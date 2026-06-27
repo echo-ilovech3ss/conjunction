@@ -364,6 +364,11 @@ with open(\"/work/conjunction-profile/airootfs/usr/share/conjunction/build-metad
             cd /work
             rm -rf /work/conjunction-workspace
 
+            # Create symlinks so cj and application are on PATH during the live session
+            mkdir -p /work/conjunction-profile/airootfs/usr/local/bin
+            ln -sf /opt/conjunction/cj /work/conjunction-profile/airootfs/usr/local/bin/cj
+            ln -sf /opt/conjunction/application /work/conjunction-profile/airootfs/usr/local/bin/application
+
             # Set robust permissions
             echo "[5/6] Setting file and directory permissions..."
             find /work/conjunction-profile/airootfs/ -type d -exec chmod 755 {} +

@@ -436,6 +436,11 @@ EOF
         cd /work
         rm -rf /work/conjunction-workspace
 
+        # Create symlinks so cj and application are on PATH during the live session
+        mkdir -p /work/conjunction-profile/airootfs/usr/local/bin
+        ln -sf /opt/conjunction/cj /work/conjunction-profile/airootfs/usr/local/bin/cj
+        ln -sf /opt/conjunction/application /work/conjunction-profile/airootfs/usr/local/bin/application
+
         echo "[4/5] Setting file permissions..."
         find /work/conjunction-profile/airootfs/ -type d -exec chmod 755 {} +
         find /work/conjunction-profile/airootfs/ -type f -exec chmod 644 {} +
