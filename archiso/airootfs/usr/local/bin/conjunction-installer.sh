@@ -580,7 +580,7 @@ if ! is_step_completed "install_base"; then
             pipewire pipewire-alsa pipewire-pulse pipewire-jack wireplumber \
             plasma-desktop plasma-workspace plasma-x11-session plasma-nm plasma-pa \
             sddm konsole dolphin xdg-desktop-portal xdg-desktop-portal-kde \
-            nano vim git wget curl \
+            nano vim git wget curl flatpak \
             snapper btrfs-progs grub-btrfs bluez bluez-utils cups \
             plank kvantum breeze-gtk breeze-icons inter-font noto-fonts noto-fonts-cjk noto-fonts-emoji ttf-jetbrains-mono ttf-fira-code
     fi
@@ -649,7 +649,7 @@ EOF
 
     # Configure flathub remote in target chroot
     log "Configuring Flathub remote..."
-    run_chroot flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+    run_chroot flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo 2>/dev/null || warn "Failed to configure Flathub remote."
     ok "Flathub remote configured"
 
     save_checkpoint "configure_system"
