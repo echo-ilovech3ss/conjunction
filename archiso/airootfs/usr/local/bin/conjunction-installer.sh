@@ -692,6 +692,16 @@ post_install_validation() {
         ok "Kernel files OK"
     fi
 
+    log "Checking EFI bootloader..."
+    if [[ -n "$EFI_PART" ]]; then
+        if [[ ! -f "$MNT/boot/efi/EFI/BOOT/BOOTX64.EFI" ]]; then
+            err "Validation failed: EFI bootloader BOOTX64.EFI not found in target ESP"
+            failed=true
+        else
+            ok "EFI bootloader OK"
+        fi
+    fi
+
     log "Checking user accounts..."
     if ! grep -q "^${USERNAME}:" "$MNT/etc/passwd"; then
         err "Validation failed: User '${USERNAME}' was not created in target /etc/passwd"
@@ -859,10 +869,26 @@ fi
 if ! is_step_completed "bootloader"; then
     header "Step 8: Installing Bootloader"
 
+    # Generate initramfs before bootloader so grub-mkconfig finds the images
+    log "Generating initramfs..."
+    run_chroot mkinitcpio -P
+    ok "Initramfs generated"
+
     if [[ -n "$EFI_PART" ]]; then
         # UEFI bootloader
         run_chroot grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=CONJUNCTION
         run_chroot grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=CONJUNCTION --removable
+
+        # Verify EFI bootloader was written
+        if ! run_chroot test -f /boot/efi/EFI/BOOT/BOOTX64.EFI; then
+            err "UEFI bootloader verification failed: /boot/efi/EFI/BOOT/BOOTX64.EFI not found after grub-install"
+            exit 1
+        fi
+        ok "EFI bootloader file verified"
+
+        # Hyper-V Gen 2 fallback: ensure BOOTX64.EFI exists at the removable media path
+        run_chroot mkdir -p /boot/efi/EFI/BOOT
+        run_chroot cp /boot/efi/EFI/CONJUNCTION/grubx64.efi /boot/efi/EFI/BOOT/BOOTX64.EFI 2>/dev/null || true
     else
         # BIOS bootloader
         run_chroot grub-install --target=i386-pc "/dev/${TARGET_DISK}"
@@ -870,6 +896,13 @@ if ! is_step_completed "bootloader"; then
 
     # Generate GRUB config
     run_chroot grub-mkconfig -o /boot/grub/grub.cfg
+
+    # Verify grub.cfg contains at least one boot entry
+    if ! grep -q 'menuentry' "$MNT/boot/grub/grub.cfg"; then
+        err "GRUB config verification failed: /boot/grub/grub.cfg contains no menuentry"
+        exit 1
+    fi
+    ok "GRUB config verified"
 
     ok "Bootloader installed"
     save_checkpoint "bootloader"
