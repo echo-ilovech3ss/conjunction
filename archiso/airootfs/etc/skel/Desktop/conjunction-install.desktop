@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Install Conjunction OS
+Comment=Launch the Conjunction OS installer
+Exec=konsole -e sudo /usr/local/bin/conjunction-installer.sh
+Icon=system-installer
+Terminal=false
+Categories=System;

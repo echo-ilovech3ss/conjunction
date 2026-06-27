@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+.conjunction/
+.snapshots/
+*.tar.gz
+*.tar.zst
+*.log
+out/
+pkgcache/

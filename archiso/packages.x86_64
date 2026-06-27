@@ -1,0 +1,203 @@
+# ─── Archiso Packages for Conjunction OS ─────────────────────────────────────
+# Base system
+base
+linux
+linux-headers
+linux-firmware
+amd-ucode
+intel-ucode
+
+# Initramfs and ISO Boot Hooks (CRITICAL for booting)
+mkinitcpio
+mkinitcpio-archiso
+mkinitcpio-busybox
+
+# Virtual Machine Guest Tools
+hyperv
+open-vm-tools
+virtualbox-guest-utils-nox
+qemu-guest-agent
+
+
+# Boot loader
+grub
+syslinux
+efibootmgr
+dosfstools
+mtools
+arch-install-scripts
+parted
+gptfdisk
+
+# Display server & desktop
+xorg-server
+xorg-xinit
+xorg-xsetroot
+xorg-xrandr
+xorg-xprop
+xorg-xdpyinfo
+
+# KDE Plasma
+plasma-desktop
+plasma-workspace
+plasma-x11-session
+plasma-nm
+plasma-pa
+sddm
+sddm-kcm
+kdeplasma-addons
+kwin
+systemsettings
+
+# KDE apps
+dolphin
+konsole
+kate
+ark
+gwenview
+okular
+spectacle
+partitionmanager
+
+# Latte Dock & theming
+plank
+kvantum
+breeze-gtk
+breeze-icons
+
+# Qt
+qt5-base
+qt5-wayland
+qt6-base
+qt6-wayland
+qt6-tools
+
+# Fonts
+inter-font
+noto-fonts
+noto-fonts-cjk
+noto-fonts-emoji
+ttf-dejavu
+ttf-liberation
+ttf-jetbrains-mono
+ttf-fira-code
+
+# Graphics drivers
+mesa
+vulkan-icd-loader
+lib32-vulkan-icd-loader
+lib32-mesa
+
+# NVIDIA
+nvidia-dkms
+nvidia-utils
+lib32-nvidia-utils
+
+# AMD
+vulkan-radeon
+lib32-vulkan-radeon
+libva-mesa-driver
+lib32-libva-mesa-driver
+
+# Audio
+pipewire
+pipewire-alsa
+pipewire-pulse
+pipewire-jack
+wireplumber
+alsa-utils
+alsa-firmware
+pavucontrol
+
+# Wine & compatibility
+wine
+wine-gecko
+wine-mono
+winetricks
+lib32-glibc
+lib32-gcc-libs
+lib32-libpng
+lib32-libxml2
+lib32-ncurses
+
+# DXVK & VKD3D
+vkd3d
+lib32-vkd3d
+
+# Proton (install post-install)
+
+# System tools
+sudo
+base-devel
+git
+wget
+curl
+rsync
+htop
+fastfetch
+tree
+unzip
+p7zip
+openssh
+
+networkmanager
+network-manager-applet
+dhcpcd
+iwd
+inetutils
+
+# Development
+python
+python-pip
+
+
+# Flatpak
+flatpak
+
+# Snapper & Btrfs
+snapper
+btrfs-progs
+grub-btrfs
+
+# Image processing
+imagemagick
+ffmpeg
+
+# System utilities
+tlp
+thermald
+cpupower
+lm_sensors
+
+# Bluetooth
+bluez
+bluez-utils
+blueman
+
+# Printer
+cups
+cups-pdf
+ghostscript
+gsfonts
+hplip
+
+# File manager plugins
+ffmpegthumbnailer
+kio-extras
+kio-gdrive
+dolphin-plugins
+
+# Accessibility
+orca
+
+# Misc
+xdg-utils
+xdg-desktop-portal
+xdg-desktop-portal-kde
+polkit
+polkit-gnome
+gparted
+
+# Clipboard & Boot splash
+wl-clipboard
+xclip

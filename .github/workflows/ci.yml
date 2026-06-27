@@ -1,0 +1,39 @@
+name: Conjunction OS CI
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+        cache: 'pip'
+
+    - name: Install Python Dependencies
+      run: |
+        python -m pip upgrade pip
+        pip install pytest Pillow
+
+    - name: Python Compile Check
+      run: |
+        python -m py_compile engine.py cli.py
+
+    - name: Shell Script Syntax Check
+      run: |
+        # Check syntax of all shell scripts in the repository
+        find . -name "*.sh" -exec bash -n {} +
+
+    - name: Run Test Suite
+      run: |
+        python -m pytest tests/

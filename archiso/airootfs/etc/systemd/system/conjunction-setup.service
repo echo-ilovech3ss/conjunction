@@ -1,0 +1,13 @@
+[Unit]
+Description=Conjunction OS Setup Script
+After=NetworkManager.service systemd-user-sessions.service
+Wants=NetworkManager.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/bin/conjunction-live-setup.sh
+TimeoutStartSec=300
+
+[Install]
+WantedBy=multi-user.target

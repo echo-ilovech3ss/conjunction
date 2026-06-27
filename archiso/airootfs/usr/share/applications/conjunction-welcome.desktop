@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Welcome to Conjunction OS
+Comment=Welcome application for Conjunction OS
+Exec=/usr/local/bin/conjunction-welcome.sh
+Icon=start-here-kde
+Terminal=false
+Categories=System;

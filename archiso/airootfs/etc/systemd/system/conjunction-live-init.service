@@ -1,0 +1,13 @@
+[Unit]
+Description=Conjunction OS Live User Initialization
+DefaultDependencies=no
+After=local-fs.target
+Before=sddm.service systemd-user-sessions.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/bin/conjunction-live-init.sh
+
+[Install]
+WantedBy=multi-user.target

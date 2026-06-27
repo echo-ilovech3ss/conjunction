@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Conjunction OS — Implementation Dashboard</title>
+    <style>
+        :root {
+            --bg-color: #0b0c10;
+            --card-bg: rgba(23, 26, 32, 0.8);
+            --card-border: rgba(255, 255, 255, 0.08);
+            --accent-blue: #007aff;
+            --accent-green: #30d158;
+            --accent-purple: #af52de;
+            --text-color: #f5f5f7;
+            --text-secondary: #86868b;
+            --code-bg: #1d1f21;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            line-height: 1.5;
+            padding: 40px 20px;
+            overflow-x: hidden;
+            background-image: radial-gradient(circle at 10% 20%, rgba(90, 120, 250, 0.05) 0%, transparent 40%),
+                              radial-gradient(circle at 90% 80%, rgba(180, 90, 250, 0.05) 0%, transparent 40%);
+            background-attachment: fixed;
+        }
+
+        .container {
+            max-width: 1100px;
+            margin: 0 auto;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 50px;
+            animation: fadeIn 1s ease-out;
+        }
+
+        header h1 {
+            font-size: 2.8rem;
+            font-weight: 700;
+            margin-bottom: 12px;
+            background: linear-gradient(135deg, #ffffff 0%, #a1a1a6 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        header p {
+            font-size: 1.1rem;
+            color: var(--text-secondary);
+        }
+
+        /* macOS window frame container */
+        .window-wrapper {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 12px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            margin-bottom: 40px;
+            overflow: hidden;
+            animation: slideUp 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        /* Titlebar resembling macOS Finder */
+        .titlebar {
+            background: rgba(255, 255, 255, 0.03);
+            border-bottom: 1px solid var(--card-border);
+            height: 48px;
+            display: flex;
+            align-items: center;
+            padding: 0 16px;
+            position: relative;
+        }
+
+        .buttons {
+            display: flex;
+            gap: 8px;
+        }
+
+        .button {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+        }
+
+        .button.close { background-color: #ff5f56; }
+        .button.minimize { background-color: #ffbd2e; }
+        .button.maximize { background-color: #27c93f; }
+
+        .titlebar-text {
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 0.9rem;
+            font-weight: 500;
+            color: var(--text-color);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .sidebar-content-layout {
+            display: flex;
+            min-height: 600px;
+        }
+
+        /* Sidebar navigation */
+        .sidebar {
+            width: 250px;
+            background: rgba(0, 0, 0, 0.2);
+            border-right: 1px solid var(--card-border);
+            padding: 24px 12px;
+        }
+
+        .nav-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 16px;
+            border-radius: 8px;
+            color: var(--text-color);
+            text-decoration: none;
+            font-size: 0.95rem;
+            margin-bottom: 6px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .nav-item:hover {
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .nav-item.active {
+            background: var(--accent-blue);
+            font-weight: 550;
+        }
+
+        /* Content area */
+        .content {
+            flex: 1;
+            padding: 40px;
+            overflow-y: auto;
+            max-height: 700px;
+        }
+
+        .tab-panel {
+            display: none;
+        }
+
+        .tab-panel.active {
+            display: block;
+            animation: fadeIn 0.4s ease-out;
+        }
+
+        h2 {
+            font-size: 1.8rem;
+            font-weight: 600;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        h3 {
+            font-size: 1.25rem;
+            margin: 24px 0 12px;
+            color: var(--text-color);
+        }
+
+        p {
+            color: var(--text-secondary);
+            margin-bottom: 20px;
+            font-size: 1rem;
+        }
+
+        /* Highlight box */
+        .highlight-box {
+            background: rgba(0, 122, 255, 0.08);
+            border-left: 4px solid var(--accent-blue);
+            padding: 16px;
+            border-radius: 4px 8px 8px 4px;
+            margin: 20px 0;
+        }
+
+        .highlight-box.green {
+            background: rgba(48, 209, 88, 0.08);
+            border-left-color: var(--accent-green);
+        }
+
+        .highlight-box.purple {
+            background: rgba(175, 82, 222, 0.08);
+            border-left-color: var(--accent-purple);
+        }
+
+        .highlight-title {
+            font-weight: 600;
+            font-size: 0.95rem;
+            margin-bottom: 4px;
+            color: var(--text-color);
+        }
+
+        /* Metrics grid */
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 20px;
+            margin: 24px 0;
+        }
+
+        .metric-card {
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid var(--card-border);
+            border-radius: 8px;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .metric-val {
+            font-size: 2.2rem;
+            font-weight: 700;
+            margin-bottom: 4px;
+        }
+
+        .metric-val.green { color: var(--accent-green); }
+        .metric-val.blue { color: var(--accent-blue); }
+
+        .metric-label {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        /* Code highlight */
+        pre {
+            background: var(--code-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 8px;
+            padding: 16px;
+            overflow-x: auto;
+            font-family: "SF Mono", Monaco, Consolas, "Courier New", monospace;
+            font-size: 0.85rem;
+            margin: 20px 0;
+        }
+
+        code {
+            color: #d19a66;
+        }
+
+        /* Animations */
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        @keyframes slideUp {
+            from { opacity: 0; transform: translateY(30px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Icons */
+        .icon {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            background-size: contain;
+            background-repeat: no-repeat;
+            vertical-align: middle;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <header>
+        <h1>Conjunction OS</h1>
+        <p>Implementation Dashboard — macOS Architecture Integration</p>
+    </header>
+
+    <div class="window-wrapper">
+        <div class="titlebar">
+            <div class="buttons">
+                <div class="button close"></div>
+                <div class="button minimize"></div>
+                <div class="button maximize"></div>
+            </div>
+            <div class="titlebar-text">
+                <span>📁</span> Conjunction OS Developer Dashboard
+            </div>
+        </div>
+
+        <div class="sidebar-content-layout">
+            <div class="sidebar">
+                <div class="nav-item active" onclick="switchTab('efi')">🔧 EFI & Bootloader</div>
+                <div class="nav-item" onclick="switchTab('appcmd')">💻 Application Command</div>
+                <div class="nav-item" onclick="switchTab('bundles')">📦 macOS .app Bundles</div>
+                <div class="nav-item" onclick="switchTab('sync')">🔄 Rust Sync Daemon</div>
+                <div class="nav-item" onclick="switchTab('integration')">🎨 OS Integration</div>
+            </div>
+
+            <div class="content">
+                <!-- Panel 1: EFI & Bootloader -->
+                <div id="panel-efi" class="tab-panel active">
+                    <h2>UEFI & Bootloader Architecture Fix</h2>
+                    <p>Fixed UEFI bootloader generation and boot reliability on bare metal and VM hypervisors.</p>
+                    
+                    <div class="highlight-box green">
+                        <div class="highlight-title">Fix 1: Host ISO Build Dependency Correction</div>
+                        <p>Added <code>mtools</code> and <code>dosfstools</code> packages to the build containers. This resolved a silent bug where <code>mkarchiso</code> skipped building the UEFI boot image <code>efiboot.img</code> because it lacked FAT/EFI file construction utilities.</p>
+                    </div>
+
+                    <div class="highlight-box green">
+                        <div class="highlight-title">Fix 2: Double grub-install Fallback Configuration</div>
+                        <p>Modified the installer script (Step 8) to deploy GRUB twice. The first registers it in standard NVRAM, and the second sets up a removable fallback in the standard EFI directory:</p>
+                        <pre><code># Installs standard UEFI NVRAM entry
+grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=CONJUNCTION
+
+# Installs removable/fallback path (essential for virtualized boot and stubborn BIOSes)
+grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=CONJUNCTION --removable</code></pre>
+                    </div>
+                </div>
+
+                <!-- Panel 2: Application Command -->
+                <div id="panel-appcmd" class="tab-panel">
+                    <h2>Unified 'application' Package Manager CLI</h2>
+                    <p>Created a user-friendly CLI management tool located at <code>/usr/local/bin/application</code> to unify package discovery and container creation.</p>
+                    
+                    <h3>Features Supported:</h3>
+                    <ul>
+                        <li><strong><code>application install &lt;name&gt;</code></strong>: Searches Flatpak, Pacman, and yay/AUR sequentially and installs the package, automatically wrapping it in a macOS-style container in <code>/Applications</code>.</li>
+                        <li><strong><code>application uninstall &lt;name&gt;</code></strong>: Detects backend (Flatpak, pacman, or Wine), completely uninstalls system packages, and destroys the corresponding container and launcher.</li>
+                        <li><strong><code>application search &lt;query&gt;</code></strong>: Returns a unified result table aggregating packages across all 3 channels.</li>
+                        <li><strong><code>application list</code></strong>: Lists all installed Flatpaks and user-installed pacman/AUR packages.</li>
+                        <li><strong><code>application info &lt;name&gt;</code></strong>: Returns version, size, source and description details.</li>
+                    </ul>
+                </div>
+
+                <!-- Panel 3: macOS .app Bundles -->
+                <div id="panel-bundles" class="tab-panel">
+                    <h2>Premium macOS .app Containers</h2>
+                    <p>Designed a unified application deployment system under the root directory <code>/Applications/</code> mimicking macOS bundles.</p>
+                    
+                    <div class="highlight-box purple">
+                        <div class="highlight-title">Self-Contained Container Structure</div>
+                        <p>Applications installed via pacman, flatpak, or Wine are structured inside <code>/Applications/&lt;AppName&gt;.app/</code>:</p>
+                        <pre><code>/Applications/Firefox.app/
+├── Contents/
+│   ├── Info.plist          # Metadata property list
+│   ├── MacOS/
+│   │   └── Firefox         # Shell launcher script (e.g. exec flatpak run com.discordapp...)
+│   └── Resources/
+│       ├── icon.png        # Extracted/copied system icon
+│       └── prefix/         # (Wine-only) Self-contained Wine prefix</code></pre>
+                    </div>
+
+                    <div class="highlight-box">
+                        <div class="highlight-title">Double-Click Companion Launchers</div>
+                        <p>Since Linux file managers treat directories normally, the installer creates a companion <code>/Applications/&lt;AppName&gt;.desktop</code> launcher next to each bundle folder. This enables instant double-click execution in Dolphin.</p>
+                    </div>
+                </div>
+
+                <!-- Panel 4: Rust Sync Daemon -->
+                <div id="panel-sync" class="tab-panel">
+                    <h2>Bidirectional Sync Daemon (Rust)</h2>
+                    <p>Implemented a highly efficient background sync daemon in Rust to match system packages and the <code>/Applications</code> directory state.</p>
+                    
+                    <div class="metrics-grid">
+                        <div class="metric-card">
+                            <div class="metric-val green">&lt; 1 MB</div>
+                            <div class="metric-label">Memory Footprint</div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="metric-val blue">Instant</div>
+                            <div class="metric-label">Bidirectional Sync</div>
+                        </div>
+                    </div>
+
+                    <h3>Synchronization Logic:</h3>
+                    <ul>
+                        <li><strong>Folder Deleted:</strong> If you drag a `.app` container or a `.desktop` companion shortcut to the Trash in <code>/Applications</code>, the daemon immediately uninstalls the corresponding pacman or Flatpak package and cleans up leftover shortcuts.</li>
+                        <li><strong>Package Uninstalled:</strong> If you run a manual <code>pacman -R</code> or <code>flatpak uninstall</code> via command line, the daemon automatically cleans up the `/Applications` folder, purging the `.app` bundle, companion, and metadata.</li>
+                    </ul>
+                </div>
+
+                <!-- Panel 5: OS Integration -->
+                <div id="panel-integration" class="tab-panel">
+                    <h2>OS-level UX Integration</h2>
+                    <p>Added custom context menus and account flows to polish the user experience.</p>
+                    
+                    <h3>Dolphin Right-Click "Run Application"</h3>
+                    <p>Registered a KDE Service Menu action under <code>/usr/share/kio/servicemenus/conjunction-app.desktop</code>. Users can now right-click any <code>.app</code> folder and click <strong>"Run Application"</strong> to execute it directly.</p>
+
+                    <h3>Credentials Flow Refinement</h3>
+                    <p>Updated the live OS installer to prompt user password creation, followed by a conditional check: <em>"Use the same password for the root (administrator) account? (Y/n)"</em>. If 'n', prompts for a separate root configuration.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    function switchTab(tabId) {
+        // Deactivate all nav items
+        document.querySelectorAll('.nav-item').forEach(el => {
+            el.classList.remove('active');
+        });
+        
+        // Deactivate all panels
+        document.querySelectorAll('.tab-panel').forEach(el => {
+            el.classList.remove('active');
+        });
+
+        // Activate selected
+        const targetNav = Array.from(document.querySelectorAll('.nav-item')).find(el => el.getAttribute('onclick').includes(tabId));
+        if (targetNav) targetNav.classList.add('active');
+        
+        const targetPanel = document.getElementById('panel-' + tabId);
+        if (targetPanel) targetPanel.classList.add('active');
+    }
+</script>
+</body>
+</html>

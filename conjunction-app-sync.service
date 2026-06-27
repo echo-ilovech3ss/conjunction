@@ -1,0 +1,12 @@
+[Unit]
+Description=Conjunction OS Application Sync Daemon
+After=multi-user.target
+
+[Service]
+Type=simple
+ExecStart=/opt/conjunction/app_sync
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

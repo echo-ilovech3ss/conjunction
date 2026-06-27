@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Conjunction OS Initialization Check
+Comment=Checks if live environment initialization succeeded
+Exec=/usr/local/bin/conjunction-init-check.sh
+Icon=dialog-warning
+Terminal=false
+Categories=System;
+X-KDE-autostart-after=panel
