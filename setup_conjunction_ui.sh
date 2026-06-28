@@ -620,10 +620,35 @@ alias free="free -m"
 alias top="htop 2>/dev/null || top"
 
 # Conjunction OS shortcuts
-alias cj="python3 /opt/conjunction/cli.py"
+alias cj="cj"
 alias cj-update="cj update"
 alias cj-install="cj install"
 alias cj-optimize="cj optimize"
+
+# macOS-style open command
+open() {
+    if [[ -z "$1" ]]; then
+        echo "Usage: open <file_or_dir> or open -a <app_name> [args]"
+        return 1
+    fi
+    if [[ "$1" == "-a" ]]; then
+        local app_name="$2"
+        shift 2
+        # Search in /Applications/
+        if [[ -f "/Applications/${app_name}.app/Contents/MacOS/${app_name}" ]]; then
+            "/Applications/${app_name}.app/Contents/MacOS/${app_name}" "$@" &
+        elif [[ -f "/Applications/${app_name}.desktop" ]]; then
+            gtk-launch "conjunction-${app_name}" "$@" &>/dev/null || gtk-launch "${app_name}" "$@" &>/dev/null || xdg-open "/Applications/${app_name}.desktop" &
+        elif [[ -f "/Applications/conjunction-${app_name}.desktop" ]]; then
+            gtk-launch "conjunction-${app_name}" "$@" &>/dev/null || xdg-open "/Applications/conjunction-${app_name}.desktop" &
+        else
+            # Try to run from PATH
+            "$app_name" "$@" &
+        fi
+    else
+        xdg-open "$@"
+    fi
+}
 ALIASES
 
     # Source in .bashrc if not already sourced
