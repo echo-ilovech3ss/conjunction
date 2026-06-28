@@ -201,6 +201,13 @@ function configureTopPanel() {
     topPanel.hiding = "none";
     topPanel.floating = false;
 
+    // Add kickoff launcher on the left (represents the Apple logo menu for sleep/shutdown/lock)
+    var appleMenu = topPanel.addWidget("org.kde.plasma.kickoff");
+    if (appleMenu) {
+        appleMenu.currentConfigGroup = ["General"];
+        appleMenu.writeConfig("icon", "apple"); // Try to use apple icon if available
+    }
+
     // Add app menu widget (global menu)
     var appMenu = topPanel.addWidget("org.kde.plasma.appmenu");
     if (appMenu) {
@@ -222,12 +229,6 @@ function configureTopPanel() {
         print("Added clock widget");
     }
 
-    // Add lock/logout buttons
-    var lockBtn = topPanel.addWidget("org.kde.plasma.lockscreen");
-    if (lockBtn) {
-        print("Added lock screen button");
-    }
-
     return topPanel;
 }
 
@@ -246,6 +247,12 @@ function configureDock() {
     var taskManager = dock.addWidget("org.kde.plasma.icontasks");
     if (taskManager) {
         print("Added icon task manager");
+    }
+
+    // Add Trash Bin on the right side of the dock
+    var trash = dock.addWidget("org.kde.plasma.trash");
+    if (trash) {
+        print("Added trash widget");
     }
 
     return dock;
@@ -483,12 +490,16 @@ EOF
     local konsole_dir="$HOME/.local/share/konsole"
     mkdir -p "$konsole_dir"
 
-    # Detect the best available monospaced font (SF Mono vs JetBrains Mono)
-    local terminal_font="JetBrains Mono"
+    # Detect the best available monospaced font
+    local terminal_font="monospace"
     if fc-list : family | grep -qi "SF Mono"; then
         terminal_font="SF Mono"
     elif fc-list : family | grep -qi "SFMono"; then
         terminal_font="SFMono-Regular"
+    elif fc-list : family | grep -qi "JetBrains Mono"; then
+        terminal_font="JetBrains Mono"
+    elif fc-list : family | grep -qi "Hack"; then
+        terminal_font="Hack"
     fi
 
     cat > "$konsole_dir/Conjunction.profile" << EOF
@@ -537,7 +548,10 @@ configure_shortcuts() {
     "$KWRITECONFIG" --file "$kwinrc" --group "Overview" --key "Toggle" "Meta+W"
 
     # Spotlight (KRunner)
-    "$KWRITECONFIG" --file "$kwinrc" --group "KRunner" --key "Run" "Alt+Space"
+    local kglobal="$HOME/.config/kglobalshortcutsrc"
+    mkdir -p "$(dirname "$kglobal")"
+    "$KWRITECONFIG" --file "$kglobal" --group krunner.desktop --key _launch "Meta+Space,Alt+Space,Search"
+    "$KWRITECONFIG" --file "$kglobal" --group krunner.desktop --key runCommand "Meta+Space,Alt+Space,Search"
 
     success "Keyboard shortcuts configured."
 }
