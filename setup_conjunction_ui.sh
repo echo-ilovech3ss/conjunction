@@ -194,17 +194,21 @@ function configureTopPanel() {
     var topPanel = new Panel();
     topPanel.screen = 0;
     topPanel.position = TopEdge;
-    topPanel.height = 28;
+    topPanel.height = 30;
     topPanel.length = screenGeometry(0).width;
     topPanel.offset = 0;
     topPanel.alignment = 0;
     topPanel.hiding = "none";
+    topPanel.floating = false;
 
     // Add app menu widget (global menu)
     var appMenu = topPanel.addWidget("org.kde.plasma.appmenu");
     if (appMenu) {
         print("Added global menu widget");
     }
+
+    // Add spacer to push tray and clock to the right
+    topPanel.addWidget("org.kde.plasma.panelspacer");
 
     // Add system tray
     var systemTray = topPanel.addWidget("org.kde.plasma.systemtray");
@@ -233,8 +237,8 @@ function configureDock() {
     dock.screen = 0;
     dock.position = BottomEdge;
     dock.height = 56;
-    dock.length = 0.6;
-    dock.offset = 0;
+    dock.lengthMode = "fit";
+    dock.floating = true;
     dock.alignment = 1; // Center
     dock.hiding = "none";
 
@@ -366,6 +370,10 @@ configure_window_effects() {
     "$KWRITECONFIG" --file "$kwinrc" --group org.kde.kdecoration --key BorderSizeMax Normal
     "$KWRITECONFIG" --file "$kwinrc" --group org.kde.kdecoration --key ShowToolTips false
 
+    # Move buttons to the left (macOS traffic-light style)
+    "$KWRITECONFIG" --file "$kwinrc" --group org.kde.kdecoration2 --key ButtonsOnLeft "XIA"
+    "$KWRITECONFIG" --file "$kwinrc" --group org.kde.kdecoration2 --key ButtonsOnRight ""
+
     # Enable all desktop effects
     local effects=(
         "blur"
@@ -474,14 +482,23 @@ EOF
     # Konsole profile
     local konsole_dir="$HOME/.local/share/konsole"
     mkdir -p "$konsole_dir"
-    cat > "$konsole_dir/Conjunction.profile" << 'EOF'
+
+    # Detect the best available monospaced font (SF Mono vs JetBrains Mono)
+    local terminal_font="JetBrains Mono"
+    if fc-list : family | grep -qi "SF Mono"; then
+        terminal_font="SF Mono"
+    elif fc-list : family | grep -qi "SFMono"; then
+        terminal_font="SFMono-Regular"
+    fi
+
+    cat > "$konsole_dir/Conjunction.profile" << EOF
 [General]
 Name=Conjunction
 Parent=FALLBACK/
 
 [Appearance]
 ColorScheme=BreezeDark
-Font=Inter,10,-1,0,50,0,0,0,0,0
+Font=${terminal_font},11,-1,5,50,0,0,0,0,0
 
 [Scrolling]
 HistoryMode=2
