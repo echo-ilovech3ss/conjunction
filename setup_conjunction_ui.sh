@@ -121,7 +121,7 @@ install_packages() {
         xdg-utils xdg-desktop-portal xdg-desktop-portal-kde
         imagemagick
         base-devel git go
-        zsh ulauncher kitty appmenu-gtk-module libdbusmenu-glib libdbusmenu-gtk3 dialog
+        zsh kitty appmenu-gtk-module libdbusmenu-glib libdbusmenu-gtk3 dialog
     )
 
     run_sudo pacman -S --needed --noconfirm "${packages[@]}"
@@ -152,7 +152,7 @@ install_packages() {
     fi
 
     if command -v yay &>/dev/null; then
-        for pkg in "ttf-san-francisco" "zen-browser-bin" "whitesur-kde-theme-git" "whitesur-icon-theme-git" "sddm-theme-whitesur"; do
+        for pkg in "ttf-san-francisco" "zen-browser-bin" "whitesur-kde-theme-git" "whitesur-icon-theme-git" "sddm-theme-whitesur" "ulauncher"; do
             if ! sudo -u "$TARGET_USER" yay -Qi "$pkg" &>/dev/null; then
                 sudo -u "$TARGET_USER" yay -S --noconfirm "$pkg" || warn "Failed to install AUR package: $pkg"
             fi

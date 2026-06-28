@@ -583,7 +583,7 @@ if ! is_step_completed "install_base"; then
             nano vim git wget curl flatpak \
             snapper btrfs-progs grub-btrfs bluez bluez-utils cups \
             plank kvantum breeze-gtk breeze-icons inter-font noto-fonts noto-fonts-cjk noto-fonts-emoji ttf-jetbrains-mono ttf-fira-code \
-            zsh ulauncher kitty appmenu-gtk-module libdbusmenu-glib libdbusmenu-gtk3
+            zsh kitty appmenu-gtk-module libdbusmenu-glib libdbusmenu-gtk3
     fi
 
     ok "Base system installed"
