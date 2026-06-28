@@ -582,7 +582,8 @@ if ! is_step_completed "install_base"; then
             sddm konsole dolphin xdg-desktop-portal xdg-desktop-portal-kde \
             nano vim git wget curl flatpak \
             snapper btrfs-progs grub-btrfs bluez bluez-utils cups \
-            plank kvantum breeze-gtk breeze-icons inter-font noto-fonts noto-fonts-cjk noto-fonts-emoji ttf-jetbrains-mono ttf-fira-code
+            plank kvantum breeze-gtk breeze-icons inter-font noto-fonts noto-fonts-cjk noto-fonts-emoji ttf-jetbrains-mono ttf-fira-code \
+            zsh ulauncher kitty appmenu-gtk-module libdbusmenu-glib libdbusmenu-gtk3
     fi
 
     ok "Base system installed"
@@ -809,7 +810,7 @@ if ! is_step_completed "user_setup"; then
     fi
 
     # Create user
-    run_chroot useradd -m -G wheel,video,audio,storage,optical,network,power,lp,users -s /bin/bash "$USERNAME"
+    run_chroot useradd -m -G wheel,video,audio,storage,optical,network,power,lp,users -s /bin/zsh "$USERNAME"
 
     # Set password
     set_chroot_password "$USERNAME" "$PASSWORD"

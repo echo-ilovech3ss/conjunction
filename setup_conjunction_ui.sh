@@ -121,6 +121,7 @@ install_packages() {
         xdg-utils xdg-desktop-portal xdg-desktop-portal-kde
         imagemagick
         base-devel git go
+        zsh ulauncher kitty appmenu-gtk-module libdbusmenu-glib libdbusmenu-gtk3 dialog
     )
 
     run_sudo pacman -S --needed --noconfirm "${packages[@]}"
@@ -151,7 +152,7 @@ install_packages() {
     fi
 
     if command -v yay &>/dev/null; then
-        for pkg in "ttf-san-francisco"; do
+        for pkg in "ttf-san-francisco" "zen-browser-bin" "whitesur-kde-theme-git" "whitesur-icon-theme-git" "sddm-theme-whitesur"; do
             if ! sudo -u "$TARGET_USER" yay -Qi "$pkg" &>/dev/null; then
                 sudo -u "$TARGET_USER" yay -S --noconfirm "$pkg" || warn "Failed to install AUR package: $pkg"
             fi
@@ -232,35 +233,8 @@ function configureTopPanel() {
     return topPanel;
 }
 
-function configureDock() {
-    // Create bottom dock (macOS-style)
-    var dock = new Panel();
-    dock.screen = 0;
-    dock.position = BottomEdge;
-    dock.height = 56;
-    dock.lengthMode = "fit";
-    dock.floating = true;
-    dock.alignment = 1; // Center
-    dock.hiding = "none";
-
-    // Add task manager (dock icons)
-    var taskManager = dock.addWidget("org.kde.plasma.icontasks");
-    if (taskManager) {
-        print("Added icon task manager");
-    }
-
-    // Add Trash Bin on the right side of the dock
-    var trash = dock.addWidget("org.kde.plasma.trash");
-    if (trash) {
-        print("Added trash widget");
-    }
-
-    return dock;
-}
-
 // Execute configuration
 configureTopPanel();
-configureDock();
 LAYOUTSCRIPT
 
     # Apply the layout using plasmashell
@@ -289,7 +263,7 @@ write_panel_config() {
     
     mkdir -p "$(dirname "$appletsrc")"
 
-    # Top panel and bottom dock configuration
+    # Top panel configuration
     cat > "$appletsrc" << 'EOF'
 [Containments][1]
 activityId=
@@ -301,38 +275,19 @@ plugin=org.kde.panel
 wallpaperplugin=org.kde.image
 
 [Containments][1][Applets][1]
-plugin=org.kde.plasma.appmenu
-
-[Containments][1][Applets][1][Configuration]
-PreloadWeight=34
+plugin=org.kde.plasma.kickoff
 
 [Containments][1][Applets][2]
-plugin=org.kde.plasma.systemtray
+plugin=org.kde.plasma.appmenu
 
 [Containments][1][Applets][3]
-plugin=org.kde.plasma.digitalclock
+plugin=org.kde.plasma.panelspacer
 
 [Containments][1][Applets][4]
-plugin=org.kde.plasma.lockscreen
+plugin=org.kde.plasma.systemtray
 
-[Containments][2]
-activityId=
-formfactor=2
-immutability=1
-lastScreen=0
-location=5
-plugin=org.kde.panel
-wallpaperplugin=org.kde.image
-
-[Containments][2][Applets][5]
-plugin=org.kde.plasma.icontasks
-
-[Containments][2][Applets][5][Configuration]
-launchers=
-showOnlyCurrentActivity=false
-showOnlyCurrentScreen=false
-showOnlyMinimized=false
-sortingStrategy=0
+[Containments][1][Applets][5]
+plugin=org.kde.plasma.digitalclock
 EOF
 }
 
@@ -823,6 +778,301 @@ FUNCTIONS
     success "Shell functions created."
 }
 
+# ─── Configure WhiteSur macOS Theme ─────────────────────────────────────────
+configure_whitesur_theme() {
+    info "Configuring WhiteSur macOS theme..."
+    if [[ "$DRY_RUN" == true ]]; then
+        info "[DRY RUN] Would configure WhiteSur theme"
+        return 0
+    fi
+
+    # Set WhiteSur-dark global theme
+    local lookandfeeltool
+    lookandfeeltool="$(command -v lookandfeeltool || true)"
+    if [[ -n "$lookandfeeltool" ]]; then
+        sudo -u "$TARGET_USER" "$lookandfeeltool" -a com.github.vinceliuice.WhiteSur-dark 2>/dev/null || true
+    fi
+
+    # KWin window decoration settings
+    "$KWRITECONFIG" --file "$HOME/.config/kwinrc" --group org.kde.kdecoration2 --key library "org.kde.kwin.aurorae"
+    "$KWRITECONFIG" --file "$HOME/.config/kwinrc" --group org.kde.kdecoration2 --key theme "Aurorae__WhiteSur-dark"
+    "$KWRITECONFIG" --file "$HOME/.config/kwinrc" --group org.kde.kdecoration2 --key ButtonsOnLeft "XIA"
+    "$KWRITECONFIG" --file "$HOME/.config/kwinrc" --group org.kde.kdecoration2 --key ButtonsOnRight ""
+
+    # Set icon theme to WhiteSur-dark
+    "$KWRITECONFIG" --file "$HOME/.config/kdeglobals" --group Icons --key Theme "WhiteSur-dark"
+
+    # Configure SDDM theme
+    local sddm_conf="/etc/sddm.conf.d/sddm.conf"
+    mkdir -p "$(dirname "$sddm_conf")"
+    cat > "$sddm_conf" << 'EOF'
+[Theme]
+Current=WhiteSur
+EOF
+
+    success "WhiteSur macOS theme configured."
+}
+
+# ─── Configure Plank Dock ───────────────────────────────────────────────────
+configure_plank() {
+    info "Configuring Plank dock..."
+    if [[ "$DRY_RUN" == true ]]; then
+        info "[DRY RUN] Would configure Plank"
+        return 0
+    fi
+
+    local plank_dir="$HOME/.config/plank/dock1"
+    mkdir -p "$plank_dir/launchers"
+
+    # Write Plank settings
+    cat > "$plank_dir/settings" << 'EOF'
+[PlankDockSettings]
+IconSize=48
+ZoomEnabled=true
+ZoomPercent=135
+Position=3
+Alignment=3
+Theme=Transparent
+HideMode=0
+EOF
+
+    # Add default launchers
+    cat > "$plank_dir/launchers/dolphin.dockitem" << 'EOF'
+[PlankDockItemPreferences]
+Launcher=file:///usr/share/applications/org.kde.dolphin.desktop
+EOF
+
+    cat > "$plank_dir/launchers/kitty.dockitem" << 'EOF'
+[PlankDockItemPreferences]
+Launcher=file:///usr/share/applications/kitty.desktop
+EOF
+
+    cat > "$plank_dir/launchers/zen.dockitem" << 'EOF'
+[PlankDockItemPreferences]
+Launcher=file:///usr/share/applications/zen.desktop
+EOF
+
+    cat > "$plank_dir/launchers/trash.dockitem" << 'EOF'
+[PlankDockItemPreferences]
+Launcher=trash://
+EOF
+
+    # Configure autostart for Plank
+    local autostart_dir="$HOME/.config/autostart"
+    mkdir -p "$autostart_dir"
+    cat > "$autostart_dir/plank.desktop" << 'EOF'
+[Desktop Entry]
+Type=Application
+Exec=plank
+Hidden=false
+NoDisplay=false
+X-GNOME-Autostart-enabled=true
+Name=Plank Dock
+Comment=macOS-style bottom dock
+EOF
+
+    success "Plank dock configured."
+}
+
+# ─── Configure Ulauncher (Raycast Clone) ────────────────────────────────────
+configure_ulauncher() {
+    info "Configuring Ulauncher (Spotlight/Raycast clone)..."
+    if [[ "$DRY_RUN" == true ]]; then
+        info "[DRY RUN] Would configure Ulauncher"
+        return 0
+    fi
+
+    local ulauncher_dir="$HOME/.config/ulauncher"
+    mkdir -p "$ulauncher_dir"
+
+    # Write settings.json
+    cat > "$ulauncher_dir/settings.json" << 'EOF'
+{
+    "theme": "dark",
+    "hotkey-show-app": "<Super>space",
+    "blacklisted-desktop-files": "",
+    "clear-on-show": true,
+    "show-indicator-icon": false,
+    "show-on-mouse-pointer": true,
+    "terminal-command": "kitty"
+}
+EOF
+
+    # Configure autostart for Ulauncher
+    local autostart_dir="$HOME/.config/autostart"
+    mkdir -p "$autostart_dir"
+    cat > "$autostart_dir/ulauncher.desktop" << 'EOF'
+[Desktop Entry]
+Type=Application
+Exec=ulauncher --hide-window
+Hidden=false
+NoDisplay=false
+X-GNOME-Autostart-enabled=true
+Name=Ulauncher
+Comment=Spotlight/Raycast-like launcher
+EOF
+
+    success "Ulauncher configured."
+}
+
+# ─── Configure Kitty Terminal ───────────────────────────────────────────────
+configure_kitty() {
+    info "Configuring Kitty terminal..."
+    if [[ "$DRY_RUN" == true ]]; then
+        info "[DRY RUN] Would configure Kitty"
+        return 0
+    fi
+
+    local kitty_dir="$HOME/.config/kitty"
+    mkdir -p "$kitty_dir"
+
+    # Detect the best available monospaced font
+    local terminal_font="monospace"
+    if fc-list : family | grep -qi "SF Mono"; then
+        terminal_font="SF Mono"
+    elif fc-list : family | grep -qi "SFMono"; then
+        terminal_font="SFMono-Regular"
+    elif fc-list : family | grep -qi "JetBrains Mono"; then
+        terminal_font="JetBrains Mono"
+    elif fc-list : family | grep -qi "Hack"; then
+        terminal_font="Hack"
+    fi
+
+    cat > "$kitty_dir/kitty.conf" << EOF
+# Conjunction OS - Kitty Configuration
+
+# Typography
+font_family      ${terminal_font}
+bold_font        auto
+italic_font      auto
+bold_italic_font auto
+font_size        11.0
+adjust_line_height 110%
+
+# Window Layout
+window_padding_width 10
+hide_window_decorations yes
+confirm_os_window_close 0
+
+# Colors (macOS dark theme styled)
+background            #1e1e1e
+foreground            #f5f5f5
+selection_background  #3a3a3a
+selection_foreground  #ffffff
+
+# Black
+color0 #1e1e1e
+color8 #5a5a5a
+# Red
+color1 #ff5555
+color9 #ff6e6e
+# Green
+color2 #50fa7b
+color10 #69ff94
+# Yellow
+color3 #f1fa8c
+color11 #ffffa5
+# Blue
+color4 #8be9fd
+color12 #d6acff
+# Magenta
+color5 #ff79c6
+color13 #ff92df
+# Cyan
+color6 #8be9fd
+color14 #a4ffff
+# White
+color7 #bfbfbf
+color15 #ffffff
+
+# Shell
+shell /bin/zsh
+EOF
+
+    success "Kitty terminal configured."
+}
+
+# ─── Configure Zsh Shell ────────────────────────────────────────────────────
+configure_zsh() {
+    info "Configuring Zsh shell..."
+    if [[ "$DRY_RUN" == true ]]; then
+        info "[DRY RUN] Would configure Zsh"
+        return 0
+    fi
+
+    # Ensure target user shell is set to zsh
+    if [[ "$TARGET_USER" != "root" ]]; then
+        chsh -s /bin/zsh "$TARGET_USER" 2>/dev/null || true
+    fi
+
+    # Write .zshrc
+    cat > "$HOME/.zshrc" << 'EOF'
+# Conjunction OS - Zsh Configuration
+
+# Load prompt system
+autoload -Uz promptinit
+promptinit
+
+# Enable autocompletion
+autoload -Uz compinit
+compinit
+
+# Color support for ls
+export CLICOLOR=1
+export LSCOLORS=Gxfxcxdxbxegedabagacad
+
+# Git branch helper
+git_branch() {
+    local branch
+    branch=$(git branch --show-current 2>/dev/null)
+    if [[ -n "$branch" ]]; then
+        echo " (%F{magenta}${branch}%f)"
+    fi
+}
+
+# macOS-style prompt: username@hostname directory %
+PROMPT='%F{green}%n%f@%F{cyan}%m%f %F{blue}%~%f$(git_branch) %% '
+
+# Load aliases
+if [ -f ~/.bash_aliases ]; then
+    . ~/.bash_aliases
+fi
+
+# Load functions
+if [ -f ~/.bash_functions ]; then
+    . ~/.bash_functions
+fi
+
+# History settings
+HISTFILE=~/.zsh_history
+HISTSIZE=10000
+SAVEHIST=10000
+setopt appendhistory sharehistory HIST_IGNORE_DUPS
+EOF
+
+    success "Zsh shell configured."
+}
+
+# ─── Configure Dolphin (Finder) ─────────────────────────────────────────────
+configure_dolphin() {
+    info "Configuring Dolphin (Finder replica)..."
+    if [[ "$DRY_RUN" == true ]]; then
+        info "[DRY RUN] Would configure Dolphin"
+        return 0
+    fi
+
+    local dolphinrc="$HOME/.config/dolphinrc"
+    "$KWRITECONFIG" --file "$dolphinrc" --group General --key ShowFullPath true
+    "$KWRITECONFIG" --file "$dolphinrc" --group General --key ShowMenuBar false
+    "$KWRITECONFIG" --file "$dolphinrc" --group General --key FilterBar false
+    "$KWRITECONFIG" --file "$dolphinrc" --group General --key ShowStatusBar true
+    "$KWRITECONFIG" --file "$dolphinrc" --group General --key SplitView false
+    "$KWRITECONFIG" --file "$dolphinrc" --group DetailsMode --key SortDescending false
+    "$KWRITECONFIG" --file "$dolphinrc" --group DetailsMode --key PreviewSize 16
+    
+    success "Dolphin configured."
+}
+
 # ─── Finalize ───────────────────────────────────────────────────────────────
 finalize() {
     info "Finalizing setup..."
@@ -841,22 +1091,19 @@ finalize() {
     # Restore ownership of config files to the target user
     if [[ "${TARGET_USER}" != "root" ]]; then
         info "Restoring file ownership for ${TARGET_USER}..."
-        chown -R "${TARGET_USER}:${TARGET_USER}" "${USER_HOME}/.config" "${USER_HOME}/.local" "${USER_HOME}/.bash_aliases" "${USER_HOME}/.bash_functions" 2>/dev/null || true
-        if [[ -f "${USER_HOME}/.bashrc" ]]; then
-            chown "${TARGET_USER}:${TARGET_USER}" "${USER_HOME}/.bashrc"
-        fi
+        chown -R "${TARGET_USER}:${TARGET_USER}" "${USER_HOME}" 2>/dev/null || true
     fi
 
     echo ""
     success "Setup complete! Please log out and back in for all changes."
     echo ""
     info "Configuration summary:"
-    info "  - macOS-style top panel with global menu"
-    info "  - Bottom dock with centered icons"
-    info "  - Window effects: blur, rounded corners ($CORNER_RADIUS px), shadows"
-    info "  - Font: ${FONT_FAMILY} family"
-    info "  - Theme: Breeze Dark"
-    info "  - macOS-like shell aliases and functions"
+    info "  - macOS-style top panel with global menu & apple menu launcher"
+    info "  - Floating Plank dock with zoom on hover & Trash Bin"
+    info "  - Spotlight search: Ulauncher triggered on Cmd+Space (Meta+Space)"
+    info "  - Terminal: Kitty with SF Mono font"
+    info "  - Shell: Zsh with minimal developer prompt & aliases"
+    info "  - Themes: WhiteSur GTK/KDE decoration & SDDM login screen"
     echo ""
     info "Log file: $LOG_FILE"
 }
@@ -891,6 +1138,12 @@ main() {
     configure_window_effects
     configure_fonts
     configure_theme
+    configure_whitesur_theme
+    configure_plank
+    configure_ulauncher
+    configure_kitty
+    configure_zsh
+    configure_dolphin
     configure_shortcuts
     create_aliases
     create_functions
