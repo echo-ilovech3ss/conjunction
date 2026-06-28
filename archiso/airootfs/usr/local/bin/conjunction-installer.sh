@@ -920,7 +920,6 @@ if ! is_step_completed "services"; then
     # run_chroot systemctl enable sshd
     run_chroot systemctl enable bluetooth
     run_chroot systemctl enable cups
-    run_chroot systemctl enable conjunction-app-sync
 
     ok "Services enabled"
     save_checkpoint "services"
@@ -962,6 +961,7 @@ if ! is_step_completed "conjunction_files"; then
         fi
         if [[ -f "/etc/systemd/system/conjunction-app-sync.service" ]]; then
             cp "/etc/systemd/system/conjunction-app-sync.service" /mnt/etc/systemd/system/
+            run_chroot systemctl enable conjunction-app-sync || true
         fi
         if [[ -f "/usr/share/kio/servicemenus/conjunction-app.desktop" ]]; then
             mkdir -p /mnt/usr/share/kio/servicemenus/
