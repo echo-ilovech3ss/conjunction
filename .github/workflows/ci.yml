@@ -6,34 +6,29 @@ on:
   pull_request:
     branches: [ main, master ]
 
+permissions:
+  contents: read
+
 jobs:
-  validate:
+  rust:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout Code
-      uses: actions/checkout@v4
+      - name: Check out repository
+        uses: actions/checkout@v5
 
-    - name: Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.12'
-        cache: 'pip'
+      - name: Install stable Rust
+        uses: dtolnay/rust-toolchain@stable
 
-    - name: Install Python Dependencies
-      run: |
-        python -m pip upgrade pip
-        pip install pytest Pillow
+      - name: Test workspace
+        run: cargo test --workspace --locked
 
-    - name: Python Compile Check
-      run: |
-        python -m py_compile engine.py cli.py
+  shell:
+    runs-on: ubuntu-latest
 
-    - name: Shell Script Syntax Check
-      run: |
-        # Check syntax of all shell scripts in the repository
-        find . -name "*.sh" -exec bash -n {} +
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
 
-    - name: Run Test Suite
-      run: |
-        python -m pytest tests/
+      - name: Check shell script syntax
+        run: git ls-files -z '*.sh' | xargs -0 -r -n1 bash -n
