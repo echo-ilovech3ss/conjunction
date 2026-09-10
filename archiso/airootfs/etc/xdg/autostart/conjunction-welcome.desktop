@@ -2,8 +2,8 @@
 Type=Application
 Name=Welcome to Conjunction OS
 Comment=Welcome application for Conjunction OS
-Exec=/usr/local/bin/conjunction-welcome.sh
-Icon=start-here-kde
+Exec=/usr/local/bin/conjunction-welcome-gui
+Icon=conjunction-welcome
 Terminal=false
-Categories=System;
+Categories=System;Settings;
 X-KDE-autostart-after=panel

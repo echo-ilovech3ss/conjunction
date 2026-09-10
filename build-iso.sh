@@ -206,6 +206,9 @@ prepare() {
     cp "${SCRIPT_DIR}/setup_conjunction_ui.sh" "${PROFILE_DIR}/airootfs/opt/conjunction/" 2>/dev/null || warning "setup_conjunction_ui.sh not found"
     cp "${SCRIPT_DIR}/engine.py" "${PROFILE_DIR}/airootfs/opt/conjunction/" 2>/dev/null || warning "engine.py not found"
     cp "${SCRIPT_DIR}/cli.py" "${PROFILE_DIR}/airootfs/opt/conjunction/" 2>/dev/null || warning "cli.py not found"
+    if [[ -d "${SCRIPT_DIR}/conjunction_gui" ]]; then
+        cp -r "${SCRIPT_DIR}/conjunction_gui" "${PROFILE_DIR}/airootfs/opt/conjunction/" 2>/dev/null || true
+    fi
     chmod +x "${PROFILE_DIR}/airootfs/opt/conjunction/"*.sh 2>/dev/null || true
     chmod +x "${PROFILE_DIR}/airootfs/opt/conjunction/"*.py 2>/dev/null || true
 

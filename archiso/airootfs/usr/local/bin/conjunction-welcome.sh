@@ -1,5 +1,13 @@
 #!/usr/bin/env bash
-# conjunction-welcome.sh - Welcome application for Conjunction OS using kdialog
+# conjunction-welcome.sh - Welcome application for Conjunction OS
+set -euo pipefail
+
+# If graphical environment is available and not forcing CLI, launch modern GUI welcome
+if [[ -n "${DISPLAY:-}" || -n "${WAYLAND_DISPLAY:-}" ]] && [[ ! " $* " =~ " --cli " ]]; then
+    if [[ -x "/usr/local/bin/conjunction-welcome-gui" ]]; then
+        exec /usr/local/bin/conjunction-welcome-gui "$@"
+    fi
+fi
 
 while true; do
     CHOICE=$(kdialog --clear \
@@ -19,8 +27,12 @@ while true; do
 
     case "$CHOICE" in
         install)
-            # Run the installer in konsole with sudo
-            konsole -e sudo /usr/local/bin/conjunction-installer.sh &
+            # Run the installer GUI or terminal
+            if [[ -x "/usr/local/bin/conjunction-installer-gui" ]]; then
+                /usr/local/bin/conjunction-installer-gui &
+            else
+                konsole -e sudo /usr/local/bin/conjunction-installer.sh &
+            fi
             break
             ;;
         docs)

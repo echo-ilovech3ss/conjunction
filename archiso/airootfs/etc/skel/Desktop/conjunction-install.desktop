@@ -1,8 +1,9 @@
 [Desktop Entry]
 Type=Application
 Name=Install Conjunction OS
-Comment=Launch the Conjunction OS installer
-Exec=konsole -e sudo /usr/local/bin/conjunction-installer.sh
-Icon=system-installer
+Comment=Launch the Conjunction OS graphical installer
+Exec=/usr/local/bin/conjunction-installer-gui
+Icon=conjunction-installer
 Terminal=false
-Categories=System;
+Categories=System;Settings;
+StartupNotify=true

@@ -159,6 +159,9 @@ copy_sources() {
     cp "${WINDOWS_SRC}/setup_conjunction_ui.sh" "${PROFILE_DIR}/airootfs/opt/conjunction/" 2>/dev/null || warning "setup_conjunction_ui.sh not found"
     cp "${WINDOWS_SRC}/engine.py" "${PROFILE_DIR}/airootfs/opt/conjunction/" 2>/dev/null || warning "engine.py not found"
     cp "${WINDOWS_SRC}/cli.py" "${PROFILE_DIR}/airootfs/opt/conjunction/" 2>/dev/null || warning "cli.py not found"
+    if [[ -d "${WINDOWS_SRC}/conjunction_gui" ]]; then
+        cp -r "${WINDOWS_SRC}/conjunction_gui" "${PROFILE_DIR}/airootfs/opt/conjunction/" 2>/dev/null || true
+    fi
     chmod +x "${PROFILE_DIR}/airootfs/opt/conjunction/"*.sh 2>/dev/null || true
     chmod +x "${PROFILE_DIR}/airootfs/opt/conjunction/"*.py 2>/dev/null || true
 

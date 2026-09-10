@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+# conjunction-installer-gui - Graphical Installer for Conjunction OS
+set -euo pipefail
+
+# Ensure running with root privileges if performing real installation
+if [[ $EUID -ne 0 ]] && [[ ! " $* " =~ " --dry-run " ]] && [[ ! " $* " =~ " -d " ]]; then
+    if command -v pkexec &>/dev/null; then
+        exec pkexec env DISPLAY="${DISPLAY:-}" XAUTHORITY="${XAUTHORITY:-}" WAYLAND_DISPLAY="${WAYLAND_DISPLAY:-}" "$0" "$@"
+    elif command -v sudo &>/dev/null; then
+        exec sudo env DISPLAY="${DISPLAY:-}" XAUTHORITY="${XAUTHORITY:-}" WAYLAND_DISPLAY="${WAYLAND_DISPLAY:-}" "$0" "$@"
+    fi
+fi
+
+# Locate conjunction_gui module
+if [[ -d "/opt/conjunction" ]]; then
+    export PYTHONPATH="/opt/conjunction:${PYTHONPATH:-}"
+elif [[ -d "/usr/share/conjunction" ]]; then
+    export PYTHONPATH="/usr/share/conjunction:${PYTHONPATH:-}"
+fi
+
+# Check if GUI display is available
+if [[ -z "${DISPLAY:-}" && -z "${WAYLAND_DISPLAY:-}" ]]; then
+    echo "[WARN] No graphical display detected. Falling back to terminal installer..."
+    exec /usr/local/bin/conjunction-installer.sh "$@"
+fi
+
+exec python3 -m conjunction_gui.installer "$@"

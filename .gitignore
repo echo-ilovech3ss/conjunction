@@ -12,3 +12,9 @@ target/
 *.png
 *.jpeg
 *.jpg
+!assets/**/*.png
+!assets/*.png
+!archiso/airootfs/usr/share/icons/**/*.png
+!archiso/airootfs/usr/share/pixmaps/*.png
+!archiso/airootfs/usr/share/conjunction/**/*.png
+

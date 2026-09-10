@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# conjunction-welcome-gui - Graphical Welcome & Setup for Conjunction OS
+set -euo pipefail
+
+# Locate conjunction_gui module
+if [[ -d "/opt/conjunction" ]]; then
+    export PYTHONPATH="/opt/conjunction:${PYTHONPATH:-}"
+elif [[ -d "/usr/share/conjunction" ]]; then
+    export PYTHONPATH="/usr/share/conjunction:${PYTHONPATH:-}"
+fi
+
+# Check if GUI display is available
+if [[ -z "${DISPLAY:-}" && -z "${WAYLAND_DISPLAY:-}" ]]; then
+    echo "[WARN] No graphical display detected. Falling back to terminal welcome..."
+    exec /usr/local/bin/conjunction-welcome.sh "$@"
+fi
+
+exec python3 -m conjunction_gui.welcome "$@"

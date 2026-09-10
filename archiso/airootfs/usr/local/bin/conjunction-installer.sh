@@ -20,6 +20,11 @@ for arg in "$@"; do
         -d|--dry-run)
             DRY_RUN=true
             ;;
+        -g|--gui)
+            if [[ -x "/usr/local/bin/conjunction-installer-gui" ]]; then
+                exec /usr/local/bin/conjunction-installer-gui "$@"
+            fi
+            ;;
     esac
 done
 

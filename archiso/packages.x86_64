@@ -151,6 +151,8 @@ inetutils
 # Development & Toolchains
 python
 python-pip
+tk
+python-pillow
 rust
 go
 nodejs

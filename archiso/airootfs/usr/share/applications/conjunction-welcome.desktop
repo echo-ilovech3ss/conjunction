@@ -1,8 +1,9 @@
 [Desktop Entry]
 Type=Application
 Name=Welcome to Conjunction OS
-Comment=Welcome application for Conjunction OS
-Exec=/usr/local/bin/conjunction-welcome.sh
-Icon=start-here-kde
+Comment=Welcome application and system tour for Conjunction OS
+Exec=/usr/local/bin/conjunction-welcome-gui
+Icon=conjunction-welcome
 Terminal=false
-Categories=System;
+Categories=System;Settings;
+StartupNotify=true
