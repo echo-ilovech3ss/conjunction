@@ -883,7 +883,7 @@ def build_parser() -> argparse.ArgumentParser:
         epilog=textwrap.dedent("""\
             Examples:
               cj update                    Full system update
-              cj install firefox           Install Firefox (Flatpak/pacman/AUR)
+              cj install zen               Install Zen Browser (Flatpak/pacman/AUR)
               cj install game.exe          Install Windows game via Wine
               cj optimize                  Full performance tuning
               cj status                    Show system information
@@ -941,7 +941,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     install_parser.add_argument(
         "app_name_or_path",
-        help="Package name (e.g., firefox) or path to .exe/.msi",
+        help="Package name (e.g., zen) or path to .exe/.msi",
     )
     install_parser.add_argument(
         "--force",

@@ -15,7 +15,9 @@ else
     if command -v flatpak &>/dev/null; then
         echo "Zen Browser is not installed. Installing via Flatpak..."
         flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo 2>/dev/null || true
-        flatpak install -y flathub app.zen_browser.zen && exec flatpak run app.zen_browser.zen "$@"
+        if flatpak install -y flathub app.zen_browser.zen; then
+            exec flatpak run app.zen_browser.zen "$@"
+        fi
     fi
     echo "Zen browser not found. Install it with: cj install zen" >&2
     exit 1

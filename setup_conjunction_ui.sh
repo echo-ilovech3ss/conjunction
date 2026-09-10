@@ -74,14 +74,16 @@ NC='\033[0m'
 DRY_RUN=false
 VERBOSE=false
 SKIP_PACKAGES=false
+ASSUME_YES=false
 
 while [[ $# -gt 0 ]]; do
     case $1 in
         --dry-run)  DRY_RUN=true; shift ;;
         --skip-packages) SKIP_PACKAGES=true; shift ;;
         --verbose|-v) VERBOSE=true; shift ;;
+        --yes|-y) ASSUME_YES=true; shift ;;
         --help|-h)
-            echo "Usage: $0 [--dry-run] [--skip-packages] [--verbose] [--help]"
+            echo "Usage: $0 [--dry-run] [--skip-packages] [--verbose] [--yes] [--help]"
             exit 0
             ;;
         *) echo -e "${RED}Unknown option: $1${NC}"; exit 1 ;;
@@ -122,14 +124,22 @@ preflight() {
     info "Running pre-flight checks..."
 
     if [[ $EUID -ne 0 ]] && ! sudo -n true 2>/dev/null; then
-        err "Requires root or passwordless sudo. Run: sudo $0"
-        exit 1
+        if [[ "$DRY_RUN" == true ]]; then
+            warn "Dry-run mode: skipping root/sudo requirement."
+        else
+            err "Requires root or passwordless sudo. Run: sudo $0"
+            exit 1
+        fi
     fi
 
     if [[ ! -f /etc/arch-release ]] && ! grep -qi "arch" /etc/os-release 2>/dev/null; then
         warn "Not detected as Arch Linux. Proceed with caution."
-        read -p "Continue? (y/N): " -r
-        [[ ! $REPLY =~ ^[Yy]$ ]] && exit 1
+        if [[ "$DRY_RUN" == true || "$ASSUME_YES" == true || ! -t 0 ]]; then
+            info "Non-interactive or dry-run mode; continuing automatically."
+        else
+            read -p "Continue? (y/N): " -r
+            [[ ! $REPLY =~ ^[Yy]$ ]] && exit 1
+        fi
     fi
 
     success "Pre-flight checks passed."
@@ -138,6 +148,11 @@ preflight() {
 # ─── Package Installation ──────────────────────────────────────────────────
 install_packages() {
     info "Installing required packages..."
+
+    if [[ "$DRY_RUN" == true ]]; then
+        info "[DRY RUN] Would install packages"
+        return 0
+    fi
 
     local packages=(
         plasma-desktop plasma-workspace plasma-nm plasma-pa
@@ -690,6 +705,9 @@ ALIASES
 
     # Source in .bashrc if not already sourced
     if [[ -f "$HOME/.bashrc" ]]; then
+        if ! grep -q "export PATH=.*\.cargo/bin" "$HOME/.bashrc" 2>/dev/null; then
+            echo 'export PATH="$HOME/.local/bin:/opt/conjunction:$HOME/.cargo/bin:$HOME/go/bin:$PATH"' >> "$HOME/.bashrc"
+        fi
         if ! grep -q ".bash_aliases" "$HOME/.bashrc" 2>/dev/null; then
             echo "" >> "$HOME/.bashrc"
             echo "# Load Conjunction OS aliases" >> "$HOME/.bashrc"
@@ -970,7 +988,9 @@ else
     if command -v flatpak &>/dev/null; then
         echo "Zen Browser not found. Installing via Flatpak..."
         flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo 2>/dev/null || true
-        flatpak install -y flathub app.zen_browser.zen && exec flatpak run app.zen_browser.zen "$@"
+        if flatpak install -y flathub app.zen_browser.zen; then
+            exec flatpak run app.zen_browser.zen "$@"
+        fi
     fi
     echo "Zen browser not found. Install it with: cj install zen" >&2
     exit 1
@@ -1054,7 +1074,25 @@ EOF
             fi
         done
     fi
-    chown "$TARGET_USER:$TARGET_USER" "$mimeapps" 2>/dev/null || true
+    # Write desktop launcher to user's Desktop
+    mkdir -p "$HOME/Desktop"
+    cat > "$HOME/Desktop/zen.desktop" << 'EOF'
+[Desktop Entry]
+Version=1.0
+Name=Zen Browser
+GenericName=Web Browser
+Comment=Experience tranquillity while browsing the web
+Exec=/usr/local/bin/zen %u
+Icon=zen-browser
+Terminal=false
+Type=Application
+MimeType=text/html;text/xml;application/xhtml+xml;x-scheme-handler/http;x-scheme-handler/https;
+Categories=Network;WebBrowser;
+StartupNotify=true
+StartupWMClass=zen-alpha
+EOF
+    chmod +x "$HOME/Desktop/zen.desktop"
+    chown "$TARGET_USER:$TARGET_USER" "$HOME/Desktop/zen.desktop" 2>/dev/null || true
 
     success "Zen Browser configured as default browser."
 }
