@@ -9,3 +9,6 @@ __pycache__/
 out/
 pkgcache/
 target/
+*.png
+*.jpeg
+*.jpg

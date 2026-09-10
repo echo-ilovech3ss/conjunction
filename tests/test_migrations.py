@@ -1,8 +1,15 @@
 import pytest
 import json
 import tarfile
-import engine
+import sys
 from pathlib import Path
+
+_repo_root = Path(__file__).resolve().parent.parent
+for _p in [_repo_root, _repo_root / "archiso" / "airootfs" / "opt" / "conjunction", Path("/opt/conjunction")]:
+    if _p.exists() and str(_p) not in sys.path:
+        sys.path.insert(0, str(_p))
+
+import engine
 from unittest.mock import patch, MagicMock
 from engine import ConjunctionAPI, CURRENT_SCHEMA_VERSION
 

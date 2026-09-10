@@ -24,8 +24,11 @@ file_permissions=(
   ["/usr/local/bin/conjunction-init-check.sh"]="0:0:755"
   ["/usr/local/bin/conjunction-welcome.sh"]="0:0:755"
   ["/usr/local/bin/zen"]="0:0:755"
+  ["/usr/local/bin/firefox"]="0:0:755"
   ["/opt/conjunction/setup_conjunction_ui.sh"]="0:0:755"
   ["/opt/conjunction/cj"]="0:0:755"
   ["/opt/conjunction/application"]="0:0:755"
   ["/opt/conjunction/app_sync"]="0:0:755"
+  ["/opt/conjunction/engine.py"]="0:0:755"
+  ["/opt/conjunction/cli.py"]="0:0:755"
 )

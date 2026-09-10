@@ -157,7 +157,10 @@ copy_sources() {
     cp "${WINDOWS_SRC}/conjunction-app-sync.service" "${PROFILE_DIR}/airootfs/etc/systemd/system/" 2>/dev/null || warning "conjunction-app-sync.service not found"
     cp "${WINDOWS_SRC}/conjunction-app.desktop" "${PROFILE_DIR}/airootfs/usr/share/kio/servicemenus/" 2>/dev/null || warning "conjunction-app.desktop not found"
     cp "${WINDOWS_SRC}/setup_conjunction_ui.sh" "${PROFILE_DIR}/airootfs/opt/conjunction/" 2>/dev/null || warning "setup_conjunction_ui.sh not found"
+    cp "${WINDOWS_SRC}/engine.py" "${PROFILE_DIR}/airootfs/opt/conjunction/" 2>/dev/null || warning "engine.py not found"
+    cp "${WINDOWS_SRC}/cli.py" "${PROFILE_DIR}/airootfs/opt/conjunction/" 2>/dev/null || warning "cli.py not found"
     chmod +x "${PROFILE_DIR}/airootfs/opt/conjunction/"*.sh 2>/dev/null || true
+    chmod +x "${PROFILE_DIR}/airootfs/opt/conjunction/"*.py 2>/dev/null || true
 
     # Generate build metadata
     info "Generating build metadata..."
@@ -436,16 +439,19 @@ EOF
         cd /work
         rm -rf /work/conjunction-workspace
 
-        # Create symlinks so cj and application are on PATH during the live session
+        # Create symlinks so cj, application, conjunction-runner, and conjunction-cli are on PATH during the live session
         mkdir -p /work/conjunction-profile/airootfs/usr/local/bin
         ln -sf /opt/conjunction/cj /work/conjunction-profile/airootfs/usr/local/bin/cj
         ln -sf /opt/conjunction/application /work/conjunction-profile/airootfs/usr/local/bin/application
+        ln -sf /opt/conjunction/engine.py /work/conjunction-profile/airootfs/usr/local/bin/conjunction-runner
+        ln -sf /opt/conjunction/cli.py /work/conjunction-profile/airootfs/usr/local/bin/conjunction-cli
 
         echo "[4/5] Setting file permissions..."
         find /work/conjunction-profile/airootfs/ -type d -exec chmod 755 {} +
         find /work/conjunction-profile/airootfs/ -type f -exec chmod 644 {} +
         chmod +x /work/conjunction-profile/airootfs/usr/local/bin/* 2>/dev/null || true
         chmod +x /work/conjunction-profile/airootfs/opt/conjunction/*.sh 2>/dev/null || true
+        chmod +x /work/conjunction-profile/airootfs/opt/conjunction/*.py 2>/dev/null || true
         chmod +x /work/conjunction-profile/airootfs/opt/conjunction/cj 2>/dev/null || true
         chmod +x /work/conjunction-profile/airootfs/opt/conjunction/application 2>/dev/null || true
         chmod +x /work/conjunction-profile/airootfs/opt/conjunction/app_sync 2>/dev/null || true

@@ -1,0 +1,13 @@
+[Default Applications]
+text/html=zen.desktop
+text/xml=zen.desktop
+application/xhtml+xml=zen.desktop
+x-scheme-handler/http=zen.desktop
+x-scheme-handler/https=zen.desktop
+
+[Added Associations]
+text/html=zen.desktop;
+text/xml=zen.desktop;
+application/xhtml+xml=zen.desktop;
+x-scheme-handler/http=zen.desktop;
+x-scheme-handler/https=zen.desktop;

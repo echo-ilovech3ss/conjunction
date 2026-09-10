@@ -204,7 +204,10 @@ prepare() {
     cp "${SCRIPT_DIR}/conjunction-app-sync.service" "${PROFILE_DIR}/airootfs/etc/systemd/system/" 2>/dev/null || warning "conjunction-app-sync.service not found"
     cp "${SCRIPT_DIR}/conjunction-app.desktop" "${PROFILE_DIR}/airootfs/usr/share/kio/servicemenus/" 2>/dev/null || warning "conjunction-app.desktop not found"
     cp "${SCRIPT_DIR}/setup_conjunction_ui.sh" "${PROFILE_DIR}/airootfs/opt/conjunction/" 2>/dev/null || warning "setup_conjunction_ui.sh not found"
+    cp "${SCRIPT_DIR}/engine.py" "${PROFILE_DIR}/airootfs/opt/conjunction/" 2>/dev/null || warning "engine.py not found"
+    cp "${SCRIPT_DIR}/cli.py" "${PROFILE_DIR}/airootfs/opt/conjunction/" 2>/dev/null || warning "cli.py not found"
     chmod +x "${PROFILE_DIR}/airootfs/opt/conjunction/"*.sh 2>/dev/null || true
+    chmod +x "${PROFILE_DIR}/airootfs/opt/conjunction/"*.py 2>/dev/null || true
 
     # Generate initial build-metadata.json
     info "Generating build metadata..."
@@ -364,10 +367,12 @@ with open(\"/work/conjunction-profile/airootfs/usr/share/conjunction/build-metad
             cd /work
             rm -rf /work/conjunction-workspace
 
-            # Create symlinks so cj and application are on PATH during the live session
+            # Create symlinks so cj, application, conjunction-runner, and conjunction-cli are on PATH during the live session
             mkdir -p /work/conjunction-profile/airootfs/usr/local/bin
             ln -sf /opt/conjunction/cj /work/conjunction-profile/airootfs/usr/local/bin/cj
             ln -sf /opt/conjunction/application /work/conjunction-profile/airootfs/usr/local/bin/application
+            ln -sf /opt/conjunction/engine.py /work/conjunction-profile/airootfs/usr/local/bin/conjunction-runner
+            ln -sf /opt/conjunction/cli.py /work/conjunction-profile/airootfs/usr/local/bin/conjunction-cli
 
             # Set robust permissions
             echo "[5/6] Setting file and directory permissions..."
@@ -375,6 +380,7 @@ with open(\"/work/conjunction-profile/airootfs/usr/share/conjunction/build-metad
             find /work/conjunction-profile/airootfs/ -type f -exec chmod 644 {} +
             chmod +x /work/conjunction-profile/airootfs/usr/local/bin/* 2>/dev/null || true
             chmod +x /work/conjunction-profile/airootfs/opt/conjunction/*.sh 2>/dev/null || true
+            chmod +x /work/conjunction-profile/airootfs/opt/conjunction/*.py 2>/dev/null || true
             chmod +x /work/conjunction-profile/airootfs/opt/conjunction/cj 2>/dev/null || true
             chmod +x /work/conjunction-profile/airootfs/opt/conjunction/application 2>/dev/null || true
             chmod +x /work/conjunction-profile/airootfs/opt/conjunction/app_sync 2>/dev/null || true

@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+# Firefox compatibility wrapper redirecting to Zen Browser
+exec /usr/local/bin/zen "$@"

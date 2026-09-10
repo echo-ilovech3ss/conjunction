@@ -586,7 +586,8 @@ if ! is_step_completed "install_base"; then
             docker docker-compose docker-buildx \
             snapper btrfs-progs grub-btrfs bluez bluez-utils cups \
             plank kvantum breeze-gtk breeze-icons inter-font noto-fonts noto-fonts-cjk noto-fonts-emoji ttf-jetbrains-mono ttf-fira-code \
-            zsh zsh-completions zsh-autosuggestions zsh-syntax-highlighting kitty appmenu-gtk-module libdbusmenu-glib libdbusmenu-gtk3
+            zsh zsh-completions zsh-autosuggestions zsh-syntax-highlighting kitty appmenu-gtk-module libdbusmenu-glib libdbusmenu-gtk3 \
+            python python-pip xorg-server mesa vulkan-icd-loader wine winetricks
     fi
 
     ok "Base system installed"
@@ -975,6 +976,41 @@ if ! is_step_completed "conjunction_files"; then
         if [[ -f "/usr/share/kio/servicemenus/conjunction-app.desktop" ]]; then
             mkdir -p /mnt/usr/share/kio/servicemenus/
             cp "/usr/share/kio/servicemenus/conjunction-app.desktop" /mnt/usr/share/kio/servicemenus/
+        fi
+        if [[ -f "${CONJUNCTION_SRC}/engine.py" ]]; then
+            cp "${CONJUNCTION_SRC}/engine.py" /mnt/opt/conjunction/
+            chmod +x /mnt/opt/conjunction/engine.py
+            ln -sf /opt/conjunction/engine.py /mnt/usr/local/bin/conjunction-runner
+        fi
+        if [[ -f "${CONJUNCTION_SRC}/cli.py" ]]; then
+            cp "${CONJUNCTION_SRC}/cli.py" /mnt/opt/conjunction/
+            chmod +x /mnt/opt/conjunction/cli.py
+            ln -sf /opt/conjunction/cli.py /mnt/usr/local/bin/conjunction-cli
+        fi
+        if [[ -f "/usr/local/bin/zen" ]]; then
+            cp /usr/local/bin/zen /mnt/usr/local/bin/zen
+            chmod +x /mnt/usr/local/bin/zen
+        fi
+        if [[ -f "/usr/local/bin/firefox" ]]; then
+            cp /usr/local/bin/firefox /mnt/usr/local/bin/firefox
+            chmod +x /mnt/usr/local/bin/firefox
+        fi
+        if [[ -f "/usr/share/applications/zen.desktop" ]]; then
+            mkdir -p /mnt/usr/share/applications/
+            cp /usr/share/applications/zen.desktop /mnt/usr/share/applications/
+        fi
+        if [[ -f "/etc/xdg/mimeapps.list" ]]; then
+            mkdir -p /mnt/etc/xdg/
+            cp /etc/xdg/mimeapps.list /mnt/etc/xdg/
+        fi
+        if [[ -f "/etc/skel/.config/mimeapps.list" ]]; then
+            mkdir -p /mnt/etc/skel/.config/
+            cp /etc/skel/.config/mimeapps.list /mnt/etc/skel/.config/
+        fi
+        if [[ -f "/etc/skel/Desktop/zen.desktop" ]]; then
+            mkdir -p /mnt/etc/skel/Desktop/
+            cp /etc/skel/Desktop/zen.desktop /mnt/etc/skel/Desktop/
+            chmod +x /mnt/etc/skel/Desktop/zen.desktop
         fi
         if [[ -f "${CONJUNCTION_SRC}/setup_conjunction_ui.sh" ]]; then
             cp "${CONJUNCTION_SRC}/setup_conjunction_ui.sh" /mnt/opt/conjunction/

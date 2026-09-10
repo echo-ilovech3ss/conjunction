@@ -7,6 +7,17 @@ import shutil
 import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence
+
+# Ensure conjunction modules (engine, cli) are always in sys.path
+REPO_ROOT = Path(__file__).resolve().parent.parent
+for candidate in [
+    REPO_ROOT,
+    REPO_ROOT / "archiso" / "airootfs" / "opt" / "conjunction",
+    Path("/opt/conjunction"),
+]:
+    if candidate.exists() and str(candidate) not in sys.path:
+        sys.path.insert(0, str(candidate))
+
 try:
     import engine
     import cli

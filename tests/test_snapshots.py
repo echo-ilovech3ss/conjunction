@@ -2,6 +2,13 @@ import pytest
 from unittest.mock import patch, MagicMock
 from pathlib import Path
 import subprocess
+import sys
+
+_repo_root = Path(__file__).resolve().parent.parent
+for _p in [_repo_root, _repo_root / "archiso" / "airootfs" / "opt" / "conjunction", Path("/opt/conjunction")]:
+    if _p.exists() and str(_p) not in sys.path:
+        sys.path.insert(0, str(_p))
+
 from engine import _is_btrfs, _snapshot_subvolume, _restore_snapshot, _delete_directory_or_subvolume
 
 @pytest.fixture
