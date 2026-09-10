@@ -13,6 +13,7 @@ import shutil
 import socket
 import threading
 import subprocess
+import tempfile
 from pathlib import Path
 from dataclasses import dataclass, field
 from typing import List, Dict, Optional, Callable, Any, Tuple
@@ -59,8 +60,27 @@ class InstallConfig:
     timezone: str = "UTC"
     enable_wine_proton: bool = True
     enable_zen_kernel: bool = True
+    enable_snapper: bool = True
     enable_auto_login: bool = False
     is_dry_run: bool = False
+
+
+def find_brand_asset(asset_name: str) -> Optional[Path]:
+    """Finds branded SVG/PNG asset across local, live ISO, and system paths."""
+    here = Path(__file__).resolve().parent
+    candidates = [
+        here.parent / "assets" / asset_name,
+        here.parent / "assets" / "icons" / asset_name,
+        Path("/opt/conjunction/assets") / asset_name,
+        Path("/opt/conjunction/assets/icons") / asset_name,
+        Path("/usr/share/conjunction/branding") / asset_name,
+        Path("/usr/share/pixmaps") / asset_name,
+        Path("/usr/share/icons/hicolor/scalable/apps") / asset_name,
+    ]
+    for c in candidates:
+        if c.exists():
+            return c
+    return None
 
 
 class SystemDiscovery:
@@ -282,14 +302,25 @@ class Validation:
         return True, ""
 
 
+    @staticmethod
+    def validate_disk_size(size_bytes: int) -> Tuple[bool, str]:
+        """Validates that target disk meets the 20GB system minimum."""
+        min_bytes = 20 * 1024 * 1024 * 1024
+        if size_bytes < min_bytes:
+            gb = round(size_bytes / (1024 ** 3), 1)
+            return False, f"Selected drive is {gb} GB. Conjunction OS requires at least 20.0 GB storage space."
+        return True, ""
+
+
 class InstallationRunner:
     """
     Asynchronously executes or dry-run simulates the 11 Conjunction OS installation steps.
     Dispatches step transitions, percentage milestones, and log lines to callbacks.
+    Integrates with conjunction-installer.sh via unattended config execution.
     """
 
     STEPS = [
-        "Preflight Checks & Mirror Refresh",
+        "Preflight Checks & Storage Setup",
         "Target Disk Safety & Wiping",
         "Partitioning (Btrfs + EFI)",
         "Creating Btrfs Subvolumes (@, @home, @snapshots)",
@@ -304,12 +335,17 @@ class InstallationRunner:
 
     def __init__(self, config: InstallConfig,
                  on_progress: Optional[Callable[[int, int, str, float, str], None]] = None,
-                 on_complete: Optional[Callable[[bool, Optional[str]], None]] = None):
+                 on_complete: Optional[Callable[[bool, Optional[str]], None]] = None,
+                 force_simulation: bool = False,
+                 simulation_delay: float = 0.02):
         self.config = config
         self.on_progress = on_progress
         self.on_complete = on_complete
         self.cancelled = False
+        self.force_simulation = force_simulation
+        self.simulation_delay = simulation_delay
         self._thread: Optional[threading.Thread] = None
+        self._process: Optional[subprocess.Popen] = None
         self.state_file = Path("/tmp/conjunction-install-state.json")
 
     def start(self):
@@ -318,6 +354,11 @@ class InstallationRunner:
 
     def cancel(self):
         self.cancelled = True
+        if self._process and self._process.poll() is None:
+            try:
+                self._process.terminate()
+            except Exception:
+                pass
 
     def _emit(self, step_idx: int, log_line: str, percent: float):
         total = len(self.STEPS)
@@ -329,7 +370,7 @@ class InstallationRunner:
         try:
             data = {}
             if self.state_file.exists():
-                with open(self.state_file, "r") as f:
+                with open(self.state_file, "r", encoding="utf-8") as f:
                     data = json.load(f)
             completed = data.get("completed_steps", [])
             if step_key not in completed:
@@ -339,93 +380,194 @@ class InstallationRunner:
             data["part_scheme"] = str(self.config.part_scheme)
             data["username"] = self.config.username
             self.state_file.parent.mkdir(parents=True, exist_ok=True)
-            with open(self.state_file, "w") as f:
+            with open(self.state_file, "w", encoding="utf-8") as f:
                 json.dump(data, f, indent=2)
         except Exception:
             pass
 
-    def _run(self):
-        total_steps = len(self.STEPS)
-        try:
-            self._emit(0, "Starting Conjunction OS installation pipeline...", 2.0)
-            time.sleep(0.4)
+    def _find_installer_script(self) -> Optional[Path]:
+        env_script = os.environ.get("CONJUNCTION_INSTALLER_SCRIPT")
+        if env_script and Path(env_script).exists():
+            return Path(env_script)
+        candidates = [
+            Path("/usr/local/bin/conjunction-installer.sh"),
+            Path(__file__).resolve().parent.parent / "archiso" / "airootfs" / "usr" / "local" / "bin" / "conjunction-installer.sh",
+            Path("/opt/conjunction/archiso/airootfs/usr/local/bin/conjunction-installer.sh"),
+        ]
+        for c in candidates:
+            if c.exists():
+                return c
+        return None
 
-            # Step 1: Preflight
-            self._emit(0, "Verifying installer environment, dependencies, and mirrors...", 5.0)
-            self._emit(0, "Pacman keyring and mirrorlist active: [OK]", 9.0)
-            time.sleep(0.3)
-            self._save_checkpoint("preflight")
+    def _find_bash(self) -> Optional[str]:
+        if sys.platform == "win32":
+            locations = [
+                r"C:\Program Files\Git\bin\bash.exe",
+                r"C:\Program Files\Git\usr\bin\bash.exe",
+                r"C:\Program Files (x86)\Git\bin\bash.exe",
+                r"C:\Program Files (x86)\Git\usr\bin\bash.exe",
+            ]
+            for loc in locations:
+                if os.path.exists(loc):
+                    return loc
+        return shutil.which("bash")
 
-            # Step 2: Disk Prep
-            self._emit(1, f"Preparing target block device /dev/{self.config.target_disk}...", 14.0)
-            self._emit(1, f"Deactivating stale swap, LVM volume groups, and RAID arrays on {self.config.target_disk}...", 18.0)
-            time.sleep(0.4)
-            self._save_checkpoint("select_disk")
+    def _write_unattended_config(self, target_path: Optional[Path] = None) -> Path:
+        data = {
+            "target_disk": self.config.target_disk,
+            "part_scheme": str(self.config.part_scheme),
+            "part_method": str(self.config.part_method),
+            "username": self.config.username,
+            "fullname": self.config.fullname,
+            "password": self.config.password,
+            "root_password": self.config.root_password or self.config.password,
+            "hostname": self.config.hostname or "conjunction",
+            "timezone": self.config.timezone or "UTC",
+            "enable_wine_proton": self.config.enable_wine_proton,
+            "enable_zen_kernel": self.config.enable_zen_kernel,
+            "enable_snapper": getattr(self.config, "enable_snapper", True),
+            "is_dry_run": self.config.is_dry_run
+        }
+        if target_path:
+            target = Path(target_path)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            with open(target, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2)
+            return target
 
-            # Step 3: Partitioning
-            scheme_label = "UEFI (GPT)" if self.config.part_scheme == 1 else "BIOS (MBR)"
-            self._emit(2, f"Creating partition table ({scheme_label}) on /dev/{self.config.target_disk}...", 24.0)
-            if self.config.part_scheme == 1:
-                self._emit(2, "Created 512MB EFI System Partition (type FAT32)", 27.0)
-                self._emit(2, "Created root partition with Btrfs filesystem", 30.0)
+        candidates = [Path("/tmp/conjunction-install-config.json"), Path(tempfile.gettempdir()) / "conjunction-install-config.json"]
+        for target in candidates:
+            try:
+                target.parent.mkdir(parents=True, exist_ok=True)
+                with open(target, "w", encoding="utf-8") as f:
+                    json.dump(data, f, indent=2)
+                return target
+            except Exception:
+                continue
+        fallback = Path("conjunction-install-config.json")
+        with open(fallback, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2)
+        return fallback
+
+    def _write_config_file(self) -> Path:
+        return self._write_unattended_config()
+
+    def _run_backend_script(self, bash_bin: str, script_path: Path, config_file: Path):
+        cmd = [bash_bin, str(script_path), "--config", str(config_file).replace("\\", "/")]
+        if self.config.is_dry_run:
+            cmd.append("--dry-run")
+
+        env = os.environ.copy()
+        env["CONJUNCTION_UNATTENDED"] = "1"
+        env["MSYS_NO_PATHCONV"] = "1"
+
+        self._process = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            stdin=subprocess.DEVNULL,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            bufsize=1,
+            env=env
+        )
+
+        step_idx = 0
+        step_pattern = re.compile(r"═══\s*Step\s*(\d+):\s*(.*?)\s*═══")
+        self._emit(0, "Initiating backend installer execution...", 2.0)
+
+        step_keys = [
+            "select_disk", "partitioning", "subvolumes", "install_base",
+            "configure_system", "user_setup", "snapper_config", "bootloader",
+            "services", "post_install_config", "post_install_validate"
+        ]
+
+        for raw_line in iter(self._process.stdout.readline, ""):
+            if self.cancelled:
+                self._process.terminate()
+                break
+            line = raw_line.strip()
+            if not line:
+                continue
+
+            m = step_pattern.search(line)
+            if m:
+                step_num = int(m.group(1))
+                step_idx = min(len(self.STEPS) - 1, max(0, step_num - 1))
+                pct = (step_num / float(len(self.STEPS))) * 100.0
+                if step_idx < len(step_keys):
+                    self._save_checkpoint(step_keys[step_idx])
+                self._emit(step_idx, line, pct)
             else:
-                self._emit(2, "Created MBR primary partition with Btrfs filesystem", 30.0)
-            time.sleep(0.4)
-            self._save_checkpoint("partitioning")
+                pct = min(99.0, ((step_idx + 0.5) / float(len(self.STEPS))) * 100.0)
+                self._emit(step_idx, line, pct)
 
-            # Step 4: Subvolumes
-            self._emit(3, "Creating modern Btrfs subvolumes: @, @home, @snapshots, @var_log...", 35.0)
-            self._emit(3, "Configuring zstd compression and mount flags: [OK]", 40.0)
-            time.sleep(0.3)
-            self._save_checkpoint("subvolumes")
+        self._process.stdout.close()
+        ret = self._process.wait()
 
-            # Step 5: Base System
-            self._emit(4, "Installing base packages, linux-zen kernel, and firmware via pacstrap...", 45.0)
-            self._emit(4, "Deploying core system libraries and toolchains...", 52.0)
-            self._emit(4, "Kernel vmlinuz-linux-zen and initramfs deployed successfully", 58.0)
-            time.sleep(0.5)
-            self._save_checkpoint("install_base")
-
-            # Step 6: Configure System
-            self._emit(5, "Generating fstab and persistent UUID mounts...", 62.0)
-            self._emit(5, f"Configuring timezone '{self.config.timezone}' and hostname '{self.config.hostname}'...", 66.0)
-            self._emit(5, "Configured locale: en_US.UTF-8 UTF-8", 68.0)
-            time.sleep(0.3)
-            self._save_checkpoint("configure_system")
-
-            # Step 7: User Account
-            self._emit(6, f"Creating user account '{self.config.username}' with wheel / sudo privileges...", 72.0)
-            self._emit(6, "Setting default shell to /bin/zsh...", 75.0)
-            time.sleep(0.3)
-            self._save_checkpoint("user_setup")
-
-            # Step 8: Snapper
-            self._emit(7, "Initializing Snapper Btrfs automatic snapshot timeline...", 78.0)
-            self._emit(7, "Snapper root configuration created: hourly=10, daily=7, weekly=4", 82.0)
-            time.sleep(0.3)
-            self._save_checkpoint("snapper_config")
-
-            # Step 9: Bootloader
-            self._emit(8, "Generating initramfs with mkinitcpio...", 85.0)
-            self._emit(8, f"Installing GRUB bootloader ({scheme_label}) to /dev/{self.config.target_disk}...", 88.0)
-            self._emit(8, "Generated /boot/grub/grub.cfg menu entries: [OK]", 90.0)
-            time.sleep(0.4)
-            self._save_checkpoint("bootloader")
-
-            # Step 10: Services
-            self._emit(9, "Enabling systemd services: sddm, NetworkManager, bluetooth, cups, docker...", 93.0)
-            time.sleep(0.3)
-            self._save_checkpoint("services")
-
-            # Step 11: Conjunction Layer
-            self._emit(10, "Deploying Conjunction OS ecosystem: cj CLI, app container engine, and Proton layer...", 96.0)
-            self._emit(10, "Installing WhiteSur macOS-style desktop theme and Plank launcher dock...", 98.0)
-            self._emit(10, "Post-install validation passed: All system checks OK!", 100.0)
-            time.sleep(0.4)
+        if self.cancelled:
+            if self.on_complete:
+                self.on_complete(False, "Installation cancelled by user")
+        elif ret == 0:
             self._save_checkpoint("post_install_config")
-
+            self._emit(len(self.STEPS) - 1, "Installation pipeline completed successfully!", 100.0)
             if self.on_complete:
                 self.on_complete(True, None)
+        else:
+            err_msg = f"Installation halted with exit code {ret}"
+            if self.on_complete:
+                self.on_complete(False, err_msg)
+
+    def _run_simulation(self):
+        delay = self.simulation_delay
+        step_checkpoints = [
+            ("preflight", "Verifying installer environment, dependencies, and mirrors...", 9.0),
+            ("select_disk", f"Preparing target block device /dev/{self.config.target_disk}...", 18.0),
+            ("partitioning", f"Creating Btrfs & EFI partition table on /dev/{self.config.target_disk}...", 30.0),
+            ("subvolumes", "Creating modern Btrfs subvolumes: @, @home, @snapshots, @var_log...", 40.0),
+            ("install_base", "Installing base system and linux-zen kernel via pacstrap...", 58.0),
+            ("configure_system", f"Configuring timezone '{self.config.timezone}' and hostname '{self.config.hostname}'...", 68.0),
+            ("user_setup", f"Creating user account '{self.config.username}' with wheel / sudo privileges...", 75.0),
+            ("snapper_config", "Configuring Snapper automated snapshots...", 82.0),
+            ("bootloader", f"Installing GRUB bootloader to /dev/{self.config.target_disk}...", 90.0),
+            ("services", "Enabling systemd services: sddm, NetworkManager, bluetooth...", 95.0),
+            ("post_install_config", "Deploying Conjunction OS desktop, theme, and Wine/Proton layer...", 100.0)
+        ]
+
+        self._emit(0, "Starting Conjunction OS installation pipeline (simulated)...", 2.0)
+        for idx, (step_key, desc, pct) in enumerate(step_checkpoints):
+            if self.cancelled:
+                if self.on_complete:
+                    self.on_complete(False, "Installation cancelled by user")
+                return
+            self._emit(idx, desc, pct)
+            self._save_checkpoint(step_key)
+            if delay > 0:
+                time.sleep(delay)
+
+        if self.on_complete:
+            self.on_complete(True, None)
+
+    def _can_run_backend(self, bash_bin: Optional[str], installer_script: Optional[Path]) -> bool:
+        if self.force_simulation or not bash_bin or not installer_script:
+            return False
+        if sys.platform != "win32" or os.environ.get("CONJUNCTION_FORCE_BACKEND") == "1":
+            return True
+        if shutil.which("arch-chroot") or shutil.which("pacstrap"):
+            return True
+        return False
+
+    def _run(self):
+        try:
+            installer_script = self._find_installer_script()
+            bash_bin = self._find_bash()
+            config_file = self._write_config_file()
+
+            if self._can_run_backend(bash_bin, installer_script):
+                self._run_backend_script(bash_bin, installer_script, config_file)
+            else:
+                self._run_simulation()
 
         except Exception as e:
             if self.on_complete:

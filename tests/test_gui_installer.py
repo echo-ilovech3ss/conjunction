@@ -217,81 +217,91 @@ def test_installation_runner_pipeline(tmp_path):
 
 # ─── 3. GUI STATE & PAGE NAVIGATION TESTS ───────────────────────────────────
 
-def test_installer_gui_instantiation_and_step_transitions():
+@pytest.fixture(scope="module")
+def tk_root():
+    """Provides a shared hidden Tk root to prevent Tcl teardown issues in test runs."""
+    import tkinter as tk
+    root = tk.Tk()
+    root.withdraw()
+    yield root
+    try:
+        root.destroy()
+    except Exception:
+        pass
+
+
+def test_installer_gui_instantiation_and_step_transitions(tk_root):
     """Verify GUI installer initializes cleanly and transitions through all 7 pages."""
     import tkinter as tk
     from conjunction_gui.installer import ConjunctionInstallerApp
 
-    root = tk.Tk()
-    try:
-        app = ConjunctionInstallerApp(root=root, dry_run=True, test_mode=True)
-        assert app.current_step == 0
-        assert len(app.step_names) == 7
+    for child in tk_root.winfo_children():
+        child.destroy()
 
-        # Step 0: Welcome
-        assert str(app.btn_back.cget("state")) == "disabled"
-        assert str(app.btn_next.cget("text")) == "Next"
+    app = ConjunctionInstallerApp(root=tk_root, dry_run=True, test_mode=True)
+    assert app.current_step == 0
+    assert len(app.step_names) == 7
 
-        # Step 1: Storage
-        app._show_step(1)
-        assert app.current_step == 1
-        assert len(app.disk_card_widgets) > 0
-        assert str(app.btn_back.cget("state")) == "normal"
+    # Step 0: Welcome
+    assert str(app.btn_back.cget("state")) == "disabled"
+    assert str(app.btn_next.cget("text")) == "Next"
 
-        # Step 2: User Account
-        app._show_step(2)
-        assert app.current_step == 2
-        assert hasattr(app, "entry_username")
-        assert hasattr(app, "entry_pw")
-        # Enter valid user info
-        app.entry_username.delete(0, tk.END)
-        app.entry_username.insert(0, "archtest")
-        app.entry_pw.delete(0, tk.END)
-        app.entry_pw.insert(0, "validpass123")
-        app.entry_pw_confirm.delete(0, tk.END)
-        app.entry_pw_confirm.insert(0, "validpass123")
-        app._on_pw_change()
+    # Step 1: Storage
+    app._show_step(1)
+    assert app.current_step == 1
+    assert len(app.disk_card_widgets) > 0
+    assert str(app.btn_back.cget("state")) == "normal"
 
-        # Step 3: Preferences
-        app._show_step(3)
-        assert app.current_step == 3
-        assert hasattr(app, "entry_hostname")
+    # Step 2: User Account
+    app._show_step(2)
+    assert app.current_step == 2
+    assert hasattr(app, "entry_username")
+    assert hasattr(app, "entry_pw")
+    # Enter valid user info
+    app.entry_username.delete(0, tk.END)
+    app.entry_username.insert(0, "archtest")
+    app.entry_pw.delete(0, tk.END)
+    app.entry_pw.insert(0, "validpass123")
+    app.entry_pw_confirm.delete(0, tk.END)
+    app.entry_pw_confirm.insert(0, "validpass123")
+    app._on_pw_change()
 
-        # Step 4: Summary
-        app._show_step(4)
-        assert app.current_step == 4
-        assert str(app.btn_next.cget("text")) == "Install Conjunction OS"
+    # Step 3: Preferences
+    app._show_step(3)
+    assert app.current_step == 3
+    assert hasattr(app, "entry_hostname")
 
-        # Step 5: Installing
-        app._show_step(5)
-        assert app.current_step == 5
-        assert str(app.btn_back.cget("state")) == "disabled"
+    # Step 4: Summary
+    app._show_step(4)
+    assert app.current_step == 4
+    assert str(app.btn_next.cget("text")) == "Install Conjunction OS"
 
-        # Step 6: Completed
-        app._show_step(6)
-        assert app.current_step == 6
-        assert str(app.btn_next.cget("text")) == "Reboot Now"
+    # Step 5: Installing
+    app._show_step(5)
+    assert app.current_step == 5
+    assert str(app.btn_back.cget("state")) == "disabled"
 
-        # Test back navigation
-        app._show_step(3)
-        app._on_back()
-        assert app.current_step == 2
-    finally:
-        root.destroy()
+    # Step 6: Completed
+    app._show_step(6)
+    assert app.current_step == 6
+    assert str(app.btn_next.cget("text")) == "Reboot Now"
+
+    # Test back navigation
+    app._show_step(3)
+    app._on_back()
+    assert app.current_step == 2
 
 
-def test_welcome_gui_instantiation():
+def test_welcome_gui_instantiation(tk_root):
     """Verify Welcome Hub application initializes with action cards and system specs."""
-    import tkinter as tk
     from conjunction_gui.welcome import ConjunctionWelcomeApp
 
-    root = tk.Tk()
-    try:
-        app = ConjunctionWelcomeApp(root=root, test_mode=True)
-        assert app.specs is not None
-        assert app.specs.ram_total_gb > 0.0
-    finally:
-        root.destroy()
+    for child in tk_root.winfo_children():
+        child.destroy()
+
+    app = ConjunctionWelcomeApp(root=tk_root, test_mode=True)
+    assert app.specs is not None
+    assert app.specs.ram_total_gb > 0.0
 
 
 # ─── 4. DESKTOP ENTRIES & LAUNCHER SCRIPTS INTEGRATION ───────────────────────
@@ -329,3 +339,96 @@ def test_desktop_entries_syntax_and_executables():
                 icon_png = project_root / f"archiso/airootfs/usr/share/pixmaps/{icon_name}.png"
                 icon_svg = project_root / f"archiso/airootfs/usr/share/icons/hicolor/scalable/apps/{icon_name}.svg"
                 assert icon_png.exists() or icon_svg.exists(), f"Icon asset missing for: {icon_name}"
+
+
+def test_validation_disk_size():
+    """Test storage size boundary validation (minimum 20 GB)."""
+    ok, err = Validation.validate_disk_size(10 * (1024**3))
+    assert ok is False
+    assert "20.0 GB" in err
+
+    ok, err = Validation.validate_disk_size(19 * (1024**3))
+    assert ok is False
+
+    ok, err = Validation.validate_disk_size(20 * (1024**3))
+    assert ok is True
+    assert err == ""
+
+    ok, err = Validation.validate_disk_size(512 * (1024**3))
+    assert ok is True
+
+
+def test_disk_selection_reactivity(tk_root):
+    """Verify GUI disk selection properly updates radio symbol and selected disk variable."""
+    from conjunction_gui.installer import ConjunctionInstallerApp
+
+    for child in tk_root.winfo_children():
+        child.destroy()
+
+    app = ConjunctionInstallerApp(root=tk_root, dry_run=True, test_mode=True)
+    app._show_step(1)
+    assert len(app.available_disks) >= 2
+
+    first_disk = app.available_disks[0].name
+    second_disk = app.available_disks[1].name
+
+    # Initial selection is first disk
+    assert app.config.target_disk == first_disk
+    first_item = next(it for it in app.disk_card_items if it["disk"].name == first_disk)
+    second_item = next(it for it in app.disk_card_items if it["disk"].name == second_disk)
+    assert first_item["rad_lbl"].cget("text") == "◉"
+
+    # Select second disk
+    app._select_disk(second_disk)
+    assert app.config.target_disk == second_disk
+    assert first_item["rad_lbl"].cget("text") == "○"
+    assert second_item["rad_lbl"].cget("text") == "◉"
+
+
+def test_partitioning_method_selection(tk_root):
+    """Verify GUI partitioning method switches between automatic and manual."""
+    from conjunction_gui.installer import ConjunctionInstallerApp
+
+    for child in tk_root.winfo_children():
+        child.destroy()
+
+    app = ConjunctionInstallerApp(root=tk_root, dry_run=True, test_mode=True)
+    app._show_step(1)
+    assert hasattr(app, "var_part_method")
+    assert app.var_part_method.get() == 1  # Automatic default
+
+    app.var_part_method.set(2)  # Manual
+    app._on_part_method_change()
+    assert app.config.part_method == 2
+
+    # Check launch partition manager button exists
+    assert hasattr(app, "btn_open_partman")
+
+
+def test_installation_runner_unattended_config_writing(tmp_path):
+    """Verify InstallationRunner writes unattended JSON config before execution."""
+    cfg = InstallConfig(
+        target_disk="nvme0n1",
+        part_scheme=1,
+        part_method=1,
+        username="unattended_user",
+        fullname="Unattended Test",
+        password="secretpassword",
+        hostname="custom-box",
+        timezone="America/New_York",
+        enable_snapper=True,
+        is_dry_run=True,
+    )
+
+    runner = InstallationRunner(config=cfg)
+    cfg_file = tmp_path / "test-unattended.json"
+    runner._write_unattended_config(cfg_file)
+
+    assert cfg_file.exists()
+    payload = json.loads(cfg_file.read_text(encoding="utf-8"))
+    assert payload["target_disk"] == "nvme0n1"
+    assert payload["username"] == "unattended_user"
+    assert payload["hostname"] == "custom-box"
+    assert payload["timezone"] == "America/New_York"
+    assert payload["enable_snapper"] is True
+

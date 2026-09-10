@@ -15,18 +15,61 @@ NC='\033[0m'
 
 # ─── Dry Run & Logging Setup ───────────────────────────────────────────────
 DRY_RUN=false
-for arg in "$@"; do
-    case "$arg" in
+CONFIG_FILE=""
+UNATTENDED=false
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
         -d|--dry-run)
             DRY_RUN=true
+            shift
             ;;
         -g|--gui)
             if [[ -x "/usr/local/bin/conjunction-installer-gui" ]]; then
                 exec /usr/local/bin/conjunction-installer-gui "$@"
             fi
+            shift
+            ;;
+        -c|--config)
+            CONFIG_FILE="${2:-}"
+            UNATTENDED=true
+            shift 2
+            ;;
+        --config=*)
+            CONFIG_FILE="${1#*=}"
+            UNATTENDED=true
+            shift
+            ;;
+        -u|--unattended)
+            UNATTENDED=true
+            shift
+            ;;
+        *)
+            shift
             ;;
     esac
 done
+
+if [[ -n "${CONJUNCTION_UNATTENDED:-}" ]]; then
+    UNATTENDED=true
+fi
+
+if [[ -n "$CONFIG_FILE" && -f "$CONFIG_FILE" ]]; then
+    UNATTENDED=true
+    TARGET_DISK=$(python3 -c "import json; d=json.load(open('$CONFIG_FILE')); print(d.get('target_disk',''))" 2>/dev/null || true)
+    PART_SCHEME=$(python3 -c "import json; d=json.load(open('$CONFIG_FILE')); print(d.get('part_scheme','1'))" 2>/dev/null || true)
+    PART_METHOD=$(python3 -c "import json; d=json.load(open('$CONFIG_FILE')); print(d.get('part_method','1'))" 2>/dev/null || true)
+    USERNAME=$(python3 -c "import json; d=json.load(open('$CONFIG_FILE')); print(d.get('username',''))" 2>/dev/null || true)
+    PASSWORD=$(python3 -c "import json; d=json.load(open('$CONFIG_FILE')); print(d.get('password',''))" 2>/dev/null || true)
+    ROOT_PASSWORD=$(python3 -c "import json; d=json.load(open('$CONFIG_FILE')); print(d.get('root_password',''))" 2>/dev/null || true)
+    HOSTNAME=$(python3 -c "import json; d=json.load(open('$CONFIG_FILE')); print(d.get('hostname','conjunction'))" 2>/dev/null || true)
+    TIMEZONE=$(python3 -c "import json; d=json.load(open('$CONFIG_FILE')); print(d.get('timezone','UTC'))" 2>/dev/null || true)
+    ENABLE_SNAPPER=$(python3 -c "import json; d=json.load(open('$CONFIG_FILE')); print(str(d.get('enable_snapper', True)).lower())" 2>/dev/null || true)
+    CONFIG_DRY_RUN=$(python3 -c "import json; d=json.load(open('$CONFIG_FILE')); print(str(d.get('is_dry_run', False)).lower())" 2>/dev/null || true)
+    if [[ "$CONFIG_DRY_RUN" == "true" ]]; then
+        DRY_RUN=true
+    fi
+fi
 
 LOG_FILE="/var/log/conjunction-installer.log"
 # Redirect stdout and stderr to the log file as well as the terminal
@@ -211,9 +254,13 @@ set_chroot_password() {
 
 # ─── Check for Root ────────────────────────────────────────────────────────
 if [[ $EUID -ne 0 ]]; then
-    err "This installer must be run as root."
-    err "Please run: sudo $0"
-    exit 1
+    if [[ "$DRY_RUN" == true ]]; then
+        warn "Running in dry-run mode without root privileges."
+    else
+        err "This installer must be run as root."
+        err "Please run: sudo $0"
+        exit 1
+    fi
 fi
 
 echo -e "${CYAN}"
@@ -225,27 +272,36 @@ echo " \____\___/|_| \_(_)___\___/|_| \_|\____| |_| |___\___/|_| \_|  \___/|____
 echo -e "                     Installer - Version 1.0.0${NC}\n"
 
 # ─── Resume Checkpoint Check ────────────────────────────────────────────────
-TARGET_DISK=""
-PART_SCHEME=""
-EFI_PART=""
-ROOT_PART=""
-USERNAME=""
+TARGET_DISK="${TARGET_DISK:-}"
+PART_SCHEME="${PART_SCHEME:-}"
+EFI_PART="${EFI_PART:-}"
+ROOT_PART="${ROOT_PART:-}"
+USERNAME="${USERNAME:-}"
+PASSWORD="${PASSWORD:-}"
+ROOT_PASSWORD="${ROOT_PASSWORD:-}"
+HOSTNAME="${HOSTNAME:-conjunction}"
+TIMEZONE="${TIMEZONE:-UTC}"
 
 if [[ -f "$STATE_FILE" ]]; then
-    echo -e "${YELLOW}An existing installation state was found.${NC}"
-    read -p "Would you like to resume from the last failed step? (Y/n): " -r RESUME
-    RESUME="${RESUME:-y}"
-    if [[ ! $RESUME =~ ^[Yy]$ ]]; then
-        log "Starting fresh installation. Wiping state file..."
+    if [[ "$UNATTENDED" == true ]]; then
+        log "Unattended mode: starting fresh installation and resetting state file..."
         rm -f "$STATE_FILE"
     else
-        # Load variables from state file
-        TARGET_DISK=$(get_checkpoint_state "target_disk")
-        PART_SCHEME=$(get_checkpoint_state "part_scheme")
-        EFI_PART=$(get_checkpoint_state "efi_part")
-        ROOT_PART=$(get_checkpoint_state "root_part")
-        USERNAME=$(get_checkpoint_state "username")
-        log "Resuming installation. Loaded: disk=/dev/${TARGET_DISK}, scheme=${PART_SCHEME}, efi=${EFI_PART}, root=${ROOT_PART}, user=${USERNAME}"
+        echo -e "${YELLOW}An existing installation state was found.${NC}"
+        read -p "Would you like to resume from the last failed step? (Y/n): " -r RESUME
+        RESUME="${RESUME:-y}"
+        if [[ ! $RESUME =~ ^[Yy]$ ]]; then
+            log "Starting fresh installation. Wiping state file..."
+            rm -f "$STATE_FILE"
+        else
+            # Load variables from state file
+            TARGET_DISK=$(get_checkpoint_state "target_disk")
+            PART_SCHEME=$(get_checkpoint_state "part_scheme")
+            EFI_PART=$(get_checkpoint_state "efi_part")
+            ROOT_PART=$(get_checkpoint_state "root_part")
+            USERNAME=$(get_checkpoint_state "username")
+            log "Resuming installation. Loaded: disk=/dev/${TARGET_DISK}, scheme=${PART_SCHEME}, efi=${EFI_PART}, root=${ROOT_PART}, user=${USERNAME}"
+        fi
     fi
 fi
 
@@ -255,26 +311,30 @@ preflight_checks
 if ! is_step_completed "select_disk"; then
     header "Step 1: Select Installation Disk"
 
-    DISKS=($(lsblk -d -n -o NAME | grep -v "loop\|sr\|ram\|zram\|dm-" || true))
-    if [[ "${#DISKS[@]}" -eq 0 ]]; then
-        err "No available installation disks found!"
-        exit 1
-    elif [[ "${#DISKS[@]}" -eq 1 ]]; then
-        TARGET_DISK="${DISKS[0]}"
-        echo "Available disk: /dev/${TARGET_DISK} ($(lsblk -d -o SIZE "/dev/${TARGET_DISK}" | tail -1 | xargs))"
-        read -p "Install Conjunction OS to /dev/${TARGET_DISK}? (Y/n): " CONFIRM_DISK
-        CONFIRM_DISK="${CONFIRM_DISK:-y}"
-        if [[ ! "$CONFIRM_DISK" =~ ^[Yy]$ ]]; then
-            err "Installation aborted by user."
-            exit 1
-        fi
+    if [[ "$UNATTENDED" == true && -n "$TARGET_DISK" ]]; then
+        log "Target disk specified via configuration: /dev/${TARGET_DISK}"
     else
-        echo "Available disks:"
-        echo ""
-        lsblk -d -o NAME,SIZE,MODEL,ROTA | grep -v "loop\|sr\|ram\|zram\|dm-"
-        echo ""
-        read -p "Enter disk name (e.g., sda, nvme0n1): " TARGET_DISK
-        TARGET_DISK="${TARGET_DISK#/dev/}"
+        DISKS=($(lsblk -d -n -o NAME | grep -v "loop\|sr\|ram\|zram\|dm-" || true))
+        if [[ "${#DISKS[@]}" -eq 0 ]]; then
+            err "No available installation disks found!"
+            exit 1
+        elif [[ "${#DISKS[@]}" -eq 1 ]]; then
+            TARGET_DISK="${DISKS[0]}"
+            echo "Available disk: /dev/${TARGET_DISK} ($(lsblk -d -o SIZE "/dev/${TARGET_DISK}" | tail -1 | xargs))"
+            read -p "Install Conjunction OS to /dev/${TARGET_DISK}? (Y/n): " CONFIRM_DISK
+            CONFIRM_DISK="${CONFIRM_DISK:-y}"
+            if [[ ! "$CONFIRM_DISK" =~ ^[Yy]$ ]]; then
+                err "Installation aborted by user."
+                exit 1
+            fi
+        else
+            echo "Available disks:"
+            echo ""
+            lsblk -d -o NAME,SIZE,MODEL,ROTA | grep -v "loop\|sr\|ram\|zram\|dm-"
+            echo ""
+            read -p "Enter disk name (e.g., sda, nvme0n1): " TARGET_DISK
+            TARGET_DISK="${TARGET_DISK#/dev/}"
+        fi
     fi
 
     if [[ ! -b "/dev/${TARGET_DISK}" ]]; then
@@ -301,12 +361,17 @@ if ! is_step_completed "select_disk"; then
     echo ""
     warn "⚠️ WARNING: Installing Conjunction OS will completely WIPE all data on /dev/${TARGET_DISK}!"
     warn "This includes any existing Linux or Windows partitions on that drive."
-    echo "Type 'ERASE' (all capital letters) to confirm and proceed with the installation."
-    read -p "Confirmation: " -r ERASE_CONFIRM
 
-    if [[ "$ERASE_CONFIRM" != "ERASE" ]]; then
-        err "Confirmation failed. Installation aborted."
-        exit 1
+    if [[ "$UNATTENDED" != true ]]; then
+        echo "Type 'ERASE' (all capital letters) to confirm and proceed with the installation."
+        read -p "Confirmation: " -r ERASE_CONFIRM
+
+        if [[ "$ERASE_CONFIRM" != "ERASE" ]]; then
+            err "Confirmation failed. Installation aborted."
+            exit 1
+        fi
+    else
+        log "Confirmation pre-authorized by configuration/GUI."
     fi
 
     log "Deactivating swap, LVM volume groups, and MD RAID arrays on /dev/${TARGET_DISK}..."
@@ -370,20 +435,24 @@ if ! is_step_completed "partitioning"; then
         log "Legacy BIOS firmware detected. Defaulting to MBR."
     fi
 
-    read -p "Select partitioning scheme [${DEFAULT_PART_SCHEME}]: " PART_SCHEME
-    PART_SCHEME="${PART_SCHEME:-$DEFAULT_PART_SCHEME}"
+    if [[ "$UNATTENDED" != true || -z "$PART_SCHEME" ]]; then
+        read -p "Select partitioning scheme [${DEFAULT_PART_SCHEME}]: " PART_SCHEME
+        PART_SCHEME="${PART_SCHEME:-$DEFAULT_PART_SCHEME}"
 
-    echo ""
-    echo "Partitioning method:"
-    echo "  1. Automatic partitioning (WIPES DISK, creates EFI and Btrfs root)"
-    echo "  2. Manual partitioning (Opens cfdisk command-line interface)"
-    echo ""
-    echo "💡 TIP: If you prefer a graphical interface (with a slider), you can open"
-    echo "   'KDE Partition Manager' from the system application launcher first to"
-    echo "   graphically resize or create partitions. Then select '2' here to assign them."
-    echo ""
-    read -p "Select partitioning method [1]: " PART_METHOD
-    PART_METHOD="${PART_METHOD:-1}"
+        echo ""
+        echo "Partitioning method:"
+        echo "  1. Automatic partitioning (WIPES DISK, creates EFI and Btrfs root)"
+        echo "  2. Manual partitioning (Opens cfdisk command-line interface)"
+        echo ""
+        echo "💡 TIP: If you prefer a graphical interface (with a slider), you can open"
+        echo "   'KDE Partition Manager' from the system application launcher first to"
+        echo "   graphically resize or create partitions. Then select '2' here to assign them."
+        echo ""
+        read -p "Select partitioning method [1]: " PART_METHOD
+        PART_METHOD="${PART_METHOD:-1}"
+    else
+        log "Using preconfigured partitioning scheme: ${PART_SCHEME} and method: ${PART_METHOD:-1}"
+    fi
 
     if [[ "$DRY_RUN" == true ]]; then
         EFI_PART=""
@@ -617,9 +686,9 @@ if ! is_step_completed "configure_system"; then
     ok "fstab generated successfully"
 
     # Set timezone
-    run_chroot ln -sf /usr/share/zoneinfo/UTC /etc/localtime
+    run_chroot ln -sf "/usr/share/zoneinfo/${TIMEZONE:-UTC}" /etc/localtime
     run_chroot hwclock --systohc
-    ok "Timezone configured"
+    ok "Timezone configured (${TIMEZONE:-UTC})"
 
     # Set locale
     if [[ "$DRY_RUN" == true ]]; then
@@ -633,16 +702,16 @@ if ! is_step_completed "configure_system"; then
 
     # Set hostname
     if [[ "$DRY_RUN" == true ]]; then
-        echo -e "${YELLOW}[DRY RUN]${NC} Simulating writing /etc/hostname and /etc/hosts..."
+        echo -e "${YELLOW}[DRY RUN]${NC} Simulating writing /etc/hostname and /etc/hosts with ${HOSTNAME:-conjunction}..."
     else
-        echo "conjunction" > /mnt/etc/hostname
+        echo "${HOSTNAME:-conjunction}" > /mnt/etc/hostname
         cat > /mnt/etc/hosts << EOF
 127.0.0.1   localhost
-127.0.1.1   conjunction
+127.0.1.1   ${HOSTNAME:-conjunction}
 ::1         localhost
 EOF
     fi
-    ok "Hostname configured"
+    ok "Hostname configured (${HOSTNAME:-conjunction})"
 
     # Write Nouveau blacklist configuration
     log "Writing Nouveau blacklist configuration..."
@@ -760,10 +829,14 @@ post_install_validation() {
 
     if [[ "$failed" == true ]]; then
         warn "⚠️ Some validation checks failed! Please review the errors above."
-        read -p "Do you want to continue anyway? (y/N): " -r CONTINUE_ANYWAY
-        if [[ ! $CONTINUE_ANYWAY =~ ^[Yy]$ ]]; then
-            err "Installation aborted due to validation failure."
-            exit 1
+        if [[ "$UNATTENDED" == true ]]; then
+            warn "Unattended mode: proceeding despite non-fatal validation warnings."
+        else
+            read -p "Do you want to continue anyway? (y/N): " -r CONTINUE_ANYWAY
+            if [[ ! $CONTINUE_ANYWAY =~ ^[Yy]$ ]]; then
+                err "Installation aborted due to validation failure."
+                exit 1
+            fi
         fi
     else
         ok "All post-install validation checks passed!"
@@ -774,54 +847,66 @@ post_install_validation() {
 if ! is_step_completed "user_setup"; then
     header "Step 6: Creating User Account"
 
-    read -p "Enter username: " USERNAME
-    validate_username "$USERNAME"
+    if [[ "$UNATTENDED" != true || -z "$USERNAME" ]]; then
+        read -p "Enter username: " USERNAME
+        validate_username "$USERNAME"
 
-    read -s -p "Enter password for $USERNAME: " PASSWORD
-    echo ""
-    read -s -p "Confirm password: " PASSWORD_CONFIRM
-    echo ""
-
-    if [[ "$PASSWORD" != "$PASSWORD_CONFIRM" ]]; then
-        err "Passwords do not match."
-        exit 1
-    fi
-
-    if [[ -z "$PASSWORD" ]]; then
-        err "Password cannot be empty."
-        exit 1
-    fi
-
-    if [[ "$PASSWORD" == *:* ]]; then
-        err "Password cannot contain ':' because Linux chpasswd uses it as a field separator."
-        exit 1
-    fi
-
-    read -p "Use the same password for the root (administrator) account? (Y/n): " SAME_PASSWORD
-    SAME_PASSWORD="${SAME_PASSWORD:-y}"
-
-    if [[ ! "$SAME_PASSWORD" =~ ^[Yy]$ ]]; then
-        read -s -p "Enter password for root: " ROOT_PASSWORD
+        read -s -p "Enter password for $USERNAME: " PASSWORD
         echo ""
-        read -s -p "Confirm root password: " ROOT_PASSWORD_CONFIRM
+        read -s -p "Confirm password: " PASSWORD_CONFIRM
         echo ""
 
-        if [[ "$ROOT_PASSWORD" != "$ROOT_PASSWORD_CONFIRM" ]]; then
+        if [[ "$PASSWORD" != "$PASSWORD_CONFIRM" ]]; then
             err "Passwords do not match."
             exit 1
         fi
 
-        if [[ -z "$ROOT_PASSWORD" ]]; then
+        if [[ -z "$PASSWORD" ]]; then
             err "Password cannot be empty."
             exit 1
         fi
 
-        if [[ "$ROOT_PASSWORD" == *:* ]]; then
+        if [[ "$PASSWORD" == *:* ]]; then
             err "Password cannot contain ':' because Linux chpasswd uses it as a field separator."
             exit 1
         fi
+
+        read -p "Use the same password for the root (administrator) account? (Y/n): " SAME_PASSWORD
+        SAME_PASSWORD="${SAME_PASSWORD:-y}"
+
+        if [[ ! "$SAME_PASSWORD" =~ ^[Yy]$ ]]; then
+            read -s -p "Enter password for root: " ROOT_PASSWORD
+            echo ""
+            read -s -p "Confirm root password: " ROOT_PASSWORD_CONFIRM
+            echo ""
+
+            if [[ "$ROOT_PASSWORD" != "$ROOT_PASSWORD_CONFIRM" ]]; then
+                err "Passwords do not match."
+                exit 1
+            fi
+
+            if [[ -z "$ROOT_PASSWORD" ]]; then
+                err "Password cannot be empty."
+                exit 1
+            fi
+
+            if [[ "$ROOT_PASSWORD" == *:* ]]; then
+                err "Password cannot contain ':' because Linux chpasswd uses it as a field separator."
+                exit 1
+            fi
+        else
+            ROOT_PASSWORD="$PASSWORD"
+        fi
     else
-        ROOT_PASSWORD="$PASSWORD"
+        validate_username "$USERNAME"
+        if [[ -z "$PASSWORD" ]]; then
+            err "Unattended installation requires a non-empty password."
+            exit 1
+        fi
+        if [[ -z "$ROOT_PASSWORD" ]]; then
+            ROOT_PASSWORD="$PASSWORD"
+        fi
+        log "Using preconfigured user account: $USERNAME"
     fi
 
     # Create user
@@ -831,19 +916,18 @@ if ! is_step_completed "user_setup"; then
     set_chroot_password "$USERNAME" "$PASSWORD"
 
     # Set root password
-    set_chroot_password root "$ROOT_PASSWORD"
+    set_chroot_password "root" "$ROOT_PASSWORD"
 
-    # Enable sudo for wheel group
-    if [[ "$DRY_RUN" == false ]]; then
-        sed -i 's/# %wheel ALL=(ALL:ALL) ALL/%wheel ALL=(ALL:ALL) ALL/' "$MNT/etc/sudoers" 2>/dev/null || true
-        mkdir -p "$MNT/etc/sudoers.d"
-        echo "%wheel ALL=(ALL:ALL) ALL" > "$MNT/etc/sudoers.d/10-wheel"
-        chmod 440 "$MNT/etc/sudoers.d/10-wheel"
+    # Setup wheel group in sudoers
+    log "Configuring sudoers for wheel group..."
+    if [[ "$DRY_RUN" == true ]]; then
+        echo -e "${YELLOW}[DRY RUN]${NC} Simulating sudoers configuration..."
     else
-        echo -e "${YELLOW}[DRY RUN]${NC} Simulating enabling sudo for wheel group..."
+        echo "%wheel ALL=(ALL:ALL) ALL" > /mnt/etc/sudoers.d/wheel
+        chmod 440 /mnt/etc/sudoers.d/wheel
     fi
 
-    ok "User account created"
+    ok "User account created and sudo configured"
     save_checkpoint "user_setup"
 else
     log "Step 6: Creating User Account (Skipped - already completed)"
@@ -853,31 +937,35 @@ fi
 if ! is_step_completed "snapper_config"; then
     header "Step 7: Configuring Snapper"
 
-    if [[ "$DRY_RUN" == true ]]; then
-        echo -e "${YELLOW}[DRY RUN]${NC} Simulating Snapper configuration..."
+    if [[ "${ENABLE_SNAPPER:-true}" == "true" ]]; then
+        if [[ "$DRY_RUN" == true ]]; then
+            echo -e "${YELLOW}[DRY RUN]${NC} Simulating Snapper configuration..."
+        else
+            # Unmount the snapshots subvolume temporarily so snapper can create its config
+            log "Unmounting .snapshots temporarily..."
+            umount -l /mnt/.snapshots 2>/dev/null || true
+            btrfs subvolume delete /mnt/.snapshots 2>/dev/null || rm -rf /mnt/.snapshots 2>/dev/null || true
+
+            # Create snapper config
+            log "Initializing Snapper config..."
+            arch-chroot /mnt snapper -c root create-config / || true
+
+            # Delete the directory snapper created so we can remount our subvolume there
+            log "Remounting .snapshots subvolume..."
+            btrfs subvolume delete /mnt/.snapshots 2>/dev/null || rm -rf /mnt/.snapshots 2>/dev/null || true
+            mkdir -p /mnt/.snapshots
+            mount -o subvol=@snapshots,compress=zstd,noatime "${ROOT_PART}" /mnt/.snapshots || true
+        fi
+
+        run_chroot snapper -c root set-timeline-limit-hourly 10 || true
+        run_chroot snapper -c root set-timeline-limit-daily 7 || true
+        run_chroot snapper -c root set-timeline-limit-weekly 4 || true
+        run_chroot snapper -c root set-timeline-limit-monthly 6 || true
+
+        ok "Snapper configured"
     else
-        # Unmount the snapshots subvolume temporarily so snapper can create its config
-        log "Unmounting .snapshots temporarily..."
-        umount -l /mnt/.snapshots 2>/dev/null || true
-        btrfs subvolume delete /mnt/.snapshots 2>/dev/null || rm -rf /mnt/.snapshots 2>/dev/null || true
-
-        # Create snapper config
-        log "Initializing Snapper config..."
-        arch-chroot /mnt snapper -c root create-config / || true
-
-        # Delete the directory snapper created so we can remount our subvolume there
-        log "Remounting .snapshots subvolume..."
-        btrfs subvolume delete /mnt/.snapshots 2>/dev/null || rm -rf /mnt/.snapshots 2>/dev/null || true
-        mkdir -p /mnt/.snapshots
-        mount -o subvol=@snapshots,compress=zstd,noatime "${ROOT_PART}" /mnt/.snapshots || true
+        log "Snapper automated snapshots disabled by configuration"
     fi
-
-    run_chroot snapper -c root set-timeline-limit-hourly 10 || true
-    run_chroot snapper -c root set-timeline-limit-daily 7 || true
-    run_chroot snapper -c root set-timeline-limit-weekly 4 || true
-    run_chroot snapper -c root set-timeline-limit-monthly 6 || true
-
-    ok "Snapper configured"
     save_checkpoint "snapper_config"
 else
     log "Step 7: Configuring Snapper (Skipped - already completed)"

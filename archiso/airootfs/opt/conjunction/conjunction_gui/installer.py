@@ -22,7 +22,8 @@ from .theme import (
 )
 from .backend import (
     DiskInfo, SystemSpecs, InstallConfig,
-    SystemDiscovery, Validation, InstallationRunner
+    SystemDiscovery, Validation, InstallationRunner,
+    find_brand_asset
 )
 from .logo import render_logo_png, export_all_brand_assets
 
@@ -76,6 +77,7 @@ class ConjunctionInstallerApp:
         self.logo_img_header: Optional[Any] = None
         self.logo_img_hero: Optional[Any] = None
         self.disk_card_widgets: List[ModernCard] = []
+        self.disk_card_items: List[Dict[str, Any]] = []
         self._load_brand_assets()
 
         # Thread queue for background installer events
@@ -90,26 +92,27 @@ class ConjunctionInstallerApp:
         self.root.after(100, self._process_events)
 
     def _load_brand_assets(self):
-        """Loads and prepares Conjunction OS God Logo icons."""
-        # Find or export assets
-        base_dir = Path(__file__).parent.parent / "assets"
-        header_png = base_dir / "icons" / "conjunction-32.png"
-        hero_png = base_dir / "conjunction.png"
+        """Loads and prepares Conjunction OS God Logo icons with multi-tier fallback."""
+        header_png = find_brand_asset("conjunction-32.png") or find_brand_asset("conjunction-installer.png")
+        hero_png = find_brand_asset("conjunction.png") or find_brand_asset("conjunction-logo-512.png")
 
-        if not header_png.exists() or not hero_png.exists():
+        if not header_png or not hero_png:
+            base_dir = Path(__file__).parent.parent / "assets"
             try:
                 export_all_brand_assets(str(base_dir))
+                header_png = find_brand_asset("conjunction-32.png") or find_brand_asset("conjunction-installer.png")
+                hero_png = find_brand_asset("conjunction.png") or find_brand_asset("conjunction-logo-512.png")
             except Exception:
                 pass
 
-        if HAS_PIL and header_png.exists():
+        if HAS_PIL and header_png and header_png.exists():
             try:
                 im_hdr = Image.open(str(header_png)).resize((28, 28), Image.Resampling.LANCZOS)
                 self.logo_img_header = ImageTk.PhotoImage(im_hdr)
             except Exception:
                 pass
 
-        if HAS_PIL and hero_png.exists():
+        if HAS_PIL and hero_png and hero_png.exists():
             try:
                 im_hero = Image.open(str(hero_png)).resize((110, 110), Image.Resampling.LANCZOS)
                 self.logo_img_hero = ImageTk.PhotoImage(im_hero)
@@ -348,80 +351,78 @@ class ConjunctionInstallerApp:
         tk.Label(self.content_frame, text="Storage Destination & Partitions",
                  font=("Segoe UI", 14, "bold"), fg=Palette.TEXT_PRIMARY, bg=Palette.BG_DARK).pack(anchor="w")
 
-        tk.Label(self.content_frame, text="Select the drive to install Conjunction OS. Btrfs subvolumes will be created.",
+        tk.Label(self.content_frame, text="Select the drive to install Conjunction OS and choose your partitioning method.",
                  font=("Segoe UI", 9), fg=Palette.TEXT_SECONDARY, bg=Palette.BG_DARK).pack(anchor="w", pady=(2, 12))
 
         # List of detected disks
         self.disk_card_widgets = []
+        self.disk_card_items = []
         disks_container = tk.Frame(self.content_frame, bg=Palette.BG_DARK)
-        disks_container.pack(fill=tk.X, pady=(0, 12))
+        disks_container.pack(fill=tk.X, pady=(0, 8))
 
         for disk in self.available_disks:
+            is_initial = (disk.name == self.config.target_disk)
             card = ModernCard(disks_container, height=64)
             card.pack(fill=tk.X, pady=4)
-            if disk.name == self.config.target_disk:
+            if is_initial:
                 card.set_selected(True)
 
-            card_inner = tk.Frame(card, bg=Palette.BG_CARD_SELECTED if disk.name == self.config.target_disk else Palette.BG_CARD)
+            card_inner = tk.Frame(card, bg=Palette.BG_CARD_SELECTED if is_initial else Palette.BG_CARD)
             card.create_window(12, 8, anchor="nw", window=card_inner)
 
-            # Click handler to select disk
-            def make_click_handler(d_name=disk.name, c=card, ci=card_inner):
-                def _select(event=None):
-                    self.config.target_disk = d_name
-                    for other_card in self.disk_card_widgets:
-                        other_card.set_selected(False)
-                    c.set_selected(True)
-                return _select
-
-            handler = make_click_handler()
-            card.bind("<Button-1>", handler)
-            card_inner.bind("<Button-1>", handler)
-
-            # Disk Icon and Name
             top_line = tk.Frame(card_inner, bg=card_inner["bg"])
             top_line.pack(fill=tk.X)
-            top_line.bind("<Button-1>", handler)
 
-            radio_char = "◉" if disk.name == self.config.target_disk else "○"
+            radio_char = "◉" if is_initial else "○"
             rad_lbl = tk.Label(top_line, text=radio_char, font=("Segoe UI", 12),
                                fg=Palette.ACCENT_CYAN, bg=card_inner["bg"])
             rad_lbl.pack(side=tk.LEFT, padx=(0, 8))
-            rad_lbl.bind("<Button-1>", handler)
 
             d_title = tk.Label(top_line, text=f"/dev/{disk.name}  —  {disk.size_human}",
                                font=("Segoe UI", 10, "bold"), fg=Palette.TEXT_PRIMARY, bg=card_inner["bg"])
             d_title.pack(side=tk.LEFT)
-            d_title.bind("<Button-1>", handler)
 
             type_badge = tk.Label(top_line, text=f" [{disk.disk_type_label}] ",
                                   font=("Segoe UI", 8, "bold"), fg=Palette.ACCENT_CYAN, bg=card_inner["bg"])
             type_badge.pack(side=tk.LEFT, padx=6)
-            type_badge.bind("<Button-1>", handler)
 
             d_model = tk.Label(card_inner, text=f"Model: {disk.model}", font=("Segoe UI", 8),
                                fg=Palette.TEXT_SECONDARY, bg=card_inner["bg"])
             d_model.pack(anchor="w", padx=(28, 0))
-            d_model.bind("<Button-1>", handler)
 
+            item_record = {
+                "disk": disk,
+                "card": card,
+                "inner": card_inner,
+                "top_line": top_line,
+                "rad_lbl": rad_lbl,
+                "d_title": d_title,
+                "badge": type_badge,
+                "d_model": d_model
+            }
+            self.disk_card_items.append(item_record)
             self.disk_card_widgets.append(card)
 
-        # Partitioning Method
-        part_box = ModernCard(self.content_frame, height=130)
-        part_box.pack(fill=tk.X, pady=(4, 12))
+            # Bind click handlers to all components of the card
+            handler = (lambda e, dn=disk.name: self._select_disk(dn))
+            for w in [card, card_inner, top_line, rad_lbl, d_title, type_badge, d_model]:
+                w.bind("<Button-1>", handler)
+
+        # Partitioning Method & Layout
+        part_box = ModernCard(self.content_frame, height=185)
+        part_box.pack(fill=tk.X, pady=(4, 8))
 
         part_inner = tk.Frame(part_box, bg=Palette.BG_CARD)
         part_box.create_window(14, 10, anchor="nw", window=part_inner)
 
-        tk.Label(part_inner, text="Partitioning Layout", font=("Segoe UI", 10, "bold"),
+        tk.Label(part_inner, text="Partitioning Layout & Method", font=("Segoe UI", 10, "bold"),
                  fg=Palette.TEXT_PRIMARY, bg=Palette.BG_CARD).pack(anchor="w")
 
-        # Partition bar visualization
         pbar = PartitionVisualBar(part_inner, height=18, width=540)
-        pbar.pack(fill=tk.X, pady=(6, 8))
+        pbar.pack(fill=tk.X, pady=(6, 6))
 
         legend_row = tk.Frame(part_inner, bg=Palette.BG_CARD)
-        legend_row.pack(fill=tk.X)
+        legend_row.pack(fill=tk.X, pady=(0, 8))
         legs = [
             ("EFI System (512M)", Palette.PART_EFI),
             ("Root / (@)", Palette.PART_ROOT),
@@ -432,80 +433,209 @@ class ConjunctionInstallerApp:
             tk.Label(legend_row, text="■", font=("Segoe UI", 10), fg=leg_col, bg=Palette.BG_CARD).pack(side=tk.LEFT, padx=(0, 3))
             tk.Label(legend_row, text=leg_text, font=("Segoe UI", 8), fg=Palette.TEXT_SECONDARY, bg=Palette.BG_CARD).pack(side=tk.LEFT, padx=(0, 12))
 
-        # Data wipe warning
-        warn_card = ModernCard(self.content_frame, height=52, border=Palette.ACCENT_AMBER)
-        warn_card.pack(fill=tk.X)
-        warn_inner = tk.Frame(warn_card, bg=Palette.BG_CARD)
-        warn_card.create_window(12, 10, anchor="nw", window=warn_inner)
+        # Method Radios
+        self.var_part_method = tk.IntVar(value=self.config.part_method or 1)
 
-        tk.Label(warn_inner, text="⚠️ NOTICE:", font=("Segoe UI", 9, "bold"),
-                 fg=Palette.ACCENT_AMBER, bg=Palette.BG_CARD).pack(side=tk.LEFT, padx=(0, 6))
-        tk.Label(warn_inner, text="Installing will re-partition and format the chosen drive. Make sure important data is backed up.",
-                 font=("Segoe UI", 8), fg=Palette.TEXT_SECONDARY, bg=Palette.BG_CARD).pack(side=tk.LEFT)
+        r_auto = ttk.Radiobutton(part_inner,
+                                 text="Automatic Btrfs (Recommended - Erases drive, allocates EFI & subvolumes @, @home, @snapshots)",
+                                 variable=self.var_part_method, value=1, style="Card.TRadiobutton",
+                                 command=self._on_part_method_change)
+        r_auto.pack(anchor="w", pady=2)
+
+        r_man_frame = tk.Frame(part_inner, bg=Palette.BG_CARD)
+        r_man_frame.pack(fill=tk.X, pady=2)
+
+        r_man = ttk.Radiobutton(r_man_frame,
+                                text="Manual Partitioning (Advanced - Launch partition manager to inspect or prepare custom partitions)",
+                                variable=self.var_part_method, value=2, style="Card.TRadiobutton",
+                                command=self._on_part_method_change)
+        r_man.pack(side=tk.LEFT)
+
+        self.btn_open_partman = ttk.Button(r_man_frame, text="Launch Partition Manager", style="Secondary.TButton",
+                                           command=self._open_partition_manager)
+        if self.config.part_method == 2:
+            self.btn_open_partman.pack(side=tk.LEFT, padx=12)
+
+        # Storage boundary notice card
+        notice_card = ModernCard(self.content_frame, height=48, border=Palette.BORDER_DEFAULT)
+        notice_card.pack(fill=tk.X)
+        notice_inner = tk.Frame(notice_card, bg=Palette.BG_CARD)
+        notice_card.create_window(12, 10, anchor="nw", window=notice_inner)
+
+        self.lbl_storage_notice = tk.Label(notice_inner, text="", font=("Segoe UI", 9),
+                                           fg=Palette.TEXT_SECONDARY, bg=Palette.BG_CARD)
+        self.lbl_storage_notice.pack(side=tk.LEFT)
+
+        # Initial selection notice update
+        if self.config.target_disk:
+            self._select_disk(self.config.target_disk)
+
+    def _select_disk(self, disk_name: str):
+        self.config.target_disk = disk_name
+        selected_disk: Optional[DiskInfo] = None
+        for item in self.disk_card_items:
+            d = item["disk"]
+            is_sel = (d.name == disk_name)
+            if is_sel:
+                selected_disk = d
+            item["card"].set_selected(is_sel)
+            bg = Palette.BG_CARD_SELECTED if is_sel else Palette.BG_CARD
+            item["inner"].configure(bg=bg)
+            item["top_line"].configure(bg=bg)
+            item["rad_lbl"].configure(text="◉" if is_sel else "○", bg=bg)
+            item["d_title"].configure(bg=bg)
+            item["badge"].configure(bg=bg)
+            item["d_model"].configure(bg=bg)
+
+        # Validate boundary
+        if selected_disk and hasattr(self, "lbl_storage_notice"):
+            ok_size, msg_size = Validation.validate_disk_size(selected_disk.size_bytes)
+            if not ok_size:
+                self.lbl_storage_notice.configure(
+                    text=f"⚠️ {msg_size}",
+                    fg=Palette.ACCENT_AMBER
+                )
+            else:
+                self.lbl_storage_notice.configure(
+                    text=f"✓ Drive /dev/{selected_disk.name} ({selected_disk.size_human}) meets storage requirements.",
+                    fg=Palette.ACCENT_EMERALD
+                )
+
+    def _on_part_method_change(self):
+        self.config.part_method = self.var_part_method.get()
+        if hasattr(self, "btn_open_partman"):
+            if self.config.part_method == 2:
+                self.btn_open_partman.pack(side=tk.LEFT, padx=12)
+            else:
+                self.btn_open_partman.pack_forget()
+
+    def _open_partition_manager(self):
+        for tool in ["partitionmanager", "gparted"]:
+            if shutil.which(tool):
+                try:
+                    subprocess.Popen([tool])
+                    return
+                except Exception:
+                    pass
+        if shutil.which("konsole") and shutil.which("cfdisk"):
+            try:
+                subprocess.Popen(["konsole", "-e", "sudo", "cfdisk", f"/dev/{self.config.target_disk}"])
+                return
+            except Exception:
+                pass
+        messagebox.showinfo("Partition Manager",
+            f"Launch KDE Partition Manager or GParted to modify /dev/{self.config.target_disk} before proceeding.")
 
     # ─── PAGE 3: USER ACCOUNT & SECURITY ─────────────────────────────────────
     def _render_user_page(self):
         tk.Label(self.content_frame, text="User Account & Security",
                  font=("Segoe UI", 14, "bold"), fg=Palette.TEXT_PRIMARY, bg=Palette.BG_DARK).pack(anchor="w")
 
-        tk.Label(self.content_frame, text="Create your administrative user profile for Conjunction OS.",
-                 font=("Segoe UI", 9), fg=Palette.TEXT_SECONDARY, bg=Palette.BG_DARK).pack(anchor="w", pady=(2, 14))
+        tk.Label(self.content_frame, text="Create your administrative user profile and security credentials.",
+                 font=("Segoe UI", 9), fg=Palette.TEXT_SECONDARY, bg=Palette.BG_DARK).pack(anchor="w", pady=(2, 12))
 
-        form_card = ModernCard(self.content_frame, height=270)
+        form_card = ModernCard(self.content_frame, height=310)
         form_card.pack(fill=tk.X)
 
         form = tk.Frame(form_card, bg=Palette.BG_CARD)
-        form_card.create_window(16, 16, anchor="nw", window=form)
+        form_card.create_window(16, 14, anchor="nw", window=form)
 
         # Full Name
-        tk.Label(form, text="Full Name", font=("Segoe UI", 9, "bold"), fg=Palette.TEXT_PRIMARY, bg=Palette.BG_CARD).grid(row=0, column=0, sticky="w", pady=6)
+        tk.Label(form, text="Full Name", font=("Segoe UI", 9, "bold"), fg=Palette.TEXT_PRIMARY, bg=Palette.BG_CARD).grid(row=0, column=0, sticky="w", pady=5)
         self.entry_fullname = ttk.Entry(form, width=32)
         self.entry_fullname.insert(0, self.config.fullname or "Developer")
-        self.entry_fullname.grid(row=0, column=1, sticky="w", padx=12, pady=6)
+        self.entry_fullname.grid(row=0, column=1, sticky="w", padx=12, pady=5)
 
         # Username
-        tk.Label(form, text="Username", font=("Segoe UI", 9, "bold"), fg=Palette.TEXT_PRIMARY, bg=Palette.BG_CARD).grid(row=1, column=0, sticky="w", pady=6)
+        tk.Label(form, text="Username", font=("Segoe UI", 9, "bold"), fg=Palette.TEXT_PRIMARY, bg=Palette.BG_CARD).grid(row=1, column=0, sticky="w", pady=5)
         self.entry_username = ttk.Entry(form, width=32)
         self.entry_username.insert(0, self.config.username or "conjunction")
-        self.entry_username.grid(row=1, column=1, sticky="w", padx=12, pady=6)
+        self.entry_username.grid(row=1, column=1, sticky="w", padx=12, pady=5)
 
         self.lbl_user_val = tk.Label(form, text="", font=("Segoe UI", 8), fg=Palette.ACCENT_CRIMSON, bg=Palette.BG_CARD)
         self.lbl_user_val.grid(row=1, column=2, sticky="w", padx=6)
 
         # Password
-        tk.Label(form, text="Password", font=("Segoe UI", 9, "bold"), fg=Palette.TEXT_PRIMARY, bg=Palette.BG_CARD).grid(row=2, column=0, sticky="w", pady=6)
+        tk.Label(form, text="Password", font=("Segoe UI", 9, "bold"), fg=Palette.TEXT_PRIMARY, bg=Palette.BG_CARD).grid(row=2, column=0, sticky="w", pady=5)
         self.entry_pw = ttk.Entry(form, width=32, show="•")
         self.entry_pw.insert(0, self.config.password or "")
-        self.entry_pw.grid(row=2, column=1, sticky="w", padx=12, pady=6)
+        self.entry_pw.grid(row=2, column=1, sticky="w", padx=12, pady=5)
 
         # Strength bar
         self.pw_bar = PasswordStrengthBar(form, height=6, width=180)
         self.pw_bar.grid(row=2, column=2, sticky="w", padx=6)
 
         # Confirm Password
-        tk.Label(form, text="Confirm Password", font=("Segoe UI", 9, "bold"), fg=Palette.TEXT_PRIMARY, bg=Palette.BG_CARD).grid(row=3, column=0, sticky="w", pady=6)
+        tk.Label(form, text="Confirm Password", font=("Segoe UI", 9, "bold"), fg=Palette.TEXT_PRIMARY, bg=Palette.BG_CARD).grid(row=3, column=0, sticky="w", pady=5)
         self.entry_pw_confirm = ttk.Entry(form, width=32, show="•")
         self.entry_pw_confirm.insert(0, self.config.password or "")
-        self.entry_pw_confirm.grid(row=3, column=1, sticky="w", padx=12, pady=6)
+        self.entry_pw_confirm.grid(row=3, column=1, sticky="w", padx=12, pady=5)
 
         self.lbl_pw_val = tk.Label(form, text="", font=("Segoe UI", 8), fg=Palette.ACCENT_CRIMSON, bg=Palette.BG_CARD)
         self.lbl_pw_val.grid(row=3, column=2, sticky="w", padx=6)
+
+        # Root Password Option Checkbox
+        self.var_same_root = tk.BooleanVar(value=self.config.same_root_password)
+        chk_same_root = ttk.Checkbutton(form, text="Use the same password for administrator (root) account",
+                                        variable=self.var_same_root, style="Card.TCheckbutton",
+                                        command=self._on_same_root_change)
+        chk_same_root.grid(row=4, column=1, sticky="w", padx=12, pady=(8, 2))
+
+        # Separate Root Password Fields
+        self.root_pw_frame = tk.Frame(form, bg=Palette.BG_CARD)
+        tk.Label(self.root_pw_frame, text="Root Password", font=("Segoe UI", 9, "bold"),
+                 fg=Palette.TEXT_PRIMARY, bg=Palette.BG_CARD).grid(row=0, column=0, sticky="w", pady=3)
+        self.entry_root_pw = ttk.Entry(self.root_pw_frame, width=32, show="•")
+        self.entry_root_pw.insert(0, self.config.root_password or "")
+        self.entry_root_pw.grid(row=0, column=1, sticky="w", padx=12, pady=3)
+
+        tk.Label(self.root_pw_frame, text="Confirm Root", font=("Segoe UI", 9, "bold"),
+                 fg=Palette.TEXT_PRIMARY, bg=Palette.BG_CARD).grid(row=1, column=0, sticky="w", pady=3)
+        self.entry_root_pw_confirm = ttk.Entry(self.root_pw_frame, width=32, show="•")
+        self.entry_root_pw_confirm.insert(0, self.config.root_password or "")
+        self.entry_root_pw_confirm.grid(row=1, column=1, sticky="w", padx=12, pady=3)
+
+        if not self.config.same_root_password:
+            self.root_pw_frame.grid(row=5, column=0, columnspan=2, sticky="w", pady=4)
 
         # Sudo and Autologin checkboxes
         self.var_admin = tk.BooleanVar(value=True)
         chk_admin = ttk.Checkbutton(form, text="Grant administrator (sudo) privileges",
                                     variable=self.var_admin, style="Card.TCheckbutton")
-        chk_admin.grid(row=4, column=1, sticky="w", padx=12, pady=(10, 4))
+        chk_admin.grid(row=6, column=1, sticky="w", padx=12, pady=(6, 2))
 
         self.var_autologin = tk.BooleanVar(value=self.config.enable_auto_login)
         chk_auto = ttk.Checkbutton(form, text="Log in automatically without password prompt",
                                    variable=self.var_autologin, style="Card.TCheckbutton")
-        chk_auto.grid(row=5, column=1, sticky="w", padx=12, pady=4)
+        chk_auto.grid(row=7, column=1, sticky="w", padx=12, pady=2)
 
-        # Real-time validation bindings
+        # Bindings
+        self.entry_fullname.bind("<KeyRelease>", self._on_fullname_change)
+        self.entry_username.bind("<KeyRelease>", self._on_username_change)
         self.entry_pw.bind("<KeyRelease>", self._on_pw_change)
         self.entry_pw_confirm.bind("<KeyRelease>", self._on_pw_change)
-        self.entry_username.bind("<KeyRelease>", self._on_username_change)
+
+        # Initial password strength evaluation
+        if self.config.password:
+            self._on_pw_change()
+
+    def _on_same_root_change(self):
+        same = self.var_same_root.get()
+        self.config.same_root_password = same
+        if not same:
+            self.root_pw_frame.grid(row=5, column=0, columnspan=2, sticky="w", pady=4)
+        else:
+            self.root_pw_frame.grid_forget()
+
+    def _on_fullname_change(self, event=None):
+        fn = self.entry_fullname.get().strip()
+        curr_u = self.entry_username.get().strip()
+        if not curr_u or curr_u == "conjunction" or curr_u == "developer":
+            slug = re.sub(r"[^a-z0-9]", "", fn.lower())
+            if slug:
+                self.entry_username.delete(0, tk.END)
+                self.entry_username.insert(0, slug)
+                self._on_username_change()
 
     def _on_username_change(self, event=None):
         u = self.entry_username.get().strip()
@@ -519,6 +649,8 @@ class ConjunctionInstallerApp:
         self.pw_bar.set_strength(score)
         if confirm and pw != confirm:
             self.lbl_pw_val.configure(text="Passwords do not match")
+        elif pw and len(pw) < 4:
+            self.lbl_pw_val.configure(text="Password must be at least 4 characters")
         else:
             self.lbl_pw_val.configure(text="")
 
@@ -564,7 +696,7 @@ class ConjunctionInstallerApp:
                                   variable=self.var_zen, style="Card.TCheckbutton")
         chk_zen.grid(row=3, column=0, columnspan=2, sticky="w", pady=4)
 
-        self.var_snapper = tk.BooleanVar(value=True)
+        self.var_snapper = tk.BooleanVar(value=getattr(self.config, "enable_snapper", True))
         chk_snap = ttk.Checkbutton(s_inner, text="Snapper Automated Btrfs Snapshots (Instant system rollback)",
                                    variable=self.var_snapper, style="Card.TCheckbutton")
         chk_snap.grid(row=4, column=0, columnspan=2, sticky="w", pady=4)
@@ -583,12 +715,25 @@ class ConjunctionInstallerApp:
         s_inner = tk.Frame(summary_box, bg=Palette.BG_CARD)
         summary_box.create_window(16, 14, anchor="nw", window=s_inner)
 
+        features = []
+        if self.config.enable_zen_kernel:
+            features.append("Linux-Zen Kernel")
+        if getattr(self.config, "enable_snapper", True):
+            features.append("Snapper Snapshots")
+        if self.config.enable_wine_proton:
+            features.append("Wine/Proton Sandbox")
+        features.append("WhiteSur UI")
+        features_label = ", ".join(features)
+
+        part_label = "Automatic Btrfs (Wipes drive, creates @, @home, @snapshots subvolumes)" if self.config.part_method == 1 else "Manual / Custom Partitioning"
+
         items = [
-            ("Target Drive:", f"/dev/{self.config.target_disk} (All data will be erased and formatted as Btrfs)"),
+            ("Target Drive:", f"/dev/{self.config.target_disk}"),
+            ("Partitioning:", part_label),
             ("Firmware Scheme:", "UEFI / GPT with 512MB EFI System Partition" if self.config.part_scheme == 1 else "Legacy BIOS / MBR"),
             ("Primary Account:", f"{self.config.username} (Administrator sudo rights granted)"),
             ("Hostname & Timezone:", f"{self.config.hostname} ({self.config.timezone})"),
-            ("Ecosystem Features:", "Linux-Zen Kernel, Snapper Snapshots, WhiteSur UI, Wine/Proton Sandboxing"),
+            ("Ecosystem Features:", features_label),
         ]
 
         for i, (label, val) in enumerate(items):
@@ -606,7 +751,7 @@ class ConjunctionInstallerApp:
         tk.Label(d_inner, text=f"Data on /dev/{self.config.target_disk} will be permanently destroyed. Are you ready?",
                  font=("Segoe UI", 9), fg=Palette.TEXT_PRIMARY, bg=Palette.BG_CARD).pack(side=tk.LEFT)
 
-    # ─── PAGE 6: LIVE INSTALLATION PROGRESS ──────────────────────────────────
+    # ─── PAGE 6: INSTALLATION IN PROGRESS ────────────────────────────────────
     def _render_installing_page(self):
         tk.Label(self.content_frame, text="Installing Conjunction OS...",
                  font=("Segoe UI", 14, "bold"), fg=Palette.TEXT_PRIMARY, bg=Palette.BG_DARK).pack(anchor="w")
@@ -725,6 +870,12 @@ class ConjunctionInstallerApp:
             if not self.config.target_disk:
                 messagebox.showwarning("Selection Required", "Please select a target disk.")
                 return
+            selected_disk = next((d for d in self.available_disks if d.name == self.config.target_disk), None)
+            if selected_disk and self.config.part_method == 1:
+                ok_size, msg_size = Validation.validate_disk_size(selected_disk.size_bytes)
+                if not ok_size:
+                    messagebox.showwarning("Disk Size Warning", msg_size)
+                    return
         elif self.current_step == 2:
             # Validate user account
             self.config.fullname = self.entry_fullname.get().strip()
@@ -740,7 +891,17 @@ class ConjunctionInstallerApp:
                 messagebox.showwarning("Invalid Password", msg_p)
                 return
             self.config.password = pw
-            self.config.root_password = pw
+            self.config.same_root_password = self.var_same_root.get()
+            if self.config.same_root_password:
+                self.config.root_password = pw
+            else:
+                root_pw = self.entry_root_pw.get()
+                root_confirm = self.entry_root_pw_confirm.get()
+                ok_rp, msg_rp = Validation.validate_passwords(root_pw, root_confirm)
+                if not ok_rp:
+                    messagebox.showwarning("Invalid Root Password", f"Root password error: {msg_rp}")
+                    return
+                self.config.root_password = root_pw
             self.config.enable_auto_login = self.var_autologin.get()
         elif self.current_step == 3:
             # Save settings
@@ -752,6 +913,7 @@ class ConjunctionInstallerApp:
             self.config.timezone = self.tz_var.get()
             self.config.enable_wine_proton = self.var_proton.get()
             self.config.enable_zen_kernel = self.var_zen.get()
+            self.config.enable_snapper = self.var_snapper.get()
         elif self.current_step == 4:
             # Review to Install confirmation
             pass
