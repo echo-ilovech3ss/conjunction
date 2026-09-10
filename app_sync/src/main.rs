@@ -33,12 +33,10 @@ fn sync_apps() -> Result<(), Box<dyn std::error::Error>> {
     
     // Scan /home/*
     if let Ok(entries) = fs::read_dir("/home") {
-        for entry in entries {
-            if let Ok(entry) = entry {
-                let path = entry.path();
-                if path.is_dir() {
-                    homes.push(path);
-                }
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                homes.push(path);
             }
         }
     }
@@ -56,12 +54,10 @@ fn sync_apps() -> Result<(), Box<dyn std::error::Error>> {
         }
 
         if let Ok(entries) = fs::read_dir(&apps_dir) {
-            for entry in entries {
-                if let Ok(entry) = entry {
-                    let path = entry.path();
-                    if path.is_file() && path.extension().map_or(false, |ext| ext == "json") {
-                        process_metadata_file(&home, &path);
-                    }
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.is_file() && path.extension().is_some_and(|ext| ext == "json") {
+                    process_metadata_file(&home, &path);
                 }
             }
         }
@@ -121,12 +117,12 @@ fn process_metadata_file(home: &Path, meta_file: &Path) {
             if app_type == "flatpak" {
                 println!("Uninstalling flatpak package {}...", pkg_id);
                 let _ = std::process::Command::new("flatpak")
-                    .args(&["uninstall", "-y", pkg_id])
+                    .args(["uninstall", "-y", pkg_id])
                     .status();
             } else if app_type == "pacman" || app_type == "aur" {
                 println!("Uninstalling pacman/aur package {}...", pkg_id);
                 let _ = std::process::Command::new("pacman")
-                    .args(&["-Rns", "--noconfirm", pkg_id])
+                    .args(["-Rns", "--noconfirm", pkg_id])
                     .status();
             }
         }
@@ -177,7 +173,7 @@ fn process_metadata_file(home: &Path, meta_file: &Path) {
             let mut is_installed = true;
             if app_type == "pacman" || app_type == "aur" {
                 if let Ok(status) = std::process::Command::new("pacman")
-                    .args(&["-Qq", pkg_id])
+                    .args(["-Qq", pkg_id])
                     .stdout(std::process::Stdio::null())
                     .stderr(std::process::Stdio::null())
                     .status() 
@@ -188,7 +184,7 @@ fn process_metadata_file(home: &Path, meta_file: &Path) {
                 }
             } else if app_type == "flatpak" {
                 if let Ok(status) = std::process::Command::new("flatpak")
-                    .args(&["info", pkg_id])
+                    .args(["info", pkg_id])
                     .stdout(std::process::Stdio::null())
                     .stderr(std::process::Stdio::null())
                     .status()

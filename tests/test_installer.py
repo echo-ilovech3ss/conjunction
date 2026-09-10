@@ -106,7 +106,7 @@ exit 0
     )
     
     # Prepare interactive inputs
-    inputs = b"ERASE\n1\ntestuser\ntestpass\ntestpass\n"
+    inputs = b"y\nERASE\n1\n1\ntestuser\ntestpass\ntestpass\ny\n"
     
     stdout_bytes, stderr_bytes = proc.communicate(input=inputs, timeout=30)
     stdout = stdout_bytes.decode("utf-8")

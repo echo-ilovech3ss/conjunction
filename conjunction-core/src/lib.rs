@@ -37,8 +37,8 @@ pub fn chown_to_user<P: AsRef<Path>>(path: P) {
         if sudo_user.is_empty() {
             return;
         }
-        let uid_out = std::process::Command::new("id").args(&["-u", &sudo_user]).output();
-        let gid_out = std::process::Command::new("id").args(&["-g", &sudo_user]).output();
+        let uid_out = std::process::Command::new("id").args(["-u", &sudo_user]).output();
+        let gid_out = std::process::Command::new("id").args(["-g", &sudo_user]).output();
         if let (Ok(u), Ok(g)) = (uid_out, gid_out) {
             let uid_str = String::from_utf8_lossy(&u.stdout);
             let gid_str = String::from_utf8_lossy(&g.stdout);
@@ -79,7 +79,7 @@ fn find_binary_for_package(package_id: &str) -> String {
     }
     
     let output = std::process::Command::new("pacman")
-        .args(&["-Ql", package_id])
+        .args(["-Ql", package_id])
         .output();
         
     if let Ok(out) = output {
@@ -91,8 +91,8 @@ fn find_binary_for_package(package_id: &str) -> String {
                 if parts.len() == 2 {
                     let path_str = parts[1];
                     let path = Path::new(path_str);
-                    if path_str.starts_with("/usr/bin/") || path_str.starts_with("/bin/") {
-                        if path.is_file() {
+                    if (path_str.starts_with("/usr/bin/") || path_str.starts_with("/bin/"))
+                        && path.is_file() {
                             let is_executable = {
                                 #[cfg(unix)]
                                 {
@@ -114,7 +114,6 @@ fn find_binary_for_package(package_id: &str) -> String {
                                 }
                             }
                         }
-                    }
                 }
             }
             if !binaries.is_empty() {
@@ -150,7 +149,7 @@ fn which_binary(name: &str) -> Option<PathBuf> {
 fn find_package_icon(package_id: &str, pkg_type: &str) -> Option<PathBuf> {
     let mut icon_names = vec![package_id.to_string()];
     if package_id.contains('.') {
-        if let Some(last_part) = package_id.split('.').last() {
+        if let Some(last_part) = package_id.split('.').next_back() {
             icon_names.push(last_part.to_string());
         }
     }
@@ -175,7 +174,7 @@ fn find_package_icon(package_id: &str, pkg_type: &str) -> Option<PathBuf> {
                 if let Ok(entries) = std::fs::read_dir(bp) {
                     for entry in entries.flatten() {
                         let path = entry.path();
-                        if path.is_file() && path.extension().map_or(false, |ext| ext == "desktop") {
+                        if path.is_file() && path.extension().is_some_and(|ext| ext == "desktop") {
                             if let Some(filename) = path.file_name().and_then(|f| f.to_str()) {
                                 if filename.to_lowercase().contains(&package_id.to_lowercase()) {
                                     desktop_files.push(path);
@@ -418,17 +417,16 @@ pub fn remove_app_bundle(name: &str) -> Result<(), Box<dyn std::error::Error>> {
         if let Ok(entries) = std::fs::read_dir(&apps_dir) {
             for entry in entries.flatten() {
                 let path = entry.path();
-                if path.is_file() && path.extension().map_or(false, |ext| ext == "json") {
+                if path.is_file() && path.extension().is_some_and(|ext| ext == "json") {
                     if let Ok(content) = std::fs::read_to_string(&path) {
                         if let Ok(meta) = serde_json::from_str::<serde_json::Value>(&content) {
                             let meta_name = meta.get("name").and_then(|v| v.as_str()).unwrap_or("");
                             let meta_pkg_id = meta.get("package_id").and_then(|v| v.as_str()).unwrap_or("");
-                            if meta_name.to_lowercase() == name.to_lowercase() || meta_pkg_id.to_lowercase() == name.to_lowercase() {
-                                if !meta_name.is_empty() {
+                            if (meta_name.to_lowercase() == name.to_lowercase() || meta_pkg_id.to_lowercase() == name.to_lowercase())
+                                && !meta_name.is_empty() {
                                     app_name = meta_name.to_string();
                                     break;
                                 }
-                            }
                         }
                     }
                 }
@@ -464,6 +462,36 @@ pub fn remove_app_bundle(name: &str) -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-// Added standard safety annotations for system-wide path resolution.
-// Added fallback lookup handling for system-wide icon resolution.
-// Added logic to strip raw control characters from plist strings.
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_get_user_home_returns_path() {
+        let home = get_user_home();
+        assert!(!home.as_os_str().is_empty());
+    }
+
+    #[test]
+    fn test_which_binary_nonexistent() {
+        assert!(which_binary("this_binary_definitely_does_not_exist_123456").is_none());
+    }
+
+    #[test]
+    fn test_find_binary_for_package_fallback() {
+        let pkg = "custom-pkg-xyz-nonexistent";
+        let res = find_binary_for_package(pkg);
+        assert_eq!(res, pkg);
+    }
+
+    #[test]
+    fn test_write_file_user_temp() {
+        let tmp_dir = std::env::temp_dir().join("conjunction_core_test_write");
+        let tmp_file = tmp_dir.join("subdir").join("test.txt");
+        let res = write_file_user(&tmp_file, "hello conjunction", None);
+        assert!(res.is_ok());
+        let read = std::fs::read_to_string(&tmp_file).unwrap();
+        assert_eq!(read, "hello conjunction");
+        let _ = std::fs::remove_dir_all(&tmp_dir);
+    }
+}

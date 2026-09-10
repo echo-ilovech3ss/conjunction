@@ -7,8 +7,12 @@ import shutil
 import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence
-import engine
-import cli
+try:
+    import engine
+    import cli
+except ImportError:
+    engine = None
+    cli = None
 
 # Mock os.statvfs on Windows since it does not exist natively
 if sys.platform == "win32":
@@ -178,10 +182,13 @@ def mock_run_cmd(
 
 @pytest.fixture(autouse=True)
 def mock_engine_run_cmd(monkeypatch):
-    monkeypatch.setattr(engine, "_run_cmd", mock_run_cmd)
+    if engine is not None:
+        monkeypatch.setattr(engine, "_run_cmd", mock_run_cmd)
 
 @pytest.fixture(autouse=True)
 def isolate_directories(tmp_path, monkeypatch):
+    if engine is None or cli is None:
+        return
     # Set the directories in engine to temporary ones
     base_dir = tmp_path / ".conjunction"
     prefix_dir = base_dir / "prefixes"

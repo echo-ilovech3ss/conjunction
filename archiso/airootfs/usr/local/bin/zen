@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# /usr/local/bin/zen - Conjunction OS Zen Browser Launcher Wrapper
+set -euo pipefail
+
+if command -v /usr/bin/zen &>/dev/null; then
+    exec /usr/bin/zen "$@"
+elif flatpak info app.zen_browser.zen &>/dev/null; then
+    exec flatpak run app.zen_browser.zen "$@"
+elif flatpak info io.github.zen_browser.zen &>/dev/null; then
+    exec flatpak run io.github.zen_browser.zen "$@"
+elif [[ -x "/Applications/zen.app/Contents/MacOS/zen" ]]; then
+    exec "/Applications/zen.app/Contents/MacOS/zen" "$@"
+else
+    # Auto-install or notify
+    if command -v flatpak &>/dev/null; then
+        echo "Zen Browser is not installed. Installing via Flatpak..."
+        flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo 2>/dev/null || true
+        flatpak install -y flathub app.zen_browser.zen && exec flatpak run app.zen_browser.zen "$@"
+    fi
+    echo "Zen browser not found. Install it with: cj install zen" >&2
+    exit 1
+fi

@@ -102,11 +102,10 @@ fn run_command(
     let mut cmd_args: Vec<String> = args.iter().map(|s| s.to_string()).collect();
     let is_root = conjunction_core::is_root();
     
-    if sudo && !is_root {
-        if which_binary("sudo").is_some() {
+    if sudo && !is_root
+        && which_binary("sudo").is_some() {
             cmd_args.insert(0, "sudo".to_string());
         }
-    }
     
     let cmd_str = cmd_args.join(" ");
     if verbose && !quiet {
@@ -400,6 +399,7 @@ fn parse_colon_separated_info(output: &str) -> std::collections::HashMap<String,
     info
 }
 
+#[allow(clippy::too_many_arguments)]
 fn cmd_install(
     name: &str,
     force: bool,
@@ -964,7 +964,7 @@ fn cmd_list(
         return 0;
     }
     
-    combined.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+    combined.sort_by_key(|a| a.name.to_lowercase());
     
     if !quiet {
         println!("{}", colored(&format!("{:<45} {:<20} {:<15}", "Package Name", "Version", "Source"), BOLD));
@@ -1111,7 +1111,7 @@ fn cmd_search(
         return 0;
     }
     
-    results.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+    results.sort_by_key(|a| a.name.to_lowercase());
     
     if !quiet {
         println!("{}", colored(&format!("{:<40} {:<18} {:<15} {}", "Name", "Version", "Source", "Description"), BOLD));

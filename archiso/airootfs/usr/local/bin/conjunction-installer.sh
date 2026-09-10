@@ -580,10 +580,13 @@ if ! is_step_completed "install_base"; then
             pipewire pipewire-alsa pipewire-pulse pipewire-jack wireplumber \
             plasma-desktop plasma-workspace plasma-x11-session plasma-nm plasma-pa \
             sddm konsole dolphin xdg-desktop-portal xdg-desktop-portal-kde \
-            nano vim git wget curl flatpak \
+            nano vim neovim git github-cli lazygit wget curl flatpak 7zip \
+            ripgrep fd bat eza fzf jq btop tmux strace \
+            rust go nodejs npm clang cmake ninja \
+            docker docker-compose docker-buildx \
             snapper btrfs-progs grub-btrfs bluez bluez-utils cups \
             plank kvantum breeze-gtk breeze-icons inter-font noto-fonts noto-fonts-cjk noto-fonts-emoji ttf-jetbrains-mono ttf-fira-code \
-            zsh kitty appmenu-gtk-module libdbusmenu-glib libdbusmenu-gtk3
+            zsh zsh-completions zsh-autosuggestions zsh-syntax-highlighting kitty appmenu-gtk-module libdbusmenu-glib libdbusmenu-gtk3
     fi
 
     ok "Base system installed"
@@ -810,7 +813,7 @@ if ! is_step_completed "user_setup"; then
     fi
 
     # Create user
-    run_chroot useradd -m -G wheel,video,audio,storage,optical,network,power,lp,users -s /bin/zsh "$USERNAME"
+    run_chroot useradd -m -G wheel,video,audio,storage,optical,network,power,lp,users,docker -s /bin/zsh "$USERNAME"
 
     # Set password
     set_chroot_password "$USERNAME" "$PASSWORD"
@@ -899,9 +902,13 @@ if ! is_step_completed "bootloader"; then
     run_chroot grub-mkconfig -o /boot/grub/grub.cfg
 
     # Verify grub.cfg contains at least one boot entry
-    if ! grep -q 'menuentry' "$MNT/boot/grub/grub.cfg"; then
-        err "GRUB config verification failed: /boot/grub/grub.cfg contains no menuentry"
-        exit 1
+    if [[ "$DRY_RUN" == true ]]; then
+        echo -e "${YELLOW}[DRY RUN]${NC} Simulating verification of /boot/grub/grub.cfg menuentry..."
+    else
+        if ! grep -q 'menuentry' "$MNT/boot/grub/grub.cfg"; then
+            err "GRUB config verification failed: /boot/grub/grub.cfg contains no menuentry"
+            exit 1
+        fi
     fi
     ok "GRUB config verified"
 
@@ -921,6 +928,7 @@ if ! is_step_completed "services"; then
     # run_chroot systemctl enable sshd
     run_chroot systemctl enable bluetooth
     run_chroot systemctl enable cups
+    run_chroot systemctl enable docker
 
     ok "Services enabled"
     save_checkpoint "services"

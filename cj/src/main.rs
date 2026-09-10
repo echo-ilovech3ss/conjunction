@@ -13,6 +13,7 @@ const YELLOW: &str = "\x1b[33m";
 const BLUE: &str = "\x1b[34m";
 const CYAN: &str = "\x1b[36m";
 const BOLD: &str = "\x1b[1m";
+#[allow(dead_code)]
 const DIM: &str = "\x1b[2m";
 
 fn colored(text: &str, color: &str) -> String {
@@ -56,7 +57,7 @@ enum Commands {
 
     #[command(about = "Install an application from a name or .exe/.msi path")]
     Install {
-        #[arg(help = "Package name (e.g., firefox) or path to .exe/.msi")]
+        #[arg(help = "Package name (e.g., zen) or path to .exe/.msi")]
         app_name_or_path: String,
 
         #[arg(long, help = "Force reinstall even if already installed")]
@@ -178,6 +179,7 @@ impl Runner {
         self.log(&format!("✗ {}", message), RED);
     }
 
+    #[allow(dead_code)]
     fn execute(&self, args: &[&str], envs: &[(&str, &str)], sudo: bool) -> Result<std::process::Output, std::io::Error> {
         let mut cmd = if sudo {
             let mut c = Command::new("sudo");
@@ -232,6 +234,9 @@ impl Runner {
             self.info(&format!("[dry-run] Would execute: {:?}", cmd));
             Ok(0)
         } else {
+            if self.verbose {
+                self.info(&format!("[verbose] Executing: {:?}", cmd));
+            }
             let mut child = cmd.spawn()?;
             let status = child.wait()?;
             Ok(status.code().unwrap_or(-1))
@@ -239,7 +244,7 @@ impl Runner {
     }
 
     fn detect_gpu_vendor(&self) -> String {
-        if let Ok(output) = Command::new("lspci").arg("-nn").output() {
+        if let Ok(output) = self.execute(&["lspci", "-nn"], &[], false) {
             let stdout = String::from_utf8_lossy(&output.stdout);
             for line in stdout.lines() {
                 let lower = line.to_lowercase();
@@ -298,7 +303,7 @@ fn cmd_update(runner: &Runner) -> i32 {
     // Step 1: Snapper snapshot
     runner.info("Step 1/5: Creating pre-update Btrfs system snapshot...");
     if !runner.dry_run {
-        match Command::new("snapper").args(&["-c", "root", "create", "--description", "pre-update snapshot", "--print-number"]).output() {
+        match Command::new("snapper").args(["-c", "root", "create", "--description", "pre-update snapshot", "--print-number"]).output() {
             Ok(output) if output.status.success() => {
                 let num = String::from_utf8_lossy(&output.stdout).trim().to_string();
                 runner.success(&format!("Created pre-update system snapshot: ID {}", num));
@@ -485,9 +490,8 @@ fn cmd_install(runner: &Runner, app_name_or_path: &str, force: bool, sandbox: bo
         let mut candidates = Vec::new();
         for dir in &search_dirs {
             if dir.is_dir() {
-                if let Ok(entries) = fs::read_dir(dir) {
-                    // Simple recursive walk
-                    let mut stack = vec![dir.clone()];
+                // Simple recursive walk
+                let mut stack = vec![dir.clone()];
                     while let Some(current_dir) = stack.pop() {
                         if let Ok(sub_entries) = fs::read_dir(current_dir) {
                             for sub_entry in sub_entries.flatten() {
@@ -511,14 +515,13 @@ fn cmd_install(runner: &Runner, app_name_or_path: &str, force: bool, sandbox: bo
                                     }
                                 }
                             }
-                        }
                     }
                 }
             }
         }
 
         let primary_exe = if !candidates.is_empty() {
-            candidates.sort_by(|a, b| b.0.cmp(&a.0));
+            candidates.sort_by_key(|b| std::cmp::Reverse(b.0));
             Some(candidates[0].1.clone())
         } else {
             None
@@ -605,6 +608,7 @@ Categories=Utility;
             "app_bundle_path": app_path_str,
             "installed_at": install_time,
             "gpu_vendor": runner.detect_gpu_vendor(),
+            "sandboxed": sandbox,
             "proton": false
         });
 
@@ -677,8 +681,8 @@ fn cmd_optimize(runner: &Runner, gpu_only: bool, cpu_only: bool, memory_only: bo
             }
             runner.success("RAM caches flushed successfully.");
 
-            let _ = Command::new("sysctl").args(&["-w", "vm.swappiness=10"]).status();
-            let _ = Command::new("sysctl").args(&["-w", "vm.dirty_ratio=15"]).status();
+            let _ = Command::new("sysctl").args(["-w", "vm.swappiness=10"]).status();
+            let _ = Command::new("sysctl").args(["-w", "vm.dirty_ratio=15"]).status();
             runner.success("Zen kernel VM parameters (swappiness=10, dirty_ratio=15) optimized.");
 
             if let Ok(mut file) = fs::File::create("/sys/kernel/mm/transparent_hugepage/enabled") {
@@ -696,7 +700,7 @@ fn cmd_optimize(runner: &Runner, gpu_only: bool, cpu_only: bool, memory_only: bo
             let gpu_vendor = runner.detect_gpu_vendor();
             if gpu_vendor == "nvidia" {
                 match Command::new("nvidia-settings")
-                    .args(&["-a", "[gpu:0]/GPUPowerMizerMode=1"])
+                    .args(["-a", "[gpu:0]/GPUPowerMizerMode=1"])
                     .env("DISPLAY", ":0")
                     .status() {
                         Ok(status) if status.success() => runner.success("NVIDIA GPU PowerMizerMode set to maximum performance."),
@@ -725,7 +729,7 @@ fn cmd_optimize(runner: &Runner, gpu_only: bool, cpu_only: bool, memory_only: bo
     if cpu_only || run_all {
         runner.info("Optimizing CPU frequency scaling governor...");
         if !runner.dry_run {
-            match Command::new("cpupower").args(&["frequency-set", "-g", "performance"]).status() {
+            match Command::new("cpupower").args(["frequency-set", "-g", "performance"]).status() {
                 Ok(status) if status.success() => runner.success("CPU frequency scaling governor set to performance."),
                 _ => {
                     // Fallback to manual write to sysfs
@@ -800,13 +804,13 @@ fn cmd_status(runner: &Runner) -> i32 {
     let apps_dir = user_home.join(".conjunction").join("apps");
     let sandbox_count = if apps_dir.exists() {
         fs::read_dir(&apps_dir)
-            .map(|rd| rd.flatten().filter(|e| e.path().extension().map_or(false, |ext| ext == "json")).count())
+            .map(|rd| rd.flatten().filter(|e| e.path().extension().is_some_and(|ext| ext == "json")).count())
             .unwrap_or(0)
     } else {
         0
     };
 
-    let last_update = if let Ok(output) = Command::new("stat").args(&["-c", "%y", "/var/log/pacman.log"]).output() {
+    let last_update = if let Ok(output) = Command::new("stat").args(["-c", "%y", "/var/log/pacman.log"]).output() {
         let s = String::from_utf8_lossy(&output.stdout).trim().to_string();
         if !s.is_empty() {
             s.split('.').next().unwrap_or(&s).to_string()
@@ -818,7 +822,7 @@ fn cmd_status(runner: &Runner) -> i32 {
     };
 
     let mut snapshot_count = 0;
-    if let Ok(output) = Command::new("snapper").args(&["-c", "root", "list", "--columns", "number"]).output() {
+    if let Ok(output) = Command::new("snapper").args(["-c", "root", "list", "--columns", "number"]).output() {
         let stdout = String::from_utf8_lossy(&output.stdout);
         snapshot_count = stdout.lines().filter(|l| l.trim().chars().all(|c| c.is_ascii_digit())).count();
     }
@@ -841,7 +845,7 @@ fn cmd_status(runner: &Runner) -> i32 {
 
     let prefix_dir = user_home.join(".conjunction").join("prefixes");
     let prefix_size = if prefix_dir.exists() {
-        if let Ok(output) = Command::new("du").args(&["-sh", &prefix_dir.to_string_lossy()]).output() {
+        if let Ok(output) = Command::new("du").args(["-sh", &prefix_dir.to_string_lossy()]).output() {
             String::from_utf8_lossy(&output.stdout).split_whitespace().next().unwrap_or("0M").to_string()
         } else {
             "0M".to_string()
@@ -850,10 +854,35 @@ fn cmd_status(runner: &Runner) -> i32 {
         "0M".to_string()
     };
 
+    let proton_version = if let Ok(output) = Command::new("proton").arg("--version").output() {
+        let s = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        if !s.is_empty() { s } else { "none".to_string() }
+    } else {
+        let steam_proton = user_home.join(".local").join("share").join("Steam").join("compatibilitytools.d");
+        if steam_proton.exists() {
+            if let Ok(entries) = fs::read_dir(&steam_proton) {
+                let proton_dirs: Vec<String> = entries.flatten()
+                    .filter(|e| e.path().is_dir())
+                    .filter_map(|e| e.file_name().into_string().ok())
+                    .collect();
+                if !proton_dirs.is_empty() {
+                    proton_dirs.join(", ")
+                } else {
+                    "none".to_string()
+                }
+            } else {
+                "none".to_string()
+            }
+        } else {
+            "none".to_string()
+        }
+    };
+
     runner.info(&format!("Kernel:        {}", kernel));
     runner.info(&format!("Desktop:       {}", desktop));
     runner.info(&format!("GPU Driver:    {}", gpu_driver));
     runner.info(&format!("Wine:          {}", wine_version));
+    runner.info(&format!("Proton:        {}", proton_version));
     runner.info(&format!("Sandboxed:     {} apps", sandbox_count));
     runner.info(&format!("Last Update:   {}", last_update));
     runner.info(&format!("Snapshots:     {}", snapshot_count));
@@ -866,12 +895,11 @@ fn cmd_status(runner: &Runner) -> i32 {
 
 fn cmd_apps(runner: &Runner, remove_name: Option<String>) -> i32 {
     if let Some(name) = remove_name {
-        if !runner.dry_run {
-            if !confirm(&format!("Remove '{}' and all its data?", name)) {
+        if !runner.dry_run
+            && !confirm(&format!("Remove '{}' and all its data?", name)) {
                 runner.info("Aborted.");
                 return 0;
             }
-        }
         runner.info(&format!("Removing {}...", name));
         if runner.dry_run {
             runner.info(&format!("[dry-run] Would remove app bundle and metadata for {}", name));
@@ -882,9 +910,9 @@ fn cmd_apps(runner: &Runner, remove_name: Option<String>) -> i32 {
             Ok(_) => {
                 // Delete prefix under /Applications
                 let app_dir = format!("/Applications/{}.app", name);
-                let _ = Command::new("rm").args(&["-rf", &app_dir]).status();
+                let _ = Command::new("rm").args(["-rf", &app_dir]).status();
                 let app_desktop = format!("/Applications/{}.desktop", name);
-                let _ = Command::new("rm").args(&["-f", &app_desktop]).status();
+                let _ = Command::new("rm").args(["-f", &app_desktop]).status();
                 
                 runner.success(&format!("Removed '{}' successfully", name));
                 0
@@ -912,7 +940,7 @@ fn cmd_apps(runner: &Runner, remove_name: Option<String>) -> i32 {
         if let Ok(entries) = fs::read_dir(&apps_dir) {
             for entry in entries.flatten() {
                 let path = entry.path();
-                if path.is_file() && path.extension().map_or(false, |ext| ext == "json") {
+                if path.is_file() && path.extension().is_some_and(|ext| ext == "json") {
                     if let Ok(content) = fs::read_to_string(&path) {
                         if let Ok(val) = serde_json::from_str::<Value>(&content) {
                             let name = val.get("name").and_then(|v| v.as_str()).unwrap_or("unknown");
@@ -988,11 +1016,11 @@ exec cj update "$@"
         let temp_path = format!("/tmp/cj-wrapper-{}", name);
         if fs::write(&temp_path, content).is_ok() {
             let dest_path = format!("/usr/local/bin/{}", name);
-            let cp_res = Command::new("sudo").args(&["cp", &temp_path, &dest_path]).status();
-            let chmod_res = Command::new("sudo").args(&["chmod", "+x", &dest_path]).status();
+            let cp_res = Command::new("sudo").args(["cp", &temp_path, &dest_path]).status();
+            let chmod_res = Command::new("sudo").args(["chmod", "+x", &dest_path]).status();
             let _ = fs::remove_file(&temp_path);
             
-            if cp_res.map_or(false, |s| s.success()) && chmod_res.map_or(false, |s| s.success()) {
+            if cp_res.is_ok_and(|s| s.success()) && chmod_res.is_ok_and(|s| s.success()) {
                 runner.success(&format!("Installed /usr/local/bin/{}", name));
             } else {
                 runner.error(&format!("Failed to copy wrapper {} to /usr/local/bin", name));
@@ -1045,7 +1073,14 @@ fn cmd_run(runner: &Runner, app_name: &str) -> i32 {
         return 1;
     }
 
-    runner.info(&format!("Launching {} via Wine...", app_name));
+    let use_proton = val.get("proton").and_then(|v| v.as_bool()).unwrap_or(false);
+    let runner_bin = if use_proton && which_binary("proton").is_some() {
+        "proton"
+    } else {
+        "wine"
+    };
+
+    runner.info(&format!("Launching {} via {}...", app_name, runner_bin));
 
     let envs = [
         ("WINEPREFIX", prefix_path),
@@ -1053,10 +1088,10 @@ fn cmd_run(runner: &Runner, app_name: &str) -> i32 {
         ("WINEDLLOVERRIDES", "winemenubuilder.exe=d"),
     ];
 
-    match runner.run_stream(&["wine", primary_exe], &envs, false) {
+    match runner.run_stream(&[runner_bin, primary_exe], &envs, false) {
         Ok(code) => code,
         Err(e) => {
-            runner.error(&format!("Failed to run Wine application: {}", e));
+            runner.error(&format!("Failed to run {} application: {}", runner_bin, e));
             1
         }
     }
@@ -1103,12 +1138,11 @@ fn cmd_rollback(runner: &Runner, target: &str, snapshot_id: &str) -> i32 {
     println!();
 
     if target == "system" {
-        if !runner.dry_run {
-            if !confirm("Are you sure you want to perform system snapper rollback? This requires rebooting.") {
+        if !runner.dry_run
+            && !confirm("Are you sure you want to perform system snapper rollback? This requires rebooting.") {
                 runner.info("Aborted.");
                 return 0;
             }
-        }
         match runner.run_stream(&["snapper", "rollback", snapshot_id], &[], true) {
             Ok(0) => {
                 runner.success("System rollback scheduled. Please reboot to complete.");
@@ -1276,12 +1310,11 @@ fn cmd_reset_desktop(runner: &Runner) -> i32 {
     runner.info("═══════════════════════════════════════");
     println!();
 
-    if !runner.dry_run {
-        if !confirm("This will overwrite your current desktop layout. Proceed?") {
+    if !runner.dry_run
+        && !confirm("This will overwrite your current desktop layout. Proceed?") {
             runner.info("Aborted.");
             return 0;
         }
-    }
 
     match runner.run_stream(&["/opt/conjunction/setup_conjunction_ui.sh"], &[], true) {
         Ok(0) => {
@@ -1325,6 +1358,76 @@ fn main() {
     std::process::exit(exit_code);
 }
 
-// End of Cj CLI module. Cleaned up unused DIM color constants.
-// Unified verbose argument propagation to nested process runners.
-// Verified correct exit status returning from pacman system upgrades.
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_colored() {
+        let text = colored("test", BLUE);
+        assert_eq!(text, format!("{}test{}", BLUE, RESET));
+    }
+
+    #[test]
+    fn test_cli_parsing_status() {
+        let cli = Cli::try_parse_from(["cj", "status"]).expect("failed to parse status");
+        assert!(matches!(cli.command, Commands::Status));
+        assert!(!cli.dry_run);
+        assert!(!cli.verbose);
+    }
+
+    #[test]
+    fn test_cli_parsing_install() {
+        let cli = Cli::try_parse_from(["cj", "--dry-run", "install", "zen", "--sandbox"])
+            .expect("failed to parse install");
+        assert!(cli.dry_run);
+        match cli.command {
+            Commands::Install { app_name_or_path, force, sandbox } => {
+                assert_eq!(app_name_or_path, "zen");
+                assert!(!force);
+                assert!(sandbox);
+            }
+            _ => panic!("Expected Commands::Install"),
+        }
+    }
+
+    #[test]
+    fn test_cli_parsing_cleanup() {
+        let cli = Cli::try_parse_from(["cj", "cleanup", "--days", "14"])
+            .expect("failed to parse cleanup");
+        match cli.command {
+            Commands::Cleanup { days } => assert_eq!(days, 14),
+            _ => panic!("Expected Commands::Cleanup"),
+        }
+    }
+
+    #[test]
+    fn test_cli_parsing_apps_remove() {
+        let cli = Cli::try_parse_from(["cj", "apps", "--remove", "zen"])
+            .expect("failed to parse apps remove");
+        match cli.command {
+            Commands::Apps { remove } => assert_eq!(remove, Some("zen".to_string())),
+            _ => panic!("Expected Commands::Apps"),
+        }
+    }
+
+    #[test]
+    fn test_cli_parsing_run() {
+        let cli = Cli::try_parse_from(["cj", "run", "zen"]).expect("failed to parse run");
+        match cli.command {
+            Commands::Run { app_name } => assert_eq!(app_name, "zen"),
+            _ => panic!("Expected Commands::Run"),
+        }
+    }
+
+    #[test]
+    fn test_runner_dry_run() {
+        let runner = Runner::new(false, true, true);
+        assert!(runner.dry_run);
+        assert!(runner.quiet);
+        let res = runner.run_stream(&["echo", "hi"], &[], false);
+        assert_eq!(res.unwrap(), 0);
+        let exec_res = runner.execute(&["echo", "hi"], &[], false);
+        assert!(exec_res.is_ok());
+    }
+}

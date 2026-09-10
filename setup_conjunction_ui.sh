@@ -120,8 +120,11 @@ install_packages() {
         ttf-jetbrains-mono ttf-fira-code
         xdg-utils xdg-desktop-portal xdg-desktop-portal-kde
         imagemagick
-        base-devel git go
-        zsh kitty appmenu-gtk-module libdbusmenu-glib libdbusmenu-gtk3 dialog
+        base-devel git go rust nodejs npm clang cmake ninja
+        zsh zsh-completions zsh-autosuggestions zsh-syntax-highlighting
+        kitty appmenu-gtk-module libdbusmenu-glib libdbusmenu-gtk3 dialog
+        neovim ripgrep fd bat eza fzf jq btop tmux strace 7zip
+        docker docker-compose docker-buildx
     )
 
     run_sudo pacman -S --needed --noconfirm "${packages[@]}"
@@ -134,14 +137,25 @@ install_packages() {
         exit 1
     fi
 
-    # AUR packages
+    # Enable and start Docker service if installed
+    if command -v systemctl &>/dev/null && systemctl list-unit-files | grep -q "^docker.service"; then
+        run_sudo systemctl enable docker 2>/dev/null || true
+    fi
+
+    # Ensure target user is added to docker group
+    if getent group docker >/dev/null 2>&1 && [[ "$TARGET_USER" != "root" ]]; then
+        run_sudo usermod -aG docker "$TARGET_USER" 2>/dev/null || true
+    fi
+
+    # Install yay (AUR helper) for custom theming and fonts
     if ! command -v yay &>/dev/null; then
-        info "yay not found. Automating cloning and building of yay AUR helper as $TARGET_USER..."
+        info "Installing yay AUR helper..."
         local yay_dir
-        yay_dir=$(sudo -u "$TARGET_USER" mktemp -d)
-        if sudo -u "$TARGET_USER" git clone https://aur.archlinux.org/yay.git "$yay_dir/yay"; then
-            if sudo -u "$TARGET_USER" bash -c "cd '$yay_dir/yay' && makepkg -si --noconfirm"; then
-                success "yay installed successfully from source."
+        yay_dir=$(mktemp -d /tmp/yay_build_XXXXXX)
+        chown -R "$TARGET_USER:$TARGET_USER" "$yay_dir"
+        if sudo -u "$TARGET_USER" git clone https://aur.archlinux.org/yay.git "$yay_dir"; then
+            if (cd "$yay_dir" && sudo -u "$TARGET_USER" makepkg -si --noconfirm); then
+                success "yay installed successfully."
             else
                 warn "Failed to build and install yay from source."
             fi
@@ -159,6 +173,13 @@ install_packages() {
         done
     else
         warn "yay helper is still missing. Font support may be incomplete."
+    fi
+
+    # Ensure Zen Browser is installed (via yay AUR or flatpak fallback)
+    if ! command -v zen &>/dev/null && ! flatpak info app.zen_browser.zen &>/dev/null && ! flatpak info io.github.zen_browser.zen &>/dev/null; then
+        info "Installing Zen Browser via Flatpak fallback..."
+        flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo 2>/dev/null || true
+        flatpak install -y flathub app.zen_browser.zen 2>/dev/null || flatpak install -y flathub io.github.zen_browser.zen 2>/dev/null || warn "Failed to install Zen Browser via Flatpak"
     fi
 
     success "Package installation complete."
@@ -559,20 +580,43 @@ alias vi="vim"
 alias nano="nano -x"
 
 # Git shortcuts
+alias g="git"
 alias gs="git status"
+alias gst="git status"
 alias ga="git add"
 alias gc="git commit"
 alias gp="git push"
-alias gl="git log"
+alias gl="git log --oneline -n 20"
 alias gd="git diff"
 alias gb="git branch"
 alias gco="git checkout"
+
+# Developer & container tools
+alias d="docker"
+alias dc="docker compose"
+alias dps="docker ps"
+alias lg="lazygit"
+
+# Modern CLI tools
+if command -v eza &>/dev/null; then
+    alias ls="eza --icons"
+    alias ll="eza -la --icons"
+fi
+if command -v bat &>/dev/null; then
+    alias cat="bat --paging=never"
+fi
 
 # System shortcuts
 alias df="df -h"
 alias du="du -h"
 alias free="free -m"
-alias top="htop 2>/dev/null || top"
+if command -v btop &>/dev/null; then
+    alias top="btop"
+elif command -v htop &>/dev/null; then
+    alias top="htop"
+else
+    alias top="top"
+fi
 
 # Conjunction OS shortcuts
 alias cj="cj"
@@ -582,8 +626,8 @@ alias cj-optimize="cj optimize"
 
 # macOS-style open command
 open() {
-    if [[ -z "$1" ]]; then
-        echo "Usage: open <file_or_dir> or open -a <app_name> [args]"
+    if [[ -z "${1:-}" ]]; then
+        echo "Usage: open <file_or_dir_or_url> or open -a <app_name> [args]"
         return 1
     fi
     if [[ "$1" == "-a" ]]; then
@@ -597,11 +641,14 @@ open() {
         elif [[ -f "/Applications/conjunction-${app_name}.desktop" ]]; then
             gtk-launch "conjunction-${app_name}" "$@" &>/dev/null || xdg-open "/Applications/conjunction-${app_name}.desktop" &
         else
-            # Try to run from PATH
             "$app_name" "$@" &
         fi
+    elif [[ "$1" =~ ^https?:// ]]; then
+        xdg-open "$1" 2>/dev/null &
+    elif [[ -d "$1" ]]; then
+        dolphin "$1" 2>/dev/null || xdg-open "$1" 2>/dev/null &
     else
-        xdg-open "$@"
+        xdg-open "$@" 2>/dev/null &
     fi
 }
 ALIASES
@@ -630,25 +677,6 @@ create_functions() {
     local func_file="$HOME/.bash_functions"
     cat > "$func_file" << 'FUNCTIONS'
 # Conjunction OS - macOS-like functions
-
-# Open file with default application (like macOS 'open')
-open() {
-    if [[ -z "$1" ]]; then
-        echo "Usage: open <file|url>"
-        return 1
-    fi
-
-    if [[ "$1" =~ ^https?:// ]]; then
-        xdg-open "$1" 2>/dev/null &
-    elif [[ -f "$1" ]]; then
-        xdg-open "$1" 2>/dev/null &
-    elif [[ -d "$1" ]]; then
-        dolphin "$1" 2>/dev/null &
-    else
-        echo "File not found: $1"
-        return 1
-    fi
-}
 
 # Quick file preview (like macOS Quick Look)
 ql() {
@@ -874,6 +902,98 @@ EOF
     success "Plank dock configured."
 }
 
+# ─── Configure Zen Browser ──────────────────────────────────────────────────
+configure_browser() {
+    info "Configuring Zen Browser and default handlers..."
+
+    if [[ "$DRY_RUN" == true ]]; then
+        info "[DRY RUN] Would configure Zen Browser"
+        return 0
+    fi
+
+    # Create /usr/local/bin/zen wrapper if not present
+    mkdir -p /usr/local/bin
+    cat > /usr/local/bin/zen << 'EOF'
+#!/usr/bin/env bash
+# Zen Browser launcher wrapper
+set -euo pipefail
+
+if command -v /usr/bin/zen &>/dev/null; then
+    exec /usr/bin/zen "$@"
+elif flatpak info app.zen_browser.zen &>/dev/null; then
+    exec flatpak run app.zen_browser.zen "$@"
+elif flatpak info io.github.zen_browser.zen &>/dev/null; then
+    exec flatpak run io.github.zen_browser.zen "$@"
+elif [[ -x "/Applications/zen.app/Contents/MacOS/zen" ]]; then
+    exec "/Applications/zen.app/Contents/MacOS/zen" "$@"
+else
+    if command -v flatpak &>/dev/null; then
+        echo "Zen Browser not found. Installing via Flatpak..."
+        flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo 2>/dev/null || true
+        flatpak install -y flathub app.zen_browser.zen && exec flatpak run app.zen_browser.zen "$@"
+    fi
+    echo "Zen browser not found. Install it with: cj install zen" >&2
+    exit 1
+fi
+EOF
+    chmod +x /usr/local/bin/zen
+
+    # Ensure /usr/share/applications/zen.desktop exists
+    mkdir -p /usr/share/applications
+    if [[ ! -f /usr/share/applications/zen.desktop ]]; then
+        cat > /usr/share/applications/zen.desktop << 'EOF'
+[Desktop Entry]
+Version=1.0
+Name=Zen Browser
+GenericName=Web Browser
+Comment=Experience tranquillity while browsing the web
+Exec=/usr/local/bin/zen %u
+Icon=zen-browser
+Terminal=false
+Type=Application
+MimeType=text/html;text/xml;application/xhtml+xml;x-scheme-handler/http;x-scheme-handler/https;
+Categories=Network;WebBrowser;
+StartupNotify=true
+StartupWMClass=zen-alpha
+EOF
+    fi
+
+    # Configure default browser for target user via xdg-settings & xdg-mime
+    if command -v xdg-settings &>/dev/null; then
+        sudo -u "$TARGET_USER" xdg-settings set default-web-browser zen.desktop 2>/dev/null || true
+    fi
+    if command -v xdg-mime &>/dev/null; then
+        for mime in text/html text/xml application/xhtml+xml x-scheme-handler/http x-scheme-handler/https; do
+            sudo -u "$TARGET_USER" xdg-mime default zen.desktop "$mime" 2>/dev/null || true
+        done
+    fi
+
+    # Write ~/.config/mimeapps.list for default browser
+    local mimeapps="$HOME/.config/mimeapps.list"
+    mkdir -p "$HOME/.config"
+    if [[ ! -f "$mimeapps" ]]; then
+        cat > "$mimeapps" << 'EOF'
+[Default Applications]
+text/html=zen.desktop
+text/xml=zen.desktop
+application/xhtml+xml=zen.desktop
+x-scheme-handler/http=zen.desktop
+x-scheme-handler/https=zen.desktop
+EOF
+    else
+        for mime in text/html text/xml application/xhtml+xml x-scheme-handler/http x-scheme-handler/https; do
+            if grep -q "^$mime=" "$mimeapps"; then
+                sed -i "s|^$mime=.*|$mime=zen.desktop|" "$mimeapps"
+            else
+                sed -i "/^\[Default Applications\]/a $mime=zen.desktop" "$mimeapps" 2>/dev/null || echo "$mime=zen.desktop" >> "$mimeapps"
+            fi
+        done
+    fi
+    chown "$TARGET_USER:$TARGET_USER" "$mimeapps" 2>/dev/null || true
+
+    success "Zen Browser configured as default browser."
+}
+
 # ─── Configure Ulauncher (Raycast Clone) ────────────────────────────────────
 configure_ulauncher() {
     info "Configuring Ulauncher (Spotlight/Raycast clone)..."
@@ -1048,6 +1168,25 @@ HISTFILE=~/.zsh_history
 HISTSIZE=10000
 SAVEHIST=10000
 setopt appendhistory sharehistory HIST_IGNORE_DUPS
+
+# Plugins
+if [ -f /usr/share/zsh/plugins/zsh-autosuggestions/zsh-autosuggestions.zsh ]; then
+    . /usr/share/zsh/plugins/zsh-autosuggestions/zsh-autosuggestions.zsh
+fi
+if [ -f /usr/share/zsh/plugins/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh ]; then
+    . /usr/share/zsh/plugins/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh
+fi
+
+# Modern Developer Environment
+export PATH="$HOME/.local/bin:/opt/conjunction:$HOME/.cargo/bin:$HOME/go/bin:$PATH"
+if command -v nvim &>/dev/null; then
+    export EDITOR="nvim"
+elif command -v vim &>/dev/null; then
+    export EDITOR="vim"
+else
+    export EDITOR="nano"
+fi
+export VISUAL="$EDITOR"
 EOF
 
     success "Zsh shell configured."
@@ -1140,6 +1279,7 @@ main() {
     configure_theme
     configure_whitesur_theme
     configure_plank
+    configure_browser
     configure_ulauncher
     configure_kitty
     configure_zsh
