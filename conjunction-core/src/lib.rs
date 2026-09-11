@@ -1,3 +1,6 @@
+pub mod bundle;
+pub use bundle::{Bundle, BundleError, Manifest, CURRENT_BUNDLE_FORMAT, SUPPORTED_ARCHITECTURES};
+
 use std::path::{Path, PathBuf};
 
 pub fn get_user_home() -> PathBuf {
