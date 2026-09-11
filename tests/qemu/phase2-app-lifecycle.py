@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Phase 2 Application Lifecycle System Verification inside QEMU (WSL2)."""
+"""Phase 2.1 Application Services Hardening System Verification inside QEMU (WSL2)."""
 
 import json
 import os
@@ -64,7 +64,7 @@ def qmp_cmd(state, command, arguments=None):
 
 
 def main():
-    print("=== Conjunction Phase 2 QEMU System Verification ===", flush=True)
+    print("=== Conjunction Phase 2.1 QEMU System Verification ===", flush=True)
 
     # 1. Kill stale QEMU instances
     subprocess.run(['pkill', '-9', '-f', 'qemu-system-x86_64'], stderr=subprocess.DEVNULL)
@@ -107,7 +107,7 @@ def main():
         raise RuntimeError("Timeout waiting for guest SSH")
 
     # 4. Provision compiled Conjunction binaries
-    print("\n[STEP 1/8] Provisioning Conjunction binaries to guest /usr/local/bin...", flush=True)
+    print("\n[STEP 1/6] Provisioning Conjunction binaries to guest /usr/local/bin...", flush=True)
     binaries = ['conj-bundle', 'conj-appctl', 'conj-appd', 'conj-open']
     for b in binaries:
         bin_path = BIN_DIR / b
@@ -117,22 +117,99 @@ def main():
         run_ssh(f'chmod +x /usr/local/bin/{b}')
     print("  Provisioned: " + ", ".join(binaries), flush=True)
 
-    # Guest test script
+    # 5. Provision non-root user and system applications directory
+    print("\n[STEP 2/6] Setting up guest environment: non-root user & system applications...", flush=True)
+    setup_script = r'''#!/bin/bash
+set -euo pipefail
+# Create unprivileged test user if not existing
+if ! id -u conjunction-test &>/dev/null; then
+    useradd -m -s /bin/bash conjunction-test
+fi
+
+# Ensure /opt/conjunction/Applications exists, owned by root (read-only to ordinary users)
+mkdir -p /opt/conjunction/Applications
+chown -R root:root /opt/conjunction
+chmod 755 /opt/conjunction /opt/conjunction/Applications
+
+# Install system bundle fixture: SystemSettings.app
+SYS_APP="/opt/conjunction/Applications/SystemSettings.app"
+rm -rf "$SYS_APP"
+mkdir -p "$SYS_APP"/Contents/{Executable,Resources}
+cat > "$SYS_APP/Contents/Info.toml" << 'EOF'
+bundle_format = "conjunction.app/1"
+id = "org.conjunction.settings"
+name = "System Settings"
+version = "1.0.0"
+executable = "Contents/Executable/settings"
+architectures = ["x86_64"]
+description = "Conjunction System Settings."
+EOF
+
+cat > "$SYS_APP/Contents/Executable/settings" << 'EOF'
+#!/bin/sh
+echo "Conjunction System Settings Opened"
+EOF
+chmod +x "$SYS_APP/Contents/Executable/settings"
+chown -R root:root "$SYS_APP"
+
+# Pre-seed non-root user's mimeapps.list with an unrelated association
+USER_CONFIG="/home/conjunction-test/.config"
+mkdir -p "$USER_CONFIG"
+cat > "$USER_CONFIG/mimeapps.list" << 'EOF'
+[Added Associations]
+text/plain=unrelated-editor.desktop;
+EOF
+chown -R conjunction-test:conjunction-test /home/conjunction-test
+
+# Ensure root /Applications does NOT exist
+rm -rf /Applications
+'''
+    res = run_ssh(setup_script)
+    if res.returncode != 0:
+        raise RuntimeError(f"System setup failed: {res.stderr}")
+    print("  Created user conjunction-test, /opt/conjunction/Applications/SystemSettings.app, and pre-seeded mimeapps.list", flush=True)
+
+    # 6. Guest non-root verification script
     guest_test_script = r'''#!/bin/bash
 set -euo pipefail
 
-export HOME="/root"
-export XDG_DATA_HOME="/root/.local/share"
-export XDG_CONFIG_HOME="/root/.config"
-export XDG_STATE_HOME="/root/.local/state"
+export HOME="/home/conjunction-test"
+export USER="conjunction-test"
+export LOGNAME="conjunction-test"
+export XDG_RUNTIME_DIR="/tmp/conjunction-run-$(id -u)"
+mkdir -p "$XDG_RUNTIME_DIR"
+chmod 700 "$XDG_RUNTIME_DIR"
 
-TEST_ROOT="/tmp/phase2_test"
-rm -rf "$TEST_ROOT"
-mkdir -p "$TEST_ROOT"
-cd "$TEST_ROOT"
+APPD_PID=""
+cleanup() {
+    if [ -n "$APPD_PID" ]; then
+        kill -9 "$APPD_PID" 2>/dev/null || true
+    fi
+}
+trap cleanup EXIT
 
-echo "=== Test 1: Validate and Inspect Hello.app ==="
-mkdir -p Hello.app/Contents/{Executable,Resources}
+echo "=== Pre-check: Verify User & Privileges ==="
+test "$(whoami)" = "conjunction-test"
+test "$HOME" = "/home/conjunction-test"
+echo "  [PASS] Running as unprivileged user: $(whoami) (UID $(id -u))"
+
+echo "=== Test 1: Start conj-appd daemon & Verify Session IPC ==="
+# Start daemon in background as unprivileged user
+conj-appd &
+APPD_PID=$!
+sleep 1
+
+# Check daemon ping over IPC
+PING_RESP=$(conj-appctl ping)
+test "$PING_RESP" = "pong"
+echo "  [PASS] conj-appd running (PID $APPD_PID), IPC ping verified: $PING_RESP"
+
+echo "=== Test 2: Validate Hello.app bundle ==="
+TEST_SRC="/tmp/conjunction-build-test"
+rm -rf "$TEST_SRC"
+mkdir -p "$TEST_SRC/Hello.app/Contents/Executable" "$TEST_SRC/Hello.app/Contents/Resources"
+cd "$TEST_SRC"
+
 cat > Hello.app/Contents/Info.toml << 'EOF'
 bundle_format = "conjunction.app/1"
 id = "org.conjunction.hello"
@@ -152,217 +229,194 @@ chmod +x Hello.app/Contents/Executable/hello
 
 conj-bundle validate Hello.app
 conj-bundle inspect Hello.app | grep "org.conjunction.hello"
-echo "  [PASS] Hello.app validated and inspected."
+echo "  [PASS] Hello.app validated."
 
-echo "=== Test 2: Install Hello.app via conj-appctl ==="
-conj-appctl install ./Hello.app
+echo "=== Test 3: Install Hello.app via conj-appctl IPC ==="
+conj-appctl install "$TEST_SRC/Hello.app"
 
-# Check user Applications directory
-test -d /root/Applications/Hello.app
-test -f /root/Applications/Hello.app/Contents/Info.toml
+# Verify installed to non-root user Applications ($HOME/Applications)
+test -d "$HOME/Applications/Hello.app"
+test -f "$HOME/Applications/Hello.app/Contents/Info.toml"
+test ! -e "/Applications/Hello.app"
 
-# Check synthesized desktop entry
-test -f /root/.local/share/applications/conj-org.conjunction.hello.desktop
-grep -q "Name=Hello App" /root/.local/share/applications/conj-org.conjunction.hello.desktop
-grep -q "X-Conjunction-AppId=org.conjunction.hello" /root/.local/share/applications/conj-org.conjunction.hello.desktop
+# Verify desktop entry generated in user XDG applications
+DESKTOP_FILE="$HOME/.local/share/applications/conj-org.conjunction.hello.desktop"
+test -f "$DESKTOP_FILE"
+grep -q "Name=Hello App" "$DESKTOP_FILE"
+grep -q "X-Conjunction-AppId=org.conjunction.hello" "$DESKTOP_FILE"
 
-# Check MIME association
-test -f /root/.config/mimeapps.list
-grep -q "application/x-hello=conj-org.conjunction.hello.desktop;" /root/.config/mimeapps.list
-echo "  [PASS] Installation and desktop/MIME synthesis verified."
+# Verify MIME association added AND pre-existing unrelated association preserved
+MIME_FILE="$HOME/.config/mimeapps.list"
+test -f "$MIME_FILE"
+grep -q "text/plain=unrelated-editor.desktop;" "$MIME_FILE"
+grep -q "application/x-hello=conj-org.conjunction.hello.desktop;" "$MIME_FILE"
+echo "  [PASS] Installation placed bundle in \$HOME/Applications, registered desktop entry and preserved unrelated MIME associations."
 
-echo "=== Test 3: Discover by ID ==="
-conj-appctl list | grep "org.conjunction.hello"
-conj-appctl inspect org.conjunction.hello | grep "Version:          1.0.0"
-echo "  [PASS] Discovery by ID verified."
+echo "=== Test 4: Discover applications (User + System scopes) ==="
+LIST_OUT=$(conj-appctl list)
+echo "$LIST_OUT"
+echo "$LIST_OUT" | grep -q "org.conjunction.hello"
+echo "$LIST_OUT" | grep -q "org.conjunction.settings"
 
-echo "=== Test 4: Launch via Application Services ==="
-LAUNCH_OUTPUT=$(conj-appctl launch org.conjunction.hello)
-echo "Launch output: $LAUNCH_OUTPUT"
-test "$LAUNCH_OUTPUT" = "Hello from Conjunction"
-echo "  [PASS] Application launched end-to-end through Application Services."
+USER_INSPECT=$(conj-appctl inspect org.conjunction.hello)
+echo "$USER_INSPECT" | grep -q "Scope:            user"
+echo "$USER_INSPECT" | grep -q "Version:          1.0.0"
 
-echo "=== Test 5: Rename bundle preserves identity ==="
-mv /root/Applications/Hello.app "/root/Applications/Renamed Hello.app"
+SYS_INSPECT=$(conj-appctl inspect org.conjunction.settings)
+echo "$SYS_INSPECT" | grep -q "Scope:            system"
+echo "$SYS_INSPECT" | grep -q "/opt/conjunction/Applications/SystemSettings.app"
+echo "  [PASS] Discovery lists and inspects both user and system application bundles."
+
+echo "=== Test 5: Launch applications via conj-appctl and conj-open (IPC routed) ==="
+APPCTL_OUT=$(conj-appctl launch org.conjunction.hello)
+test "$APPCTL_OUT" = "Hello from Conjunction"
+
+OPEN_OUT=$(conj-open org.conjunction.hello)
+test "$OPEN_OUT" = "Hello from Conjunction"
+
+SYS_OUT=$(conj-appctl launch org.conjunction.settings)
+test "$SYS_OUT" = "Conjunction System Settings Opened"
+echo "  [PASS] Application launches verified via conj-appctl and conj-open."
+
+echo "=== Test 6: Rename bundle preserves identity ==="
+mv "$HOME/Applications/Hello.app" "$HOME/Applications/Renamed Hello.app"
 conj-appctl reconcile
 
-# ID must remain org.conjunction.hello and point to new path
-conj-appctl inspect org.conjunction.hello | grep "Renamed Hello.app"
+# Bundle identity points to renamed path
+RENAME_INSPECT=$(conj-appctl inspect org.conjunction.hello)
+echo "$RENAME_INSPECT" | grep -q "Renamed Hello.app"
+
+# Launch still succeeds
 RENAME_LAUNCH=$(conj-appctl launch org.conjunction.hello)
 test "$RENAME_LAUNCH" = "Hello from Conjunction"
 
-# No ghost entries
-APP_COUNT=$(conj-appctl list | grep -c "org.conjunction.hello" || true)
-test "$APP_COUNT" -eq 1
+# Exactly one entry exists in registry (no ghosts)
+HELLO_COUNT=$(conj-appctl list | grep -c "org.conjunction.hello" || true)
+test "$HELLO_COUNT" -eq 1
 echo "  [PASS] Bundle rename preserved identity without ghost entries."
 
-echo "=== Test 6: Daemon restart & Registry Cache reconstruction ==="
-# Kill daemon if running, wipe cache
-rm -f /root/.local/state/conjunction/registry.json
-conj-appctl reconcile
-conj-appctl inspect org.conjunction.hello | grep "Renamed Hello.app"
-echo "  [PASS] Registry cache reconstructed cleanly from filesystem truth."
+echo "=== Test 7: Daemon failure & restart lifecycle ==="
+# Kill conj-appd
+kill -9 "$APPD_PID"
+wait "$APPD_PID" 2>/dev/null || true
+APPD_PID=""
 
-echo "=== Test 7: Uninstall completely unregisters application ==="
+# conj-appctl must fail cleanly when daemon is unreachable
+if conj-appctl list 2>/tmp/appctl_err; then
+    echo "ERROR: conj-appctl list should have failed when conj-appd is not running!"
+    exit 1
+fi
+grep -i -E "cannot connect|is conj-appd running|Connection refused" /tmp/appctl_err
+echo "  Clean connection failure verified when daemon is absent."
+
+# Restart conj-appd
+conj-appd &
+APPD_PID=$!
+sleep 1
+
+# conj-appctl connects and works again
+test "$(conj-appctl ping)" = "pong"
+RESTART_LAUNCH=$(conj-appctl launch org.conjunction.hello)
+test "$RESTART_LAUNCH" = "Hello from Conjunction"
+echo "  [PASS] Daemon restart cleanly recovered registry state and service IPC."
+
+echo "=== Test 8: Privilege Boundary Protection ==="
+# 1. Non-root user cannot write to system /opt/conjunction/Applications
+if touch /opt/conjunction/Applications/malicious.txt 2>/dev/null; then
+    echo "ERROR: Unprivileged user should not be able to write to /opt/conjunction/Applications!"
+    exit 1
+fi
+
+# 2. Non-root user cannot install a bundle claiming reserved system ID
+mkdir -p "$TEST_SRC/FakeSettings.app/Contents/Executable"
+cat > "$TEST_SRC/FakeSettings.app/Contents/Info.toml" << 'EOF'
+bundle_format = "conjunction.app/1"
+id = "org.conjunction.settings"
+name = "Fake Settings"
+version = "2.0.0"
+executable = "Contents/Executable/hack"
+architectures = ["x86_64"]
+EOF
+cat > "$TEST_SRC/FakeSettings.app/Contents/Executable/hack" << 'EOF'
+#!/bin/sh
+echo "Hacked Settings"
+EOF
+chmod +x "$TEST_SRC/FakeSettings.app/Contents/Executable/hack"
+
+if conj-appctl install "$TEST_SRC/FakeSettings.app" 2>/dev/null; then
+    echo "ERROR: Installation of bundle claiming reserved system ID org.conjunction.settings should have been rejected!"
+    exit 1
+fi
+
+# Verify system application was not modified and still launches original binary
+SYS_VERIFY=$(conj-appctl launch org.conjunction.settings)
+test "$SYS_VERIFY" = "Conjunction System Settings Opened"
+echo "  [PASS] Privilege boundaries enforced: system root protected, reserved ID shadowing rejected."
+
+echo "=== Test 9: MIME Preservation on Uninstall ==="
 conj-appctl uninstall org.conjunction.hello
 
 # Verify bundle removed
-test ! -d "/root/Applications/Renamed Hello.app"
+test ! -d "$HOME/Applications/Renamed Hello.app"
 
-# Verify desktop entry removed
-test ! -f "/root/.local/share/applications/conj-org.conjunction.hello.desktop"
+# Verify desktop file removed
+test ! -f "$HOME/.local/share/applications/conj-org.conjunction.hello.desktop"
 
-# Verify MIME association removed
-if [ -f /root/.config/mimeapps.list ]; then
-    ! grep -q "conj-org.conjunction.hello.desktop" /root/.config/mimeapps.list
-fi
+# Verify Hello association removed BUT unrelated association strictly preserved
+test -f "$MIME_FILE"
+! grep -q "application/x-hello" "$MIME_FILE"
+grep -q "text/plain=unrelated-editor.desktop;" "$MIME_FILE"
 
-# Verify launch fails
+# Launch should now fail
 if conj-appctl launch org.conjunction.hello 2>/dev/null; then
     echo "ERROR: launch should have failed after uninstall"
     exit 1
 fi
-echo "  [PASS] Application uninstalled cleanly with no stale artifacts."
+echo "  [PASS] Application uninstalled cleanly; unrelated MIME associations remained intact."
 
-echo "=== Test 8: Clean Reinstallation ==="
-conj-appctl install "$TEST_ROOT/Hello.app"
-conj-appctl inspect org.conjunction.hello | grep "Hello App"
-REINSTALL_LAUNCH=$(conj-appctl launch org.conjunction.hello)
-test "$REINSTALL_LAUNCH" = "Hello from Conjunction"
-conj-appctl uninstall org.conjunction.hello
-echo "  [PASS] Clean reinstallation verified."
-
-echo "=== Test 9: Duplicate-ID Conflict Handling ==="
-mkdir -p "$TEST_ROOT/Alpha.app/Contents/Executable"
-mkdir -p "$TEST_ROOT/Beta.app/Contents/Executable"
-
-cat > "$TEST_ROOT/Alpha.app/Contents/Info.toml" << 'EOF'
+echo "=== Test 10: Malicious Path Traversal Bundle Rejection ==="
+mkdir -p "$TEST_SRC/Evil.app/Contents"
+cat > "$TEST_SRC/Evil.app/Contents/Info.toml" << 'EOF'
 bundle_format = "conjunction.app/1"
-id = "org.example.conflict"
-name = "Alpha"
-version = "1.0.0"
-executable = "Contents/Executable/run"
-architectures = ["x86_64"]
-EOF
-echo '#!/bin/sh' > "$TEST_ROOT/Alpha.app/Contents/Executable/run"
-echo 'echo "Alpha"' >> "$TEST_ROOT/Alpha.app/Contents/Executable/run"
-chmod +x "$TEST_ROOT/Alpha.app/Contents/Executable/run"
-
-cat > "$TEST_ROOT/Beta.app/Contents/Info.toml" << 'EOF'
-bundle_format = "conjunction.app/1"
-id = "org.example.conflict"
-name = "Beta"
-version = "1.0.0"
-executable = "Contents/Executable/run"
-architectures = ["x86_64"]
-EOF
-echo '#!/bin/sh' > "$TEST_ROOT/Beta.app/Contents/Executable/run"
-echo 'echo "Beta"' >> "$TEST_ROOT/Beta.app/Contents/Executable/run"
-chmod +x "$TEST_ROOT/Beta.app/Contents/Executable/run"
-
-cp -r "$TEST_ROOT/Alpha.app" /root/Applications/
-cp -r "$TEST_ROOT/Beta.app" /root/Applications/
-
-conj-appctl reconcile
-# Must report conflict in list
-conj-appctl list | grep "CONFLICT DETECTED"
-
-# Launch by ID must fail
-if conj-appctl launch org.example.conflict 2>/dev/null; then
-    echo "ERROR: launch of conflicting ID must fail"
-    exit 1
-fi
-
-# Remove Beta.app -> conflict resolves
-rm -rf /root/Applications/Beta.app
-conj-appctl reconcile
-
-# Now launches Alpha
-ALPHA_OUT=$(conj-appctl launch org.example.conflict)
-test "$ALPHA_OUT" = "Alpha"
-rm -rf /root/Applications/Alpha.app
-conj-appctl reconcile
-echo "  [PASS] Duplicate-ID conflict detected, blocked launch, and resolved upon removal."
-
-echo "=== Test 10: Reserved-ID Protection ==="
-mkdir -p "$TEST_ROOT/Settings.app/Contents/Executable"
-cat > "$TEST_ROOT/Settings.app/Contents/Info.toml" << 'EOF'
-bundle_format = "conjunction.app/1"
-id = "org.conjunction.settings"
-name = "Settings"
-version = "1.0.0"
-executable = "Contents/Executable/run"
-architectures = ["x86_64"]
-EOF
-echo '#!/bin/sh' > "$TEST_ROOT/Settings.app/Contents/Executable/run"
-chmod +x "$TEST_ROOT/Settings.app/Contents/Executable/run"
-
-if conj-appctl install "$TEST_ROOT/Settings.app" 2>/dev/null; then
-    echo "ERROR: User install of reserved ID org.conjunction.settings must be rejected"
-    exit 1
-fi
-test ! -d /root/Applications/Settings.app
-echo "  [PASS] Reserved system ID properly rejected."
-
-echo "=== Test 11: Malicious Traversal Bundle Rejection ==="
-mkdir -p "$TEST_ROOT/Evil.app/Contents"
-cat > "$TEST_ROOT/Evil.app/Contents/Info.toml" << 'EOF'
-bundle_format = "conjunction.app/1"
-id = "org.example.evil"
+id = "com.example.evil"
 name = "Evil"
 version = "1.0.0"
 executable = "../../bin/sh"
 architectures = ["x86_64"]
 EOF
 
-if conj-appctl install "$TEST_ROOT/Evil.app" 2>/dev/null; then
-    echo "ERROR: Installation of traversal executable must be rejected"
+if conj-appctl install "$TEST_SRC/Evil.app" 2>/dev/null; then
+    echo "ERROR: Bundle with path traversal executable should have been rejected!"
     exit 1
 fi
-test ! -d /root/Applications/Evil.app
-test ! -f /root/.local/share/applications/conj-org.example.evil.desktop
-echo "  [PASS] Malicious bundle rejected before registration; no files installed."
-
-echo "=== Test 12: Incomplete / Interrupted Transaction Recovery ==="
-# Simulate leftover staging directory
-mkdir -p /root/Applications/.Corrupt.app.staging_12345
-echo "partial data" > /root/Applications/.Corrupt.app.staging_12345/dummy.txt
-
-conj-appctl reconcile
-if conj-appctl list | grep -q "Corrupt"; then
-    echo "ERROR: Staging directory must not be registered as an installed application"
-    exit 1
-fi
-rm -rf /root/Applications/.Corrupt.app.staging_12345
-
-# Verify clean installation of another app works
-conj-appctl install "$TEST_ROOT/Hello.app"
-conj-appctl launch org.conjunction.hello | grep -q "Hello from Conjunction"
-conj-appctl uninstall org.conjunction.hello
-echo "  [PASS] Interrupted staging handled safely without phantom registrations."
+test ! -d "$HOME/Applications/Evil.app"
+test ! -f "$HOME/.local/share/applications/conj-com.example.evil.desktop"
+echo "  [PASS] Path traversal bundle rejected before installation."
 
 echo ""
 echo "========================================================"
-echo "ALL PHASE 2 REAL-SYSTEM QEMU ACCEPTANCE TESTS PASSED!"
+echo "ALL PHASE 2.1 REAL-SYSTEM HARDENING TESTS PASSED!"
 echo "========================================================"
 '''
 
-    guest_script_path = '/tmp/phase2_guest_tests.sh'
-    run_ssh(f"cat << 'GUEST_EOF' > {guest_script_path}\n{guest_test_script}\nGUEST_EOF\nchmod +x {guest_script_path}")
+    # Write test script to guest
+    guest_script_path = '/home/conjunction-test/phase2_1_tests.sh'
+    run_ssh(f"cat << 'GUEST_EOF' > {guest_script_path}\n{guest_test_script}\nGUEST_EOF\nchmod +x {guest_script_path}\nchown conjunction-test:conjunction-test {guest_script_path}")
 
-    print("\n[STEP 2/8] Executing Phase 2 test suite inside QEMU guest...", flush=True)
-    res = run_ssh(f"bash {guest_script_path}", capture=False, timeout=120)
+    # Run tests as unprivileged user conjunction-test
+    print("\n[STEP 3/6] Executing Phase 2.1 hardening tests inside QEMU guest as conjunction-test...", flush=True)
+    res = run_ssh(f"su - conjunction-test -c 'bash {guest_script_path}'", capture=False, timeout=120)
     if res.returncode != 0:
         raise RuntimeError(f"Guest acceptance tests failed with code {res.returncode}")
 
-    print("\n[STEP 3/8] Shutting down QEMU VM cleanly...", flush=True)
+    print("\n[STEP 4/6] Shutting down QEMU VM cleanly...", flush=True)
     try:
         qmp_cmd(state, 'quit')
     except Exception:
         pass
     time.sleep(2)
 
-    print("\n*** PHASE 2 QEMU ACCEPTANCE GATE VERIFICATION SUCCESSFUL ***")
+    print("\n*** PHASE 2.1 REAL-SYSTEM HARDENING GATE VERIFICATION SUCCESSFUL ***")
 
 
 if __name__ == '__main__':

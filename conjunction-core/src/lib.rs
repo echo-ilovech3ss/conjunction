@@ -3,9 +3,14 @@ pub use bundle::{Bundle, BundleError, Manifest, CURRENT_BUNDLE_FORMAT, SUPPORTED
 
 pub mod registry;
 pub use registry::{
-    AppConflict, AppRegistry, AppScope, InstalledApp, RegistryError, RegistryItem,
+    AppConflict, AppRegistry, AppScope, InstalledApp, LaunchResult, RegistryError, RegistryItem,
     is_reserved_id, user_applications_dir, system_applications_dir, user_desktop_dir,
     user_state_dir, user_config_dir,
+};
+
+pub mod ipc;
+pub use ipc::{
+    appd_socket_path, send_appd_request, send_appd_request_to_path, AppdRequest, AppdResponse,
 };
 
 use std::path::{Path, PathBuf};

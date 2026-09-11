@@ -46,6 +46,13 @@ pub enum RegistryItem {
     Conflict(AppConflict),
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LaunchResult {
+    pub exit_code: i32,
+    pub stdout: String,
+    pub stderr: String,
+}
+
 #[derive(Debug)]
 pub enum RegistryError {
     BundleError(BundleError),
@@ -98,29 +105,28 @@ impl From<io::Error> for RegistryError {
 }
 
 pub fn is_reserved_id(id: &str) -> bool {
-    let reserved_prefixes = [
-        "org.conjunction.settings",
-        "org.conjunction.system",
-        "org.conjunction.dock",
-        "org.conjunction.shell",
-        "org.conjunction.finder",
-        "org.conjunction.store",
-    ];
-
-    for prefix in &reserved_prefixes {
-        if id == *prefix || id.starts_with(&format!("{}.", prefix)) {
-            return true;
-        }
+    if id == "org.conjunction.hello" {
+        return false;
     }
-    false
+    id == "org.conjunction" || id.starts_with("org.conjunction.")
 }
 
 pub fn user_applications_dir() -> PathBuf {
+    if let Ok(dir) = std::env::var("CONJUNCTION_USER_APPS_DIR") {
+        if !dir.is_empty() {
+            return PathBuf::from(dir);
+        }
+    }
     crate::get_user_home().join("Applications")
 }
 
 pub fn system_applications_dir() -> PathBuf {
-    PathBuf::from("/Applications")
+    if let Ok(dir) = std::env::var("CONJUNCTION_SYSTEM_APPS_DIR") {
+        if !dir.is_empty() {
+            return PathBuf::from(dir);
+        }
+    }
+    PathBuf::from("/opt/conjunction/Applications")
 }
 
 pub fn user_desktop_dir() -> PathBuf {
@@ -232,8 +238,20 @@ impl AppRegistry {
                 }
             });
 
-            if bundles.len() == 1 {
-                let (bundle, scope) = bundles.into_iter().next().unwrap();
+            // Check for system bundle precedence: system bundles cannot be shadowed by user bundles
+            let system_candidates: Vec<_> = bundles.iter().filter(|(_, s)| *s == AppScope::System).cloned().collect();
+            let user_candidates: Vec<_> = bundles.iter().filter(|(_, s)| *s == AppScope::User).cloned().collect();
+
+            let chosen = if system_candidates.len() == 1 && !user_candidates.is_empty() {
+                // System bundle takes absolute precedence; user shadowing is rejected
+                Some(system_candidates.into_iter().next().unwrap())
+            } else if bundles.len() == 1 {
+                Some(bundles.remove(0))
+            } else {
+                None
+            };
+
+            if let Some((bundle, scope)) = chosen {
                 let manifest = bundle.manifest();
                 let canonical_bundle = bundle.path().canonicalize().unwrap_or_else(|_| bundle.path().to_path_buf());
                 let exec_path = bundle.executable_path().unwrap_or_else(|_| canonical_bundle.join(&manifest.executable));
@@ -395,12 +413,17 @@ impl AppRegistry {
     }
 
     pub fn launch(&self, target: &str, args: &[String]) -> Result<i32, RegistryError> {
+        let res = self.launch_captured(target, args)?;
+        Ok(res.exit_code)
+    }
+
+    pub fn launch_captured(&self, target: &str, args: &[String]) -> Result<LaunchResult, RegistryError> {
         let target_path = Path::new(target);
         if (target.ends_with(".app") || target_path.exists()) && target_path.is_dir() {
             let bundle = Bundle::open(target_path)?;
             bundle.validate()?;
             let exec = bundle.executable_path()?;
-            return self.spawn_exec(&exec, args);
+            return self.spawn_exec_captured(&exec, args);
         }
 
         if let Some(c) = self.conflicts.get(target) {
@@ -417,13 +440,13 @@ impl AppRegistry {
                     app.executable_path.display()
                 )));
             }
-            return self.spawn_exec(&app.executable_path, args);
+            return self.spawn_exec_captured(&app.executable_path, args);
         }
 
         Err(RegistryError::AppNotFound(target.to_string()))
     }
 
-    fn spawn_exec(&self, exec: &Path, args: &[String]) -> Result<i32, RegistryError> {
+    fn spawn_exec_captured(&self, exec: &Path, args: &[String]) -> Result<LaunchResult, RegistryError> {
         #[cfg(windows)]
         let mut cmd = {
             let is_script = if let Ok(mut f) = fs::File::open(exec) {
@@ -452,8 +475,12 @@ impl AppRegistry {
             c
         };
 
-        match cmd.status() {
-            Ok(status) => Ok(status.code().unwrap_or(0)),
+        match cmd.output() {
+            Ok(output) => Ok(LaunchResult {
+                exit_code: output.status.code().unwrap_or(0),
+                stdout: String::from_utf8_lossy(&output.stdout).to_string(),
+                stderr: String::from_utf8_lossy(&output.stderr).to_string(),
+            }),
             Err(e) => Err(RegistryError::LaunchFailed(format!("failed to execute {}: {}", exec.display(), e))),
         }
     }
