@@ -5,7 +5,10 @@ members = [
     "cj",
     "application",
     "app_sync",
-    "conj-bundle"
+    "conj-bundle",
+    "conj-appd",
+    "conj-appctl",
+    "conj-open"
 ]
 
 [workspace.dependencies]

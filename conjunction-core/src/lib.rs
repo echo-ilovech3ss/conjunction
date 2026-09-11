@@ -1,6 +1,13 @@
 pub mod bundle;
 pub use bundle::{Bundle, BundleError, Manifest, CURRENT_BUNDLE_FORMAT, SUPPORTED_ARCHITECTURES};
 
+pub mod registry;
+pub use registry::{
+    AppConflict, AppRegistry, AppScope, InstalledApp, RegistryError, RegistryItem,
+    is_reserved_id, user_applications_dir, system_applications_dir, user_desktop_dir,
+    user_state_dir, user_config_dir,
+};
+
 use std::path::{Path, PathBuf};
 
 pub fn get_user_home() -> PathBuf {
