@@ -17,18 +17,23 @@ NC='\033[0m'
 DRY_RUN=false
 CONFIG_FILE=""
 UNATTENDED=false
+REBOOT_AFTER_INSTALL=true
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
+        --no-reboot)
+            REBOOT_AFTER_INSTALL=false
+            shift
+            ;;
         -d|--dry-run)
             DRY_RUN=true
             shift
             ;;
         -g|--gui)
+            shift
             if [[ -x "/usr/local/bin/conjunction-installer-gui" ]]; then
                 exec /usr/local/bin/conjunction-installer-gui "$@"
             fi
-            shift
             ;;
         -c|--config)
             CONFIG_FILE="${2:-}"
@@ -647,7 +652,7 @@ if ! is_step_completed "install_base"; then
         echo -e "${YELLOW}[DRY RUN]${NC} Simulating pacstrap installation to $MNT..."
         mkdir -p "$MNT"/{etc,usr/local/bin,opt/conjunction,var/log}
     else
-        pacstrap -K /mnt base base-devel linux-zen linux-zen-headers linux-firmware mkinitcpio \
+        pacstrap -K /mnt base base-devel linux linux-headers linux-firmware mkinitcpio \
             amd-ucode intel-ucode sudo \
             grub efibootmgr dosfstools mtools \
             networkmanager network-manager-applet iwd openssh \
@@ -661,7 +666,7 @@ if ! is_step_completed "install_base"; then
             snapper btrfs-progs grub-btrfs bluez bluez-utils cups \
             plank kvantum breeze-gtk breeze-icons inter-font noto-fonts noto-fonts-cjk noto-fonts-emoji ttf-jetbrains-mono ttf-fira-code \
             zsh zsh-completions zsh-autosuggestions zsh-syntax-highlighting kitty appmenu-gtk-module libdbusmenu-glib libdbusmenu-gtk3 \
-            python python-pip xorg-server mesa vulkan-icd-loader wine winetricks
+            python python-pip tk python-pillow xorg-server mesa vulkan-icd-loader wine winetricks
     fi
 
     ok "Base system installed"
@@ -680,7 +685,7 @@ if ! is_step_completed "configure_system"; then
         mkdir -p "$MNT/etc"
         echo "# Mock fstab" > "$MNT/etc/fstab"
     else
-        genfstab -U /mnt >> /mnt/etc/fstab
+        genfstab -U /mnt > /mnt/etc/fstab
     fi
 
     ok "fstab generated successfully"
@@ -764,8 +769,8 @@ post_install_validation() {
     fi
 
     log "Checking kernel files..."
-    if [[ ! -f "$MNT/boot/vmlinuz-linux-zen" ]]; then
-        err "Validation failed: Kernel vmlinuz-linux-zen not found in target boot directory"
+    if [[ ! -f "$MNT/boot/vmlinuz-linux" && ! -f "$MNT/boot/vmlinuz-linux-zen" ]]; then
+        err "Validation failed: Kernel not found in target boot directory"
         failed=true
     else
         ok "Kernel files OK"
@@ -805,7 +810,7 @@ post_install_validation() {
     fi
 
     log "Checking network configuration..."
-    if [[ ! -f "$MNT/etc/systemd/system/multi-user.target.wants/NetworkManager.service" ]]; then
+    if ! run_chroot systemctl is-enabled --quiet NetworkManager.service; then
         err "Validation failed: NetworkManager service is not enabled"
         failed=true
     else
@@ -828,16 +833,8 @@ post_install_validation() {
     fi
 
     if [[ "$failed" == true ]]; then
-        warn "⚠️ Some validation checks failed! Please review the errors above."
-        if [[ "$UNATTENDED" == true ]]; then
-            warn "Unattended mode: proceeding despite non-fatal validation warnings."
-        else
-            read -p "Do you want to continue anyway? (y/N): " -r CONTINUE_ANYWAY
-            if [[ ! $CONTINUE_ANYWAY =~ ^[Yy]$ ]]; then
-                err "Installation aborted due to validation failure."
-                exit 1
-            fi
-        fi
+        err "Installation validation failed. Fix the errors above before rebooting."
+        exit 1
     else
         ok "All post-install validation checks passed!"
     fi
@@ -910,6 +907,9 @@ if ! is_step_completed "user_setup"; then
     fi
 
     # Create user
+    for group in wheel video audio storage optical network power lp users docker; do
+        run_chroot getent group "$group" >/dev/null || run_chroot groupadd -r "$group"
+    done
     run_chroot useradd -m -G wheel,video,audio,storage,optical,network,power,lp,users,docker -s /bin/zsh "$USERNAME"
 
     # Set password
@@ -1026,6 +1026,7 @@ if ! is_step_completed "services"; then
     header "Step 9: Enabling Services"
 
     run_chroot systemctl enable sddm
+    run_chroot systemctl set-default graphical.target
     run_chroot systemctl enable NetworkManager
     # Commented out enabling sshd by default
     # run_chroot systemctl enable sshd
@@ -1056,6 +1057,10 @@ if ! is_step_completed "conjunction_files"; then
         # Copy Conjunction OS components from /opt/conjunction on the live ISO
         CONJUNCTION_SRC="/opt/conjunction"
         mkdir -p /mnt/opt/conjunction
+        cp -a "${CONJUNCTION_SRC}/conjunction_gui" /mnt/opt/conjunction/
+        if [[ -d "${CONJUNCTION_SRC}/assets" ]]; then
+            cp -a "${CONJUNCTION_SRC}/assets" /mnt/opt/conjunction/
+        fi
 
         if [[ -f "${CONJUNCTION_SRC}/cj" ]]; then
             cp "${CONJUNCTION_SRC}/cj" /mnt/opt/conjunction/
@@ -1183,7 +1188,7 @@ POSTINSTALL
         cat > "$MNT/etc/systemd/system/conjunction-post-install.service" << SERVICE
 [Unit]
 Description=Conjunction OS Post-Install Setup
-After=multi-user.target
+After=local-fs.target
 
 [Service]
 Type=oneshot
@@ -1243,6 +1248,12 @@ echo "  6. Run optimization: cj optimize"
 echo ""
 echo "Thank you for choosing Conjunction OS!"
 echo ""
+if [[ "$REBOOT_AFTER_INSTALL" == false ]]; then
+    sync
+    umount -R /mnt
+    ok "Installation complete. Remove the installation media before rebooting."
+    exit 0
+fi
 echo "Rebooting automatically into Conjunction OS in 5 seconds... Press Ctrl+C to cancel."
 for i in {5..1}; do
     echo -n "$i... "

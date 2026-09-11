@@ -12,7 +12,7 @@ buildmodes=('iso')
 bootmodes=('bios.syslinux' 'uefi.systemd-boot')
 pacman_conf="pacman.conf"
 airootfs_image_type="squashfs"
-airootfs_image_tool_options=('-comp' 'xz' '-Xbcj' 'x86' '-b' '1M' '-Xdict-size' '1M')
+airootfs_image_tool_options=('-comp' 'zstd' '-Xcompression-level' '3' '-b' '1M')
 
 file_permissions=(
   ["/etc/shadow"]="0:0:400"
@@ -23,6 +23,7 @@ file_permissions=(
   ["/usr/local/bin/conjunction-live-setup.sh"]="0:0:755"
   ["/usr/local/bin/conjunction-live-init.sh"]="0:0:755"
   ["/usr/local/bin/conjunction-init-check.sh"]="0:0:755"
+  ["/usr/local/bin/conjunction-session-ready.sh"]="0:0:755"
   ["/usr/local/bin/conjunction-welcome.sh"]="0:0:755"
   ["/usr/local/bin/conjunction-welcome-gui"]="0:0:755"
   ["/usr/local/bin/zen"]="0:0:755"

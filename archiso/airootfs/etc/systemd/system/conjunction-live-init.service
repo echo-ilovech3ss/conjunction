@@ -1,6 +1,6 @@
 [Unit]
 Description=Conjunction OS Live User Initialization
-DefaultDependencies=no
+ConditionPathExists=/etc/archiso-release
 After=local-fs.target
 Before=sddm.service systemd-user-sessions.service
 

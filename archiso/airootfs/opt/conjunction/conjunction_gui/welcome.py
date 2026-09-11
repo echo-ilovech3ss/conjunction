@@ -253,6 +253,11 @@ class ConjunctionWelcomeApp:
 
 def main():
     app = ConjunctionWelcomeApp()
+    def report_ready():
+        runtime = os.environ.get("XDG_RUNTIME_DIR")
+        if runtime and Path("/etc/archiso-release").exists() and app.root.winfo_ismapped():
+            (Path(runtime) / "conjunction-welcome.ready").touch()
+    app.root.after(1000, report_ready)
     app.run()
 
 

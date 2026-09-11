@@ -42,6 +42,35 @@ Recommended VM settings:
 
 The live image defaults to an X11 Plasma session for better VM compatibility and autologins as the `conjunction` live user.
 
+### Build and test from WSL2
+
+From an Ubuntu WSL shell in this repository:
+
+```bash
+sudo apt-get install qemu-system-x86 ovmf
+sudo bash build-iso-wsl.sh
+```
+
+The build uses Arch packages inside a Linux chroot. When QEMU is available, the
+build checks BIOS and UEFI startup and requires Plasma and the welcome window to
+be running. A skipped test is reported explicitly. To test an existing image:
+
+```bash
+python3 scripts/smoke-test.py out/conjunction-YYYYMMDD-x86_64.iso
+```
+
+The VM checks run under Linux or WSL, use a disposable virtual disk, and save
+serial logs and screenshots in the printed temporary directory. UEFI testing
+requires OVMF; custom firmware paths can be supplied through `OVMF_CODE` and
+`OVMF_VARS`. Secure Boot is not supported by these unsigned images.
+
+Live startup alone does not prove installation works. For an installation test,
+use `scripts/vm_test.py start --dir /tmp/conjunction-install-test --iso PATH`,
+install onto its 40 GiB virtual disk, stop the VM, then run
+`scripts/vm_test.py start --dir /tmp/conjunction-install-test --disk-boot`.
+The second command attaches only the installed disk. Invoke the script with
+`python3`; run `--help` for its diagnostic commands.
+
 ### Flash to USB
 
 **Windows:**

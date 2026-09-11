@@ -66,7 +66,7 @@ cleanup_mounts() {
               "${ROOT}/proc" "${ROOT}/sys" \
               "${ROOT}/dev/pts" "${ROOT}/dev" \
               "${ROOT}/tmp" "${ROOT}/run"; do
-        mountpoint -q "$mp" 2>/dev/null && umount -lf "$mp" 2>/dev/null || true
+        mountpoint -q "$mp" 2>/dev/null && umount -l "$mp" 2>/dev/null || true
     done
 }
 trap cleanup_mounts EXIT
@@ -273,11 +273,8 @@ bootstrap_arch() {
         sed -i "s/^CheckSpace/#CheckSpace/" "${ROOT}/etc/pacman.conf"
     fi
 
-    # Enable resilient curl XferCommand in chroot pacman.conf
-    if grep -q "XferCommand = /usr/bin/curl" "${ROOT}/etc/pacman.conf"; then
-        info "Enabling resilient curl XferCommand in chroot..."
-        sed -i 's|^#\?XferCommand = /usr/bin/curl.*|XferCommand = /usr/bin/curl -g -L -C - --connect-timeout 60 --retry 5 --retry-delay 3 -f -o %o %u|' "${ROOT}/etc/pacman.conf"
-    fi
+    # External downloaders bypass pacman's ParallelDownloads support.
+    sed -i '/^XferCommand[[:space:]]*=/d' "${ROOT}/etc/pacman.conf"
 
     # Enable ParallelDownloads to saturate high-speed internet connections
     if grep -q "ParallelDownloads" "${ROOT}/etc/pacman.conf"; then
@@ -291,13 +288,14 @@ bootstrap_arch() {
     info "Mounting chroot filesystems..."
     for mp in "proc" "sys" "dev/pts" "dev" "run" "tmp"; do
         if mountpoint -q "${ROOT}/${mp}" 2>/dev/null; then
-            umount -lf "${ROOT}/${mp}" 2>/dev/null || true
+            umount -l "${ROOT}/${mp}" 2>/dev/null || true
         fi
     done
 
     mount -t proc proc "${ROOT}/proc"
     mount -t sysfs sys "${ROOT}/sys"
     mount --bind /dev "${ROOT}/dev"
+    mount --make-rslave "${ROOT}/dev"
     mount -t devpts devpts "${ROOT}/dev/pts"
     mount -t tmpfs tmpfs "${ROOT}/run"
     mount -t tmpfs tmpfs "${ROOT}/tmp"
@@ -355,7 +353,7 @@ build_iso() {
     # Bind mount profile, output, and repository source (unmount first to clean up stale mounts)
     for mp in "conjunction-src" "output" "conjunction-repo"; do
         if mountpoint -q "${ROOT}/${mp}" 2>/dev/null; then
-            umount -lf "${ROOT}/${mp}" 2>/dev/null || true
+            umount -l "${ROOT}/${mp}" 2>/dev/null || true
         fi
     done
 
@@ -390,10 +388,8 @@ Include = /etc/pacman.d/mirrorlist
 EOF
         fi
 
-        # Enable resilient curl XferCommand in profile pacman.conf
-        if grep -q "XferCommand = /usr/bin/curl" /work/conjunction-profile/pacman.conf; then
-            sed -i "s|^#\?XferCommand = /usr/bin/curl.*|XferCommand = /usr/bin/curl -g -L -C - --connect-timeout 60 --retry 5 --retry-delay 3 -f -o %o %u|" /work/conjunction-profile/pacman.conf
-        fi
+        # Keep the native downloader so ParallelDownloads takes effect.
+        sed -i "/^XferCommand[[:space:]]*=/d" /work/conjunction-profile/pacman.conf
 
         # Enable ParallelDownloads in profile pacman.conf
         if grep -q "ParallelDownloads" /work/conjunction-profile/pacman.conf; then
@@ -404,6 +400,7 @@ EOF
 
         # Overlay Conjunction custom files on top of releng
         cp -rf /conjunction-src/* /work/conjunction-profile/
+        bash /conjunction-repo/scripts/prepare-live-profile.sh /work/conjunction-profile
 
         # Disable CheckSpace in profile pacman.conf to prevent mkarchiso installer failures in WSL
         if grep -q "^CheckSpace" /work/conjunction-profile/pacman.conf; then
@@ -425,22 +422,19 @@ EOF
 
         echo "[3/5] Running build validation..."
         echo "  Python syntax checks..."
-        find /work/conjunction-profile/airootfs/ -name "*.py" -exec python3 -m py_compile {} + 2>/dev/null || echo "  Warning: Some Python files had syntax issues"
+        python3 -m compileall -q /work/conjunction-profile/airootfs/opt/conjunction
         echo "  Bash syntax checks..."
-        find /work/conjunction-profile/airootfs/ -name "*.sh" -exec bash -n {} + 2>/dev/null || echo "  Warning: Some shell scripts had syntax issues"
-        bash -n /work/conjunction-profile/profiledef.sh || echo "  Warning: profiledef.sh had syntax issues"
+        find /work/conjunction-profile/airootfs/ -name "*.sh" -print0 | xargs -0 -r -n1 bash -n
+        bash -n /work/conjunction-profile/profiledef.sh
 
         # Compile Cargo workspace
         echo "  Compiling Cargo workspace..."
-        cp -r /conjunction-repo /work/conjunction-workspace
-        cd /work/conjunction-workspace
-        cargo build --release
+        cargo build --manifest-path /conjunction-repo/Cargo.toml --target-dir /work/conjunction-target --release --locked
         mkdir -p /work/conjunction-profile/airootfs/opt/conjunction
-        cp /work/conjunction-workspace/target/release/cj /work/conjunction-profile/airootfs/opt/conjunction/cj
-        cp /work/conjunction-workspace/target/release/application /work/conjunction-profile/airootfs/opt/conjunction/application
-        cp /work/conjunction-workspace/target/release/app_sync /work/conjunction-profile/airootfs/opt/conjunction/app_sync
+        cp /work/conjunction-target/release/cj /work/conjunction-profile/airootfs/opt/conjunction/cj
+        cp /work/conjunction-target/release/application /work/conjunction-profile/airootfs/opt/conjunction/application
+        cp /work/conjunction-target/release/app_sync /work/conjunction-profile/airootfs/opt/conjunction/app_sync
         cd /work
-        rm -rf /work/conjunction-workspace
 
         # Create symlinks so cj, application, conjunction-runner, and conjunction-cli are on PATH during the live session
         mkdir -p /work/conjunction-profile/airootfs/usr/local/bin
@@ -528,6 +522,12 @@ main() {
     bootstrap_arch
     build_iso
     copy_iso_to_windows
+
+    if command -v qemu-system-x86_64 >/dev/null; then
+        python3 "${WINDOWS_SRC}/scripts/smoke-test.py" "${WINDOWS_OUT}/${ISO_FILE}"
+    else
+        warning "QEMU is unavailable; the ISO has not been boot-tested."
+    fi
 
     success "All done!"
 }

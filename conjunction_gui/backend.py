@@ -347,6 +347,8 @@ class InstallationRunner:
         self._thread: Optional[threading.Thread] = None
         self._process: Optional[subprocess.Popen] = None
         self.state_file = Path("/tmp/conjunction-install-state.json")
+        if config.is_dry_run or force_simulation:
+            self.state_file = Path("/tmp/conjunction-install-simulation-state.json")
 
     def start(self):
         self._thread = threading.Thread(target=self._run, daemon=True)
@@ -453,7 +455,7 @@ class InstallationRunner:
         return self._write_unattended_config()
 
     def _run_backend_script(self, bash_bin: str, script_path: Path, config_file: Path):
-        cmd = [bash_bin, str(script_path), "--config", str(config_file).replace("\\", "/")]
+        cmd = [bash_bin, str(script_path), "--no-reboot", "--config", str(config_file).replace("\\", "/")]
         if self.config.is_dry_run:
             cmd.append("--dry-run")
 
@@ -496,8 +498,8 @@ class InstallationRunner:
                 step_num = int(m.group(1))
                 step_idx = min(len(self.STEPS) - 1, max(0, step_num - 1))
                 pct = (step_num / float(len(self.STEPS))) * 100.0
-                if step_idx < len(step_keys):
-                    self._save_checkpoint(step_keys[step_idx])
+                # Only the shell installer records completed steps. A progress
+                # heading means a step has started, not that it succeeded.
                 self._emit(step_idx, line, pct)
             else:
                 pct = min(99.0, ((step_idx + 0.5) / float(len(self.STEPS))) * 100.0)
@@ -510,7 +512,6 @@ class InstallationRunner:
             if self.on_complete:
                 self.on_complete(False, "Installation cancelled by user")
         elif ret == 0:
-            self._save_checkpoint("post_install_config")
             self._emit(len(self.STEPS) - 1, "Installation pipeline completed successfully!", 100.0)
             if self.on_complete:
                 self.on_complete(True, None)
@@ -566,8 +567,10 @@ class InstallationRunner:
 
             if self._can_run_backend(bash_bin, installer_script):
                 self._run_backend_script(bash_bin, installer_script, config_file)
-            else:
+            elif self.config.is_dry_run or self.force_simulation:
                 self._run_simulation()
+            else:
+                raise RuntimeError("Installer backend is unavailable; no installation was performed")
 
         except Exception as e:
             if self.on_complete:

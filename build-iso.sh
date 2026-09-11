@@ -312,6 +312,7 @@ EOF
 
             # Overlay custom conjunction profile files on top
             cp -rf /conjunction-profile/* /work/conjunction-profile/
+            bash /conjunction-src/scripts/prepare-live-profile.sh /work/conjunction-profile
 
             # Write manifest and update metadata
             echo "[3/6] Generating build metadata and manifest inside container..."
@@ -353,22 +354,19 @@ with open(\"/work/conjunction-profile/airootfs/usr/share/conjunction/build-metad
             echo "Running Python syntax checks..."
             find /work/conjunction-profile/airootfs/ -name "*.py" -exec python3 -m py_compile {} +
             echo "Running Bash syntax checks..."
-            find /work/conjunction-profile/airootfs/ -name "*.sh" -exec bash -n {} +
+            find /work/conjunction-profile/airootfs/ -name "*.sh" -print0 | xargs -0 -r -n1 bash -n
             bash -n /work/conjunction-profile/profiledef.sh
-            echo "Running Systemd service validation..."
-            SYSTEMD_UNIT_PATH="/work/conjunction-profile/airootfs/etc/systemd/system:" systemd-analyze verify /work/conjunction-profile/airootfs/etc/systemd/system/*.service
+            # Unit executables are installed by mkarchiso, not in this container.
+            # Runtime service readiness is checked by the VM smoke test.
 
             # Compile Cargo workspace
             echo "Compiling Cargo workspace..."
-            cp -r /conjunction-src /work/conjunction-workspace
-            cd /work/conjunction-workspace
-            cargo build --release
+            cargo build --manifest-path /conjunction-src/Cargo.toml --target-dir /work/conjunction-target --release --locked
             mkdir -p /work/conjunction-profile/airootfs/opt/conjunction
-            cp /work/conjunction-workspace/target/release/cj /work/conjunction-profile/airootfs/opt/conjunction/cj
-            cp /work/conjunction-workspace/target/release/application /work/conjunction-profile/airootfs/opt/conjunction/application
-            cp /work/conjunction-workspace/target/release/app_sync /work/conjunction-profile/airootfs/opt/conjunction/app_sync
+            cp /work/conjunction-target/release/cj /work/conjunction-profile/airootfs/opt/conjunction/cj
+            cp /work/conjunction-target/release/application /work/conjunction-profile/airootfs/opt/conjunction/application
+            cp /work/conjunction-target/release/app_sync /work/conjunction-profile/airootfs/opt/conjunction/app_sync
             cd /work
-            rm -rf /work/conjunction-workspace
 
             # Create symlinks so cj, application, conjunction-runner, and conjunction-cli are on PATH during the live session
             mkdir -p /work/conjunction-profile/airootfs/usr/local/bin
@@ -455,52 +453,8 @@ smoke_test() {
         exit 1
     fi
 
-    info "Starting post-build ISO Smoke Test utilizing QEMU..."
-    local serial_log="${BUILD_DIR}/qemu-serial.log"
-    rm -f "$serial_log"
-
-    # Run QEMU in the background
-    info "Launching QEMU non-interactively..."
-    qemu-system-x86_64 -m 2G -cdrom "$final_iso" -serial file:"$serial_log" -display none &
-    local qemu_pid=$!
-
-    info "Waiting for system boot, SDDM, user targets, welcome flow and NetworkManager (timeout 120s)..."
-    local timeout=120
-    local elapsed=0
-    local success=false
-
-    while [[ $elapsed -lt $timeout ]]; do
-        if [[ -f "$serial_log" ]] && grep -q "SMOKE_TEST_OK" "$serial_log"; then
-            success=true
-            break
-        fi
-        sleep 5
-        elapsed=$((elapsed + 5))
-        echo -n "."
-    done
-    echo ""
-
-    # Kill QEMU
-    kill "$qemu_pid" 2>/dev/null || true
-    wait "$qemu_pid" 2>/dev/null || true
-
-    if [[ "$success" == true ]]; then
-        success "Smoke test PASSED! ISO boots successfully and starts all target services."
-        info "Next steps:"
-        info "  1. Flash to USB: Use Rufus (Windows) or dd (Linux)"
-        info "  2. Boot from USB and follow the installer"
-        info "  3. Run: setup_conjunction_ui.sh"
-        info "  4. Run: cj update && cj optimize"
-    else
-        error "Smoke test FAILED! Timeout reached before receiving boot success signal."
-        if [[ -f "$serial_log" ]]; then
-            error "Last serial log output:"
-            cat "$serial_log"
-        else
-            error "No serial log file was generated."
-        fi
-        exit 1
-    fi
+    info "Checking BIOS and UEFI desktop startup in QEMU..."
+    python3 "${SCRIPT_DIR}/scripts/smoke-test.py" "$final_iso"
 }
 
 # ─── Main ───────────────────────────────────────────────────────────────────

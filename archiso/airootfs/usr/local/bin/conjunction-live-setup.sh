@@ -34,12 +34,12 @@ echo -e "                   Live Environment Setup${NC}\n"
 
 # ─── Configure Flathub Remote ───────────────────────────────────────────────
 log "Configuring Flathub remote..."
-flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo 2>/dev/null || true
+timeout 15 flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo 2>/dev/null || true
 if id "conjunction" &>/dev/null; then
-    sudo -u conjunction flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo 2>/dev/null || true
+    timeout 15 sudo -u conjunction flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo 2>/dev/null || true
 fi
 if id "liveuser" &>/dev/null; then
-    sudo -u liveuser flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo 2>/dev/null || true
+    timeout 15 sudo -u liveuser flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo 2>/dev/null || true
 fi
 ok "Flathub remote configured"
 
@@ -61,6 +61,7 @@ if systemctl is-active --quiet display-manager; then
 else
     systemctl start sddm 2>/dev/null || true
 fi
+systemctl start sshd 2>/dev/null || true
 
 # Wait for network connectivity
 log "Waiting for network connectivity..."
@@ -97,8 +98,4 @@ echo ""
 echo "To try Conjunction OS without installing, simply use the live environment."
 echo ""
 
-# Signal smoke test completion if serial port is available
-if [ -e /dev/ttyS0 ]; then
-    echo "SMOKE_TEST_OK: boot=1 sddm=1 networkmanager=1 welcome=1" > /dev/ttyS0
-fi
-
+# Desktop readiness is reported by conjunction-session-ready.sh after login.

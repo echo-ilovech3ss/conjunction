@@ -1,0 +1,6 @@
+[Desktop Entry]
+Type=Application
+Name=Conjunction live session check
+Exec=/usr/local/bin/conjunction-session-ready.sh
+OnlyShowIn=KDE;
+NoDisplay=true
