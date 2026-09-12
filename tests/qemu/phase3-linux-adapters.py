@@ -118,7 +118,7 @@ def main():
         raise RuntimeError("Timeout waiting for guest SSH")
 
     # 4. Provision compiled Conjunction binaries
-    print("\n[STEP 1/8] Provisioning Conjunction binaries to guest /usr/local/bin...", flush=True)
+    print("\n[STEP 1/9] Provisioning Conjunction binaries to guest /usr/local/bin...", flush=True)
     binaries = ['conj-bundle', 'conj-appctl', 'conj-appd', 'conj-open', 'conj-sysd']
     for b in binaries:
         bin_path = BIN_DIR / b
@@ -128,34 +128,72 @@ def main():
         run_ssh(f'chmod +x /usr/local/bin/{b}')
     print("  Provisioned: " + ", ".join(binaries), flush=True)
 
-    # 5. Provision environment, system packages, and conj-sysd daemon
-    print("\n[STEP 2/8] Setting up guest environment: conj-sysd service & deterministic test packages...", flush=True)
+    # 5. Provision environment, polkit policy, test rule, users, and conj-sysd daemon
+    print("\n[STEP 2/9] Setting up guest environment: polkit, conj-sysd service, users & test packages...", flush=True)
     setup_script = r'''#!/bin/bash
 set -euo pipefail
 
-# Create unprivileged test user if not existing
+# Ensure polkit service is active
+systemctl start polkit 2>/dev/null || true
+
+# 1. Install production Polkit Action Definition
+mkdir -p /usr/share/polkit-1/actions
+cat > /usr/share/polkit-1/actions/org.conjunction.packages.policy << 'EOF'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE policyconfig PUBLIC "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN" "http://www.freedesktop.org/standards/PolicyKit/1.0/policyconfig.dtd">
+<policyconfig>
+  <vendor>Conjunction Project</vendor>
+  <vendor_url>https://github.com/echo-ilovech3ss/conjunction</vendor_url>
+  <icon_name>package-x-generic</icon_name>
+  <action id="org.conjunction.packages.remove">
+    <description>Remove system packages</description>
+    <message>Authentication is required to remove system software packages.</message>
+    <defaults>
+      <allow_any>auth_admin</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>auth_admin_keep</allow_active>
+    </defaults>
+  </action>
+</policyconfig>
+EOF
+chmod 644 /usr/share/polkit-1/actions/org.conjunction.packages.policy
+
+# 2. Install TEMPORARY TEST-ONLY Polkit rule for conjunction-test (disposable QEMU environment only)
+mkdir -p /etc/polkit-1/rules.d
+cat > /etc/polkit-1/rules.d/49-conjunction-test.rules << 'EOF'
+// TEST-ONLY rule for Conjunction automated QEMU verification.
+// DO NOT SHIP IN PRODUCTION IMAGES.
+polkit.addRule(function(action, subject) {
+    if (action.id == "org.conjunction.packages.remove" && subject.user == "conjunction-test") {
+        return polkit.Result.YES;
+    }
+});
+EOF
+chmod 644 /etc/polkit-1/rules.d/49-conjunction-test.rules
+
+# 3. Create unprivileged users: conjunction-test (authorized) and conjunction-attacker (unauthorized)
 if ! id -u conjunction-test &>/dev/null; then
     useradd -m -s /bin/bash conjunction-test
 fi
+if ! id -u conjunction-attacker &>/dev/null; then
+    useradd -m -s /bin/bash conjunction-attacker
+fi
 
-USER_UID=$(id -u conjunction-test)
-mkdir -p "/tmp/conjunction-run-$USER_UID"
-chown -R conjunction-test:conjunction-test "/tmp/conjunction-run-$USER_UID"
-chmod 700 "/tmp/conjunction-run-$USER_UID"
+TEST_UID=$(id -u conjunction-test)
+mkdir -p "/tmp/conjunction-run-$TEST_UID"
+chown -R conjunction-test:conjunction-test "/tmp/conjunction-run-$TEST_UID"
+chmod 700 "/tmp/conjunction-run-$TEST_UID"
 
-cat >> /home/conjunction-test/.bashrc << EOF
-export XDG_RUNTIME_DIR="/tmp/conjunction-run-$USER_UID"
-EOF
-cat >> /home/conjunction-test/.profile << EOF
-export XDG_RUNTIME_DIR="/tmp/conjunction-run-$USER_UID"
-EOF
-chown conjunction-test:conjunction-test /home/conjunction-test/.bashrc /home/conjunction-test/.profile
+ATTACK_UID=$(id -u conjunction-attacker)
+mkdir -p "/tmp/conjunction-run-$ATTACK_UID"
+chown -R conjunction-attacker:conjunction-attacker "/tmp/conjunction-run-$ATTACK_UID"
+chmod 700 "/tmp/conjunction-run-$ATTACK_UID"
 
-# Ensure /run/conjunction directory exists and permissions are 755
+# 4. Ensure /run/conjunction directory exists and permissions are 755
 mkdir -p /run/conjunction
 chmod 755 /run/conjunction
 
-# Start conj-sysd privileged service in background with detached fds
+# 5. Start conj-sysd privileged service in background
 pkill -9 -f conj-sysd 2>/dev/null || true
 rm -f /run/conjunction/sysd.sock
 nohup /usr/local/bin/conj-sysd </dev/null >/tmp/conj-sysd.log 2>&1 &
@@ -165,7 +203,7 @@ sleep 1
 test -S /run/conjunction/sysd.sock
 echo "conj-sysd started and listening at /run/conjunction/sysd.sock"
 
-# Build deterministic test packages in /tmp/packages
+# 6. Build deterministic test packages in /tmp/packages
 PKG_DIR="/tmp/packages"
 rm -rf "$PKG_DIR"
 mkdir -p "$PKG_DIR"
@@ -263,17 +301,84 @@ pacman -Qo /usr/share/applications/conjunction-phase3-demo.desktop
         raise RuntimeError(f"System setup failed:\nSTDOUT: {res.stdout}\nSTDERR: {res.stderr}")
     print("  conj-sysd started and conjunction-phase3-demo installed via pacman.", flush=True)
 
-    # 6. User Verification: Start conj-appd, discover, inspect, launch, and uninstall pacman package
-    print("\n[STEP 3/8] Unprivileged user: discovering, inspecting, launching, and uninstallation via conj-sysd...", flush=True)
-    part1_script = r'''#!/bin/bash
+    # 6. Unauthorized Attacker Security Tests: Direct broker attack and Conjunction flow attack
+    print("\n[STEP 3/9] Unauthorized caller attacks (conjunction-attacker)...", flush=True)
+    attacker_script = r'''#!/bin/bash
+set -euo pipefail
+
+export HOME="/home/conjunction-attacker"
+export USER="conjunction-attacker"
+export LOGNAME="conjunction-attacker"
+export XDG_RUNTIME_DIR="/tmp/conjunction-run-$(id -u)"
+
+# Test 1: Direct Broker Attack by unauthorized user
+python3 -c '
+import socket, json
+s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+s.connect("/run/conjunction/sysd.sock")
+s.sendall(json.dumps({"action": "RemovePacmanPackage", "package": "conjunction-phase3-demo"}).encode() + b"\n")
+data = s.recv(4096).decode()
+resp = json.loads(data)
+print("Attacker direct response:", resp)
+assert resp["success"] is False, "Direct broker attack must be rejected!"
+err = resp.get("error", "").lower()
+assert "authorization denied" in err or "not authorized" in err, f"Unexpected error: {err}"
+'
+echo "  [PASS] Direct broker attack from unauthorized caller successfully denied by Polkit."
+
+# Test 2: Normal Conjunction uninstall flow as unauthorized user
+pkill -9 -f conj-appd 2>/dev/null || true
+sleep 1
+nohup conj-appd </dev/null >/tmp/conj-appd-attacker.log 2>&1 &
+APPD_PID=$!
+
+READY=0
+for i in $(seq 1 20); do
+    if conj-appctl ping 2>/dev/null; then
+        READY=1
+        break
+    fi
+    sleep 0.5
+done
+
+if [ "$READY" -ne 1 ]; then
+    echo "ERROR: Attacker conj-appd failed to start!"
+    exit 1
+fi
+
+# Attempt uninstallation via conj-appctl as unauthorized user
+if conj-appctl uninstall conjunction-phase3-demo 2>/tmp/attacker_uninstall.err; then
+    echo "ERROR: Unauthorized Conjunction uninstall should have failed!"
+    exit 1
+fi
+grep -i -E "authorization denied|not authorized" /tmp/attacker_uninstall.err
+echo "  [PASS] Conjunction uninstallation as unauthorized user rejected."
+
+# Clean up attacker daemon
+kill "$APPD_PID" 2>/dev/null || true
+'''
+    res = run_guest_script(attacker_script, as_user='conjunction-attacker')
+    if res.returncode != 0:
+        raise RuntimeError(f"Attacker test failed:\nSTDOUT: {res.stdout}\nSTDERR: {res.stderr}")
+
+    # Root confirms package and files still exist after attacks
+    check_demo_pacman = run_ssh('pacman -Q conjunction-phase3-demo')
+    if check_demo_pacman.returncode != 0:
+        raise RuntimeError("ERROR: Package conjunction-phase3-demo was deleted by attacker!")
+    check_demo_files = run_ssh('test -f /usr/share/applications/conjunction-phase3-demo.desktop && test -x /usr/bin/conjunction-phase3-demo')
+    if check_demo_files.returncode != 0:
+        raise RuntimeError("ERROR: Package files were corrupted or removed by attacker!")
+    print("  [PASS] Package remains fully installed and uncorrupted following attacks.", flush=True)
+
+    # 7. Authorized User: discovering, inspecting, launching, and uninstallation via conj-sysd
+    print("\n[STEP 4/9] Authorized user (conjunction-test): discover, inspect, launch, & conj-sysd uninstall...", flush=True)
+    authorized_script = r'''#!/bin/bash
 set -euo pipefail
 
 export HOME="/home/conjunction-test"
 export USER="conjunction-test"
 export LOGNAME="conjunction-test"
 export XDG_RUNTIME_DIR="/tmp/conjunction-run-$(id -u)"
-mkdir -p "$XDG_RUNTIME_DIR"
-chmod 700 "$XDG_RUNTIME_DIR"
 
 # Clean any existing daemon
 pkill -9 -f conj-appd 2>/dev/null || true
@@ -328,21 +433,20 @@ OPEN_RUN=$(conj-open conjunction-phase3-demo open_arg)
 test "$OPEN_RUN" = "Conjunction Phase 3 Demo Executed: open_arg"
 echo "  [PASS] Direct launch through Application Services verified."
 
-# Test 4: Conjunction-Initiated Pacman Uninstallation
-# Note: conjunction-test has NO sudo privileges. conj-appd uses conj-sysd socket!
+# Test 4: Conjunction-Initiated Pacman Uninstallation (Authorized by Polkit)
 conj-appctl uninstall conjunction-phase3-demo
 
 # Verify registry has automatically deregistered the app
 ! conj-appctl list | grep -q "conjunction-phase3-demo"
-echo "  [PASS] Package deregistered in registry upon uninstallation."
+echo "  [PASS] Package deregistered in registry upon authorized uninstallation."
 '''
-    res = run_guest_script(part1_script, as_user='conjunction-test')
+    res = run_guest_script(authorized_script, as_user='conjunction-test')
     if res.returncode != 0:
-        raise RuntimeError(f"User part 1 failed:\nSTDOUT: {res.stdout}\nSTDERR: {res.stderr}")
-    print("  User part 1 passed.", flush=True)
+        raise RuntimeError(f"Authorized user test failed:\nSTDOUT: {res.stdout}\nSTDERR: {res.stderr}")
+    print("  Authorized user test passed.", flush=True)
 
-    # 7. Root Verification: Verify conj-sysd removed the pacman package from the system
-    print("\n[STEP 4/8] Root verification: pacman database and filesystem state...", flush=True)
+    # 8. Root Verification: Verify conj-sysd removed the pacman package from the system
+    print("\n[STEP 5/9] Root verification: pacman database and filesystem state...", flush=True)
     check_pacman = run_ssh('pacman -Q conjunction-phase3-demo')
     if check_pacman.returncode == 0:
         raise RuntimeError("ERROR: Package conjunction-phase3-demo is still installed according to pacman!")
@@ -351,8 +455,8 @@ echo "  [PASS] Package deregistered in registry upon uninstallation."
         raise RuntimeError("ERROR: Files from conjunction-phase3-demo still exist on filesystem!")
     print("  [PASS] Pacman package and files confirmed removed by conj-sysd.", flush=True)
 
-    # 8. External Pacman Reinstall & Automatic Discovery Test
-    print("\n[STEP 5/8] External pacman reinstall & remove lifecycle...", flush=True)
+    # 9. External Pacman Reinstall & Automatic Discovery Test
+    print("\n[STEP 6/9] External pacman reinstall & remove lifecycle...", flush=True)
     # Root reinstalls package outside Conjunction
     res = run_ssh('pacman -U --noconfirm /tmp/packages/conjunction-phase3-demo-1.0.0-1-any.pkg.tar.zst')
     if res.returncode != 0:
@@ -375,8 +479,8 @@ echo "  [PASS] Package deregistered in registry upon uninstallation."
         raise RuntimeError("ERROR: conjunction-phase3-demo was not removed after external pacman -R!")
     print("  [PASS] External package removal automatically deregistered without ghosts.", flush=True)
 
-    # 9. Multi-Application Package Ownership & Safe Removal Test
-    print("\n[STEP 6/8] Multi-application package confirmation & removal...", flush=True)
+    # 10. Multi-Application Package Ownership & Safe Removal Test
+    print("\n[STEP 7/9] Multi-application package confirmation & removal...", flush=True)
     # Root installs multi-app package
     res = run_ssh('pacman -U --noconfirm /tmp/packages/conjunction-phase3-suite-2.0.0-1-any.pkg.tar.zst')
     if res.returncode != 0:
@@ -430,8 +534,8 @@ echo "  [PASS] Multi-app package removed completely upon explicit confirmation."
         raise RuntimeError("ERROR: Package conjunction-phase3-suite still installed after --yes removal!")
     print("  [PASS] Multi-app package confirmed uninstalled from pacman by conj-sysd.", flush=True)
 
-    # 10. Unowned Desktop Entry, Hostile Exec Security, and Native .app Regression Test
-    print("\n[STEP 7/8] Unowned desktop entry, hostile Exec injection security, and native .app regression...", flush=True)
+    # 11. Unowned Desktop Entry, Hostile Exec Security, and Native .app Regression Test
+    print("\n[STEP 8/9] Unowned desktop entry, hostile Exec injection security, and native .app regression...", flush=True)
     part3_script = r'''#!/bin/bash
 set -euo pipefail
 
@@ -523,14 +627,17 @@ echo "  [PASS] Native Conjunction .app bundle lifecycle completely intact."
         raise RuntimeError(f"Part 3 tests failed:\nSTDOUT: {res.stdout}\nSTDERR: {res.stderr}")
     print("  Part 3 tests passed.", flush=True)
 
-    # 11. Ownership Audit: Ensure no root-owned files exist in user home directory
-    print("\n[STEP 8/8] User ownership audit...", flush=True)
-    res = run_ssh("find /home/conjunction-test -user root")
-    if res.stdout.strip():
-        raise RuntimeError(f"ERROR: Found root-owned files in user home:\n{res.stdout}")
-    print("  [PASS] Ownership audit passed: zero root-owned files in user home.", flush=True)
+    # 12. Ownership Audit: Ensure no root-owned files exist in user home directories
+    print("\n[STEP 9/9] User ownership audit...", flush=True)
+    res1 = run_ssh("find /home/conjunction-test -user root")
+    if res1.stdout.strip():
+        raise RuntimeError(f"ERROR: Found root-owned files in conjunction-test home:\n{res1.stdout}")
+    res2 = run_ssh("find /home/conjunction-attacker -user root")
+    if res2.stdout.strip():
+        raise RuntimeError(f"ERROR: Found root-owned files in conjunction-attacker home:\n{res2.stdout}")
+    print("  [PASS] Ownership audit passed: zero root-owned files in user homes.", flush=True)
 
-    # 12. Clean Shutdown
+    # 13. Clean Shutdown
     print("\nShutting down QEMU VM cleanly...", flush=True)
     try:
         qmp_cmd(state, 'quit')
@@ -539,7 +646,7 @@ echo "  [PASS] Native Conjunction .app bundle lifecycle completely intact."
     time.sleep(2)
 
     print("\n========================================================")
-    print("ALL PHASE 3 REAL-SYSTEM ACCEPTANCE TESTS PASSED!")
+    print("ALL PHASE 3.1 REAL-SYSTEM ACCEPTANCE TESTS PASSED!")
     print("========================================================")
 
 

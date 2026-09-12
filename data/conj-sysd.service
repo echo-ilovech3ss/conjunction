@@ -1,0 +1,22 @@
+﻿[Unit]
+Description=Conjunction Privileged System Service
+Documentation=https://github.com/echo-ilovech3ss/conjunction
+After=polkit.service dbus.service
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/conj-sysd
+Restart=on-failure
+StandardOutput=journal
+StandardError=journal
+
+# Security Hardening
+NoNewPrivileges=true
+ProtectHome=true
+PrivateTmp=true
+RestrictAddressFamilies=AF_UNIX
+CapabilityBoundingSet=CAP_SYS_ADMIN CAP_DAC_OVERRIDE CAP_CHOWN CAP_FOWNER CAP_FSETID CAP_KILL CAP_SETGID CAP_SETUID
+Environment=PATH=/usr/bin:/bin LC_ALL=C
+
+[Install]
+WantedBy=multi-user.target

@@ -184,6 +184,7 @@ dependencies = [
  "clap",
  "conjunction-core",
  "env_logger",
+ "libc",
  "log",
  "serde",
  "serde_json",
