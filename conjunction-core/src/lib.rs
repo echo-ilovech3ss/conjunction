@@ -10,7 +10,8 @@ pub use registry::{
 
 pub mod ipc;
 pub use ipc::{
-    appd_socket_path, send_appd_request, send_appd_request_to_path, AppdRequest, AppdResponse,
+    appd_runtime_dir, appd_socket_path, send_appd_request, send_appd_request_to_path,
+    AppdRequest, AppdResponse,
 };
 
 use std::path::{Path, PathBuf};

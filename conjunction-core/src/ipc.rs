@@ -38,19 +38,99 @@ impl AppdResponse {
     }
 }
 
+pub fn appd_runtime_dir() -> Result<PathBuf, String> {
+    if let Ok(runtime_dir) = std::env::var("XDG_RUNTIME_DIR") {
+        if !runtime_dir.is_empty() {
+            let p = PathBuf::from(runtime_dir);
+            #[cfg(unix)]
+            {
+                if let Ok(meta) = std::fs::symlink_metadata(&p) {
+                    if meta.file_type().is_symlink() {
+                        return Err(format!(
+                            "security error: XDG_RUNTIME_DIR '{}' is a symlink",
+                            p.display()
+                        ));
+                    }
+                }
+            }
+            return Ok(p);
+        }
+    }
+
+    // Secure fallback: /tmp/conjunction-run-<UID>
+    let uid = get_effective_uid();
+    let fallback = PathBuf::from(format!("/tmp/conjunction-run-{}", uid));
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::{MetadataExt, PermissionsExt};
+        if fallback.exists() {
+            let meta = std::fs::symlink_metadata(&fallback).map_err(|e| {
+                format!(
+                    "cannot inspect fallback runtime dir {}: {}",
+                    fallback.display(),
+                    e
+                )
+            })?;
+
+            if meta.file_type().is_symlink() {
+                return Err(format!(
+                    "security error: fallback runtime path '{}' is a symlink",
+                    fallback.display()
+                ));
+            }
+            if !meta.is_dir() {
+                return Err(format!(
+                    "security error: fallback runtime path '{}' is not a directory",
+                    fallback.display()
+                ));
+            }
+            if meta.uid() != uid {
+                return Err(format!(
+                    "security error: fallback runtime dir '{}' is owned by UID {}, expected UID {}",
+                    fallback.display(),
+                    meta.uid(),
+                    uid
+                ));
+            }
+            let mode = meta.mode() & 0o777;
+            if mode != 0o700 {
+                let _ = std::fs::set_permissions(&fallback, std::fs::Permissions::from_mode(0o700));
+            }
+        } else {
+            std::fs::create_dir(&fallback).map_err(|e| {
+                format!(
+                    "cannot create fallback runtime dir {}: {}",
+                    fallback.display(),
+                    e
+                )
+            })?;
+            std::fs::set_permissions(&fallback, std::fs::Permissions::from_mode(0o700))
+                .map_err(|e| format!("cannot set mode 0700 on {}: {}", fallback.display(), e))?;
+        }
+    }
+
+    #[cfg(not(unix))]
+    {
+        let _ = std::fs::create_dir_all(&fallback);
+    }
+
+    Ok(fallback)
+}
+
 pub fn appd_socket_path() -> PathBuf {
     if let Ok(p) = std::env::var("CONJUNCTION_APPD_SOCKET") {
         if !p.is_empty() {
             return PathBuf::from(p);
         }
     }
-    if let Ok(runtime_dir) = std::env::var("XDG_RUNTIME_DIR") {
-        if !runtime_dir.is_empty() {
-            return PathBuf::from(runtime_dir).join("conjunction").join("appd.sock");
+    match appd_runtime_dir() {
+        Ok(dir) => dir.join("conjunction").join("appd.sock"),
+        Err(_) => {
+            let uid = get_effective_uid();
+            PathBuf::from(format!("/tmp/conjunction-run-{}/conjunction/appd.sock", uid))
         }
     }
-    let uid = get_effective_uid();
-    PathBuf::from(format!("/tmp/conjunction-appd-{}.sock", uid))
 }
 
 pub fn get_effective_uid() -> u32 {
@@ -112,5 +192,31 @@ pub fn send_appd_request_to_path(sock_path: &Path, req: &AppdRequest) -> Result<
     {
         let _ = (sock_path, req);
         Err("Unix domain sockets are not supported on this platform".to_string())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_ipc_request_serialization() {
+        let req = AppdRequest::Inspect {
+            id: "dev.conjunction.test.hello".to_string(),
+        };
+        let json = serde_json::to_string(&req).unwrap();
+        assert!(json.contains("Inspect"));
+        assert!(json.contains("dev.conjunction.test.hello"));
+
+        let res = AppdResponse::ok(serde_json::json!({"exit_code": 0}));
+        let res_json = serde_json::to_string(&res).unwrap();
+        assert!(res_json.contains("\"success\":true"));
+    }
+
+    #[test]
+    fn test_appd_socket_path_resolution() {
+        let path = appd_socket_path();
+        let s = path.to_string_lossy();
+        assert!(s.ends_with("appd.sock"));
     }
 }

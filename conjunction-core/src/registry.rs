@@ -105,9 +105,6 @@ impl From<io::Error> for RegistryError {
 }
 
 pub fn is_reserved_id(id: &str) -> bool {
-    if id == "org.conjunction.hello" {
-        return false;
-    }
     id == "org.conjunction" || id.starts_with("org.conjunction.")
 }
 
@@ -298,6 +295,87 @@ impl AppRegistry {
         self.conflicts = new_conflicts;
 
         self.save_cache()?;
+        Ok(())
+    }
+
+    /// Pure read-only scan: discovers bundles from search paths into memory
+    /// WITHOUT writing desktop files, modifying mime associations, or updating registry cache.
+    pub fn scan_readonly(&mut self) -> Result<(), RegistryError> {
+        let mut discovered_by_id: HashMap<String, Vec<(Bundle, AppScope)>> = HashMap::new();
+
+        for (dir, scope) in &self.app_dirs {
+            if !dir.exists() {
+                continue;
+            }
+            if let Ok(entries) = fs::read_dir(dir) {
+                for entry in entries.flatten() {
+                    let path = entry.path();
+                    if path.is_dir() && path.extension().map_or(false, |ext| ext == "app") {
+                        if let Ok(bundle) = Bundle::open(&path) {
+                            if bundle.validate().is_ok() {
+                                let id = bundle.manifest().id.clone();
+                                discovered_by_id.entry(id).or_default().push((bundle, *scope));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        let mut new_active = HashMap::new();
+        let mut new_conflicts = HashMap::new();
+
+        for (id, mut bundles) in discovered_by_id {
+            bundles.sort_by_key(|b| b.0.path().to_path_buf());
+            bundles.dedup_by(|a, b| {
+                if let (Ok(ca), Ok(cb)) = (a.0.path().canonicalize(), b.0.path().canonicalize()) {
+                    ca == cb
+                } else {
+                    a.0.path() == b.0.path()
+                }
+            });
+
+            let system_candidates: Vec<_> = bundles.iter().filter(|(_, s)| *s == AppScope::System).cloned().collect();
+            let user_candidates: Vec<_> = bundles.iter().filter(|(_, s)| *s == AppScope::User).cloned().collect();
+
+            let chosen = if system_candidates.len() == 1 && !user_candidates.is_empty() {
+                Some(system_candidates.into_iter().next().unwrap())
+            } else if bundles.len() == 1 {
+                Some(bundles.remove(0))
+            } else {
+                None
+            };
+
+            if let Some((bundle, scope)) = chosen {
+                let manifest = bundle.manifest();
+                let canonical_bundle = bundle.path().canonicalize().unwrap_or_else(|_| bundle.path().to_path_buf());
+                let exec_path = bundle.executable_path().unwrap_or_else(|_| canonical_bundle.join(&manifest.executable));
+
+                let app = InstalledApp {
+                    id: id.clone(),
+                    name: manifest.name.clone(),
+                    version: manifest.version.clone(),
+                    bundle_path: canonical_bundle,
+                    executable_path: exec_path,
+                    scope,
+                    icon: manifest.icon.clone(),
+                    mime_types: manifest.mime_types.clone().unwrap_or_default(),
+                };
+                new_active.insert(id, app);
+            } else {
+                let candidate_paths: Vec<PathBuf> = bundles.into_iter().map(|(b, _)| b.path().to_path_buf()).collect();
+                new_conflicts.insert(
+                    id.clone(),
+                    AppConflict {
+                        id,
+                        candidate_paths,
+                    },
+                );
+            }
+        }
+
+        self.active = new_active;
+        self.conflicts = new_conflicts;
         Ok(())
     }
 

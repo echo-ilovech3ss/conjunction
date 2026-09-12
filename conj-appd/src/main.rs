@@ -21,21 +21,36 @@ fn main() -> ExitCode {
     let cli = Cli::parse();
     let mut registry = AppRegistry::default_for_user();
 
-    log::info!("Starting Conjunction Application Daemon (conj-appd)...");
-    if let Err(e) = registry.reconcile() {
-        log::error!("Initial reconciliation error: {}", e);
-        if cli.oneshot {
-            return ExitCode::FAILURE;
-        }
-    } else {
-        log::info!("Initial reconciliation complete.");
-    }
-
     if cli.oneshot {
-        return ExitCode::SUCCESS;
+        log::info!("Running oneshot reconciliation...");
+        return match registry.reconcile() {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(e) => {
+                log::error!("Reconciliation error: {}", e);
+                ExitCode::FAILURE
+            }
+        };
     }
 
     let sock_path = cli.socket.unwrap_or_else(appd_socket_path);
+
+    // Single-instance check: ensure another daemon is not already running
+    #[cfg(unix)]
+    {
+        use std::os::unix::net::UnixStream;
+        if sock_path.exists() {
+            if UnixStream::connect(&sock_path).is_ok() {
+                eprintln!(
+                    "error: conj-appd is already running for this user/session (socket {})",
+                    sock_path.display()
+                );
+                return ExitCode::FAILURE;
+            }
+            log::warn!("Removing stale socket at {}", sock_path.display());
+            let _ = fs::remove_file(&sock_path);
+        }
+    }
+
     if let Some(parent) = sock_path.parent() {
         let _ = fs::create_dir_all(parent);
         #[cfg(unix)]
@@ -45,9 +60,11 @@ fn main() -> ExitCode {
         }
     }
 
-    // Clean up stale socket
-    if sock_path.exists() {
-        let _ = fs::remove_file(&sock_path);
+    log::info!("Starting Conjunction Application Daemon (conj-appd)...");
+    if let Err(e) = registry.reconcile() {
+        log::error!("Initial reconciliation error: {}", e);
+    } else {
+        log::info!("Initial reconciliation complete.");
     }
 
     #[cfg(unix)]
@@ -56,7 +73,7 @@ fn main() -> ExitCode {
         let listener = match UnixListener::bind(&sock_path) {
             Ok(l) => l,
             Err(e) => {
-                log::error!("Failed to bind socket {}: {}", sock_path.display(), e);
+                eprintln!("error: failed to bind socket {}: {}", sock_path.display(), e);
                 return ExitCode::FAILURE;
             }
         };

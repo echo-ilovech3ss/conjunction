@@ -38,7 +38,7 @@ fn test_cli_acceptance_hello_app_and_malicious_bundle() {
     let exec_path = hello_app.join("Contents/Executable/hello");
 
     let manifest = r#"bundle_format = "conjunction.app/1"
-id = "org.conjunction.hello"
+id = "dev.conjunction.test.hello"
 name = "Hello App"
 version = "1.0.0"
 executable = "Contents/Executable/hello"
@@ -69,7 +69,7 @@ description = "A friendly acceptance test application."
         .expect("should run conj-bundle inspect");
     assert!(output_insp.status.success(), "inspect should succeed for Hello.app");
     let stdout_insp = String::from_utf8_lossy(&output_insp.stdout);
-    assert!(stdout_insp.contains("Application ID: org.conjunction.hello"));
+    assert!(stdout_insp.contains("Application ID: dev.conjunction.test.hello"));
     assert!(stdout_insp.contains("Name:           Hello App"));
     assert!(stdout_insp.contains("Version:        1.0.0"));
     assert!(stdout_insp.contains("Bundle Format:  conjunction.app/1"));

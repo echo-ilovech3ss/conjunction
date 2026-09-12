@@ -103,11 +103,11 @@ fn test_registry_install_discover_launch_lifecycle() {
 
     // 1. Create a bundle in a staging folder
     let stage = env.root.join("downloads");
-    let bundle_path = env.create_bundle(&stage, "Hello", "org.conjunction.hello", "hello");
+    let bundle_path = env.create_bundle(&stage, "Hello", "dev.conjunction.test.hello", "hello");
 
     // 2. Install through registry
     let installed = reg.install(&bundle_path).expect("installation should succeed");
-    assert_eq!(installed.id, "org.conjunction.hello");
+    assert_eq!(installed.id, "dev.conjunction.test.hello");
     assert_eq!(installed.name, "Hello");
 
     // 3. Verify it exists in user applications directory
@@ -115,29 +115,29 @@ fn test_registry_install_discover_launch_lifecycle() {
     assert!(expected_bundle.exists(), "bundle should be copied to user Applications");
 
     // 4. Verify desktop integration generated
-    let dt_path = env.desktop_dir.join("conj-org.conjunction.hello.desktop");
+    let dt_path = env.desktop_dir.join("conj-dev.conjunction.test.hello.desktop");
     assert!(dt_path.exists(), "desktop file should be synthesized");
     let dt_content = fs::read_to_string(&dt_path).unwrap();
     assert!(dt_content.contains("Name=Hello"));
-    assert!(dt_content.contains("X-Conjunction-AppId=org.conjunction.hello"));
+    assert!(dt_content.contains("X-Conjunction-AppId=dev.conjunction.test.hello"));
 
     // 5. Verify MIME associations updated
     let mime_path = env.config_dir.join("mimeapps.list");
     assert!(mime_path.exists(), "mimeapps.list should exist");
     let mime_content = fs::read_to_string(&mime_path).unwrap();
-    assert!(mime_content.contains("application/x-hello=conj-org.conjunction.hello.desktop;"));
+    assert!(mime_content.contains("application/x-hello=conj-dev.conjunction.test.hello.desktop;"));
 
     // 6. Discover by ID
-    let item = reg.inspect("org.conjunction.hello").expect("inspect should find app");
+    let item = reg.inspect("dev.conjunction.test.hello").expect("inspect should find app");
     match item {
         RegistryItem::Active(app) => {
-            assert_eq!(app.id, "org.conjunction.hello");
+            assert_eq!(app.id, "dev.conjunction.test.hello");
         }
         RegistryItem::Conflict(_) => panic!("should not be conflict"),
     }
 
     // 7. Launch by ID
-    let code = reg.launch("org.conjunction.hello", &[]).expect("launch should succeed");
+    let code = reg.launch("dev.conjunction.test.hello", &[]).expect("launch should succeed");
     assert_eq!(code, 0);
 
     // 8. Rename bundle in user Applications
@@ -145,10 +145,10 @@ fn test_registry_install_discover_launch_lifecycle() {
     fs::rename(&expected_bundle, &renamed_bundle).unwrap();
 
     reg.reconcile().expect("reconcile should succeed after rename");
-    let item_after_rename = reg.inspect("org.conjunction.hello").expect("inspect should find renamed app");
+    let item_after_rename = reg.inspect("dev.conjunction.test.hello").expect("inspect should find renamed app");
     match item_after_rename {
         RegistryItem::Active(app) => {
-            assert_eq!(app.id, "org.conjunction.hello");
+            assert_eq!(app.id, "dev.conjunction.test.hello");
             assert!(app.bundle_path.ends_with("Renamed Hello.app"));
         }
         RegistryItem::Conflict(_) => panic!("should not be conflict"),
@@ -165,18 +165,18 @@ fn test_registry_install_discover_launch_lifecycle() {
     assert_eq!(fresh_reg.list().len(), 1);
 
     // 10. Uninstall
-    fresh_reg.uninstall("org.conjunction.hello").expect("uninstall should succeed");
+    fresh_reg.uninstall("dev.conjunction.test.hello").expect("uninstall should succeed");
     assert!(!renamed_bundle.exists(), "bundle should be removed on uninstall");
     assert!(!dt_path.exists(), "desktop file should be removed on uninstall");
 
     let mime_after = fs::read_to_string(&mime_path).unwrap();
-    assert!(!mime_after.contains("conj-org.conjunction.hello.desktop"), "mime should be cleaned");
+    assert!(!mime_after.contains("conj-dev.conjunction.test.hello.desktop"), "mime should be cleaned");
 
-    assert!(fresh_reg.inspect("org.conjunction.hello").is_err(), "should not be in registry");
+    assert!(fresh_reg.inspect("dev.conjunction.test.hello").is_err(), "should not be in registry");
 
     // 11. Reinstall
     let reinstalled = fresh_reg.install(&bundle_path).expect("reinstall should succeed cleanly");
-    assert_eq!(reinstalled.id, "org.conjunction.hello");
+    assert_eq!(reinstalled.id, "dev.conjunction.test.hello");
     assert!(expected_bundle.exists());
     assert!(dt_path.exists());
 }
@@ -244,6 +244,14 @@ fn test_reserved_id_rejection() {
     }
 
     assert!(!env.user_apps.join("Settings.app").exists(), "reserved bundle must not be installed");
+
+    let fake_bundle = env.create_bundle(&stage, "Fake", "org.conjunction.fake", "fake");
+    let fake_res = reg.install(&fake_bundle);
+    match fake_res {
+        Err(RegistryError::ReservedId(id)) => assert_eq!(id, "org.conjunction.fake"),
+        other => panic!("expected ReservedId error for fake, got {:?}", other),
+    }
+    assert!(!env.user_apps.join("Fake.app").exists(), "org.conjunction.fake must not be installed");
 }
 
 #[test]

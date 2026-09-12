@@ -46,9 +46,9 @@ fn main() -> ExitCode {
             }
         }
         Err(_) => {
-            // Fallback to standalone if daemon is unavailable
+            // Fallback to standalone read-only launch if daemon is unavailable
             let mut registry = AppRegistry::default_for_user();
-            let _ = registry.reconcile();
+            let _ = registry.scan_readonly();
             match registry.launch_captured(&cli.target, &cli.args) {
                 Ok(res) => {
                     print!("{}", res.stdout);

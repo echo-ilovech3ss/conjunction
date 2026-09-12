@@ -228,8 +228,16 @@ fn run_standalone(cmd: Commands) -> ExitCode {
     let mut registry = AppRegistry::default_for_user();
     match cmd {
         Commands::List => {
-            let _ = registry.reconcile();
-            for item in registry.list() {
+            if let Err(e) = registry.scan_readonly() {
+                eprintln!("error: {}", e);
+                return ExitCode::FAILURE;
+            }
+            let items = registry.list();
+            if items.is_empty() {
+                println!("No applications installed.");
+                return ExitCode::SUCCESS;
+            }
+            for item in items {
                 match item {
                     RegistryItem::Active(app) => {
                         println!(
@@ -251,72 +259,66 @@ fn run_standalone(cmd: Commands) -> ExitCode {
             }
             ExitCode::SUCCESS
         }
-        Commands::Inspect { id } => match registry.inspect(&id) {
-            Ok(RegistryItem::Active(app)) => {
-                println!("Application ID:   {}", app.id);
-                println!("Name:             {}", app.name);
-                println!("Version:          {}", app.version);
-                println!("Scope:            {}", app.scope);
-                println!("Bundle Path:      {}", app.bundle_path.display());
-                println!("Executable Path:  {}", app.executable_path.display());
-                ExitCode::SUCCESS
-            }
-            Ok(RegistryItem::Conflict(conflict)) => {
-                eprintln!("Conflict: {}", conflict.id);
-                ExitCode::FAILURE
-            }
-            Err(e) => {
-                eprintln!("error: {}", e);
-                ExitCode::FAILURE
-            }
-        },
-        Commands::Install { path } => match registry.install(&path) {
-            Ok(app) => {
-                println!("Installed '{}' ({}) successfully", app.name, app.id);
-                ExitCode::SUCCESS
-            }
-            Err(e) => {
-                eprintln!("error: {}", e);
-                ExitCode::FAILURE
-            }
-        },
-        Commands::Uninstall { id } => match registry.uninstall(&id) {
-            Ok(()) => {
-                println!("Uninstalled '{}' successfully", id);
-                ExitCode::SUCCESS
-            }
-            Err(e) => {
-                eprintln!("error: {}", e);
-                ExitCode::FAILURE
-            }
-        },
-        Commands::Launch { target, args } => match registry.launch_captured(&target, &args) {
-            Ok(res) => {
-                print!("{}", res.stdout);
-                eprint!("{}", res.stderr);
-                if res.exit_code == 0 {
+        Commands::Inspect { id } => {
+            let _ = registry.scan_readonly();
+            match registry.inspect(&id) {
+                Ok(RegistryItem::Active(app)) => {
+                    println!("Application ID:   {}", app.id);
+                    println!("Name:             {}", app.name);
+                    println!("Version:          {}", app.version);
+                    println!("Scope:            {}", app.scope);
+                    println!("Bundle Path:      {}", app.bundle_path.display());
+                    println!("Executable Path:  {}", app.executable_path.display());
                     ExitCode::SUCCESS
-                } else {
-                    ExitCode::from(res.exit_code as u8)
+                }
+                Ok(RegistryItem::Conflict(conflict)) => {
+                    eprintln!("Conflict: {}", conflict.id);
+                    ExitCode::FAILURE
+                }
+                Err(e) => {
+                    eprintln!("error: {}", e);
+                    ExitCode::FAILURE
                 }
             }
-            Err(e) => {
-                eprintln!("error: {}", e);
-                ExitCode::FAILURE
+        }
+        Commands::Install { .. } => {
+            eprintln!(
+                "error: mutating operation 'install' cannot be performed in standalone mode; start conj-appd to mutate application state"
+            );
+            ExitCode::FAILURE
+        }
+        Commands::Uninstall { .. } => {
+            eprintln!(
+                "error: mutating operation 'uninstall' cannot be performed in standalone mode; start conj-appd to mutate application state"
+            );
+            ExitCode::FAILURE
+        }
+        Commands::Reconcile => {
+            eprintln!(
+                "error: mutating operation 'reconcile' cannot be performed in standalone mode; start conj-appd to mutate application state"
+            );
+            ExitCode::FAILURE
+        }
+        Commands::Launch { target, args } => {
+            let _ = registry.scan_readonly();
+            match registry.launch_captured(&target, &args) {
+                Ok(res) => {
+                    print!("{}", res.stdout);
+                    eprint!("{}", res.stderr);
+                    if res.exit_code == 0 {
+                        ExitCode::SUCCESS
+                    } else {
+                        ExitCode::from(res.exit_code as u8)
+                    }
+                }
+                Err(e) => {
+                    eprintln!("error: {}", e);
+                    ExitCode::FAILURE
+                }
             }
-        },
-        Commands::Reconcile => match registry.reconcile() {
-            Ok(()) => {
-                println!("Reconciliation complete.");
-                ExitCode::SUCCESS
-            }
-            Err(e) => {
-                eprintln!("error: {}", e);
-                ExitCode::FAILURE
-            }
-        },
+        }
         Commands::Ping => {
-            println!("pong");
+            println!("pong (standalone)");
             ExitCode::SUCCESS
         }
     }
