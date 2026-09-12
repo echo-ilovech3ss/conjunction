@@ -9,6 +9,7 @@
 #include <QUrl>
 #include <QDebug>
 #include <QStandardPaths>
+#include <QRegularExpression>
 
 #ifdef HAVE_KF6_KIO
 #include <KIO/CopyJob>
@@ -40,6 +41,28 @@ bool FileOperations::openItem(const QString &filePath)
 
     // Default desktop service opening
     return QDesktopServices::openUrl(QUrl::fromLocalFile(filePath));
+}
+
+bool FileOperations::openInTerminal(const QString &targetPath)
+{
+    QFileInfo info(targetPath);
+    if (!info.exists()) {
+        qWarning() << "[FileOperations] Target path does not exist for terminal:" << targetPath;
+        return false;
+    }
+
+    QString dirPath = info.isDir() ? info.absoluteFilePath() : info.absolutePath();
+
+    QString conjTerm = QStandardPaths::findExecutable("conjunction-terminal");
+    if (conjTerm.isEmpty()) {
+        conjTerm = QStringLiteral("/usr/bin/conjunction-terminal");
+    }
+
+    QStringList args;
+    args << QStringLiteral("--working-directory") << dirPath;
+
+    qInfo() << "[FileOperations] Launching terminal in directory:" << dirPath;
+    return QProcess::startDetached(conjTerm, args);
 }
 
 QString FileOperations::openPackageContents(const QString &bundlePath)

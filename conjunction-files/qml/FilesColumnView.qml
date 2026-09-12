@@ -102,15 +102,52 @@ Item {
                                 id: mouseArea
                                 anchors.fill: parent
                                 hoverEnabled: true
+                                acceptedButtons: Qt.LeftButton | Qt.RightButton
 
-                                onClicked: {
+                                onClicked: (mouse) => {
                                     colListView.currentIndex = index;
                                     ColumnModel.selectItem(colRect.index, model.path, model.isDir, model.isAppBundle);
+                                    if (mouse.button === Qt.RightButton) {
+                                        columnContextMenu.popup();
+                                    }
                                 }
 
                                 onDoubleClicked: {
                                     var it = colModel.get(index);
                                     root.openRequested(it);
+                                }
+                            }
+
+                            QQC2.Menu {
+                                id: columnContextMenu
+
+                                QQC2.MenuItem {
+                                    text: "Open"
+                                    onTriggered: {
+                                        var it = colModel.get(index);
+                                        root.openRequested(it);
+                                    }
+                                }
+
+                                QQC2.MenuItem {
+                                    text: "Open in Terminal"
+                                    onTriggered: FileOps.openInTerminal(model.path)
+                                }
+
+                                QQC2.MenuItem {
+                                    text: "Quick Look"
+                                    onTriggered: {
+                                        var it = colModel.get(index);
+                                        root.quickLookRequested(it);
+                                    }
+                                }
+
+                                QQC2.MenuItem {
+                                    text: "Get Info"
+                                    onTriggered: {
+                                        var it = colModel.get(index);
+                                        root.getInfoRequested(it);
+                                    }
                                 }
                             }
                         }

@@ -1,0 +1,14 @@
+bundle_format = "conjunction.app/1"
+id = "org.conjunction.terminal"
+name = "Terminal"
+version = "1.0.0"
+executable = "Contents/Executable/conjunction-terminal"
+architectures = ["x86_64"]
+icon = "utilities-terminal"
+category = "System"
+description = "Modern desktop terminal host for Conjunction OS"
+
+[capabilities]
+window_management = true
+global_menu = true
+drag_drop = true

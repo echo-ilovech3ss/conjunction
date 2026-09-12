@@ -133,6 +133,11 @@ Item {
                 }
 
                 QQC2.MenuItem {
+                    text: "Open in Terminal"
+                    onTriggered: FileOps.openInTerminal(model.path)
+                }
+
+                QQC2.MenuItem {
                     text: "Show Package Contents"
                     visible: model.canShowPackageContents
                     onTriggered: {
