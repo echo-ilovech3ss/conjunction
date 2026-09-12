@@ -23,6 +23,12 @@ pub use ipc::{
     AppdRequest, AppdResponse,
 };
 
+pub mod shell;
+pub use shell::{
+    AppIdentity, DockClickAction, DockConfig, DockItem, DockModel, GlobalMenuRegistrar,
+    MenuItemInfo, ScreenInfo, ScreenModel, WindowInfo, WindowMatcher,
+};
+
 use std::path::{Path, PathBuf};
 
 pub fn get_user_home() -> PathBuf {
