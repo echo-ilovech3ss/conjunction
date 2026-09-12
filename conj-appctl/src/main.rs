@@ -50,6 +50,9 @@ enum Commands {
 
         #[arg(short, long, help = "Confirm removal of package providing multiple applications")]
         yes: bool,
+
+        #[arg(long, help = "Also remove user application data directories")]
+        with_data: bool,
     },
 
     #[command(about = "Launch a Conjunction application by ID or bundle path")]
@@ -85,9 +88,10 @@ fn main() -> ExitCode {
         Commands::List => AppdRequest::List,
         Commands::Inspect { id } => AppdRequest::Inspect { id: id.clone() },
         Commands::Install { path } => AppdRequest::Install { path: path.clone() },
-        Commands::Uninstall { id, yes } => AppdRequest::Uninstall {
+        Commands::Uninstall { id, yes, with_data } => AppdRequest::Uninstall {
             id: id.clone(),
             yes: *yes,
+            with_data: *with_data,
         },
         Commands::Launch { target, args } => AppdRequest::Launch {
             target: target.clone(),

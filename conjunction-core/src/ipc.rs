@@ -11,6 +11,8 @@ pub enum AppdRequest {
         id: String,
         #[serde(default)]
         yes: bool,
+        #[serde(default)]
+        with_data: bool,
     },
     Launch { target: String, args: Vec<String> },
     Reconcile,

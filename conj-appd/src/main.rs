@@ -141,10 +141,12 @@ fn handle_request(registry: &mut AppRegistry, req: AppdRequest) -> AppdResponse 
             Err(e) => AppdResponse::err(e.to_string()),
         },
 
-        AppdRequest::Uninstall { id, yes } => match registry.uninstall_with_options(&id, yes) {
-            Ok(()) => AppdResponse::ok(serde_json::json!({ "uninstalled": id })),
-            Err(e) => AppdResponse::err(e.to_string()),
-        },
+        AppdRequest::Uninstall { id, yes, with_data } => {
+            match registry.uninstall_with_options_and_data(&id, yes, with_data) {
+                Ok(()) => AppdResponse::ok(serde_json::json!({ "uninstalled": id, "with_data": with_data })),
+                Err(e) => AppdResponse::err(e.to_string()),
+            }
+        }
 
         AppdRequest::Launch { target, args } => match registry.reconcile() {
             Ok(()) => match registry.launch_captured(&target, &args) {

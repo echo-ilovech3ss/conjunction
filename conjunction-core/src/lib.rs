@@ -36,6 +36,12 @@ pub use search::{
     SearchResult, SettingsSearchProvider,
 };
 
+pub mod files;
+pub use files::{
+    detect_mime_type, empty_trash, format_file_size, format_timestamp, get_app_data_paths,
+    get_trash_dir, move_to_trash, remove_app_data, FileItemInfo, QuickLookPreview, QuickLookType,
+};
+
 use std::path::{Path, PathBuf};
 
 pub fn get_user_home() -> PathBuf {

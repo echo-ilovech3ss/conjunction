@@ -739,6 +739,10 @@ impl AppRegistry {
     }
 
     pub fn uninstall_with_options(&mut self, id: &str, yes: bool) -> Result<(), RegistryError> {
+        self.uninstall_with_options_and_data(id, yes, false)
+    }
+
+    pub fn uninstall_with_options_and_data(&mut self, id: &str, yes: bool, with_data: bool) -> Result<(), RegistryError> {
         self.reconcile()?;
 
         let app = match self.active.get(id) {
@@ -754,6 +758,9 @@ impl AppRegistry {
             }
         };
 
+        let is_flatpak = matches!(app.backend, AppBackend::Flatpak);
+        let fp_id = app.flatpak_id.clone();
+
         match app.backend {
             AppBackend::Native => {
                 if app.bundle_path.exists() {
@@ -762,7 +769,6 @@ impl AppRegistry {
                 let _ = self.remove_desktop_entry(id);
                 let _ = self.remove_mime_associations(id);
                 self.reconcile()?;
-                Ok(())
             }
             AppBackend::DesktopEntry => {
                 match app.scope {
@@ -772,10 +778,9 @@ impl AppRegistry {
                         }
                         let _ = self.remove_mime_associations(id);
                         self.reconcile()?;
-                        Ok(())
                     }
                     AppScope::System => {
-                        Err(RegistryError::ImmutableSystemApp(id.to_string()))
+                        return Err(RegistryError::ImmutableSystemApp(id.to_string()));
                     }
                 }
             }
@@ -795,16 +800,15 @@ impl AppRegistry {
                     .map_err(RegistryError::PackageRemovalFailed)?;
 
                 self.reconcile()?;
-                Ok(())
             }
             AppBackend::Flatpak => {
-                let fp_id = app.flatpak_id.as_ref().unwrap_or(&app.id);
+                let fp_id_ref = fp_id.as_deref().unwrap_or(&app.id);
                 let scope_arg = match app.scope {
                     AppScope::User => "--user",
                     AppScope::System => "--system",
                 };
                 let output = Command::new("flatpak")
-                    .args(["uninstall", scope_arg, "-y", fp_id])
+                    .args(["uninstall", scope_arg, "-y", fp_id_ref])
                     .output()
                     .map_err(|e| RegistryError::UninstallFailed(format!("failed to execute flatpak uninstall: {}", e)))?;
 
@@ -817,9 +821,14 @@ impl AppRegistry {
                 }
 
                 self.reconcile()?;
-                Ok(())
             }
         }
+
+        if with_data {
+            let _ = crate::files::remove_app_data(id, is_flatpak, fp_id.as_deref());
+        }
+
+        Ok(())
     }
 
     pub fn launch(&self, target: &str, args: &[String]) -> Result<i32, RegistryError> {
