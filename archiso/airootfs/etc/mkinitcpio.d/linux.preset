@@ -1,0 +1,10 @@
+# mkinitcpio preset for Conjunction Linux Unified Kernel Images (UKI)
+ALL_config="/etc/mkinitcpio.conf"
+ALL_kver="/boot/vmlinuz-linux"
+PRESETS=('default' 'fallback')
+
+default_uki="/boot/efi/EFI/Linux/conjunction-linux.efi"
+default_options="quiet splash rw rootflags=subvol=@"
+
+fallback_uki="/boot/efi/EFI/Linux/conjunction-linux-fallback.efi"
+fallback_options="rw rootflags=subvol=@"

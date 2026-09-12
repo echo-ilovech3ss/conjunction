@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+# conjunction-session - Conjunction Wayland Session Entry Point
+set -euo pipefail
+
+# 1. Standard Conjunction Wayland Environment
+export XDG_CURRENT_DESKTOP=Conjunction
+export XDG_SESSION_DESKTOP=conjunction
+export XDG_SESSION_TYPE=wayland
+export QT_QPA_PLATFORM="wayland;xcb"
+export QT_WAYLAND_DISABLE_WINDOWDECORATION=1
+export GDK_BACKEND="wayland,x11"
+export MOZ_ENABLE_WAYLAND=1
+
+# 2. Tell systemd user session about environment
+if command -v systemctl >/dev/null 2>&1; then
+    systemctl --user import-environment \
+        DISPLAY WAYLAND_DISPLAY \
+        XDG_CURRENT_DESKTOP XDG_SESSION_DESKTOP XDG_SESSION_TYPE \
+        QT_QPA_PLATFORM QT_WAYLAND_DISABLE_WINDOWDECORATION GDK_BACKEND MOZ_ENABLE_WAYLAND 2>/dev/null || true
+fi
+
+# 3. Start session manager with KWin Wayland
+exec kwin_wayland --no-lockscreen --exit-with-session /usr/bin/conjunction-session-init

@@ -230,3 +230,14 @@ gparted
 # Clipboard & Boot splash
 wl-clipboard
 xclip
+
+# Calamares installer dependencies
+kcoreaddons
+kpmcore
+libpwquality
+qt6-declarative
+qt6-svg
+yaml-cpp
+polkit-qt6
+smartmontools
+

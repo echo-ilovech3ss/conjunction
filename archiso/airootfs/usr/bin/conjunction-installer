@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+# conjunction-installer - Launcher for Calamares Conjunction installer
+set -euo pipefail
+
+if [[ $EUID -ne 0 ]]; then
+    if command -v pkexec >/dev/null 2>&1; then
+        exec pkexec calamares -d "$@"
+    elif command -v sudo >/dev/null 2>&1; then
+        exec sudo -E calamares -d "$@"
+    fi
+fi
+
+exec calamares -d "$@"

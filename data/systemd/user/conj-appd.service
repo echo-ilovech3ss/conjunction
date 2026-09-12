@@ -1,0 +1,13 @@
+[Unit]
+Description=Conjunction Application Daemon
+PartOf=conjunction-session.target
+After=graphical-session-pre.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/conj-appd
+Restart=on-failure
+RestartSec=1s
+
+[Install]
+WantedBy=conjunction-session.target

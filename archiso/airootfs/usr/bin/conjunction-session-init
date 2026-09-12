@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+# conjunction-session-init - Initializer for Conjunction user services under KWin Wayland
+set -e
+
+# Try activating systemd user session target first
+if command -v systemctl >/dev/null 2>&1 && systemctl --user is-system-running >/dev/null 2>&1; then
+    systemctl --user start conjunction-session.target 2>/dev/null || true
+fi
+
+# Fallback daemon launch if not running via systemd
+pgrep -x conj-appd >/dev/null 2>&1 || (/usr/bin/conj-appd &)
+pgrep -x conj-notificationd >/dev/null 2>&1 || (/usr/bin/conj-notificationd &)
+pgrep -x conj-shelld >/dev/null 2>&1 || (/usr/bin/conj-shelld &)
+
+wait

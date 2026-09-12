@@ -1,0 +1,9 @@
+[SddmGreeterTheme]
+Name=Conjunction
+Description=Conjunction OS SDDM Theme
+Author=Conjunction OS
+Version=1.0
+MainScript=Main.qml
+ConfigFile=theme.conf
+Theme-Id=conjunction
+Theme-API=2.0

@@ -36,4 +36,9 @@ file_permissions=(
   ["/opt/conjunction/cli.py"]="0:0:755"
   ["/opt/conjunction/conjunction_gui/installer.py"]="0:0:755"
   ["/opt/conjunction/conjunction_gui/welcome.py"]="0:0:755"
+  ["/usr/bin/conjunction-session"]="0:0:755"
+  ["/usr/bin/conjunction-session-init"]="0:0:755"
+  ["/usr/bin/conjunction-installer"]="0:0:755"
+  ["/usr/bin/calamares"]="0:0:755"
 )
+

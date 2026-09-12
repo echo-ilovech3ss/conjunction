@@ -1,0 +1,13 @@
+[Unit]
+Description=Conjunction Desktop Shell Daemon
+PartOf=conjunction-session.target
+After=conj-appd.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/conj-shelld
+Restart=on-failure
+RestartSec=1s
+
+[Install]
+WantedBy=conjunction-session.target

@@ -1,0 +1,10 @@
+NAME="Conjunction"
+PRETTY_NAME="Conjunction Linux"
+ID=conjunction
+ID_LIKE=arch
+BUILD_ID=rolling
+ANSI_COLOR="38;2;147;112;219"
+HOME_URL="https://conjunction.org"
+SUPPORT_URL="https://conjunction.org/support"
+BUG_REPORT_URL="https://conjunction.org/bugs"
+LOGO=conjunction

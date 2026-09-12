@@ -1,8 +1,9 @@
 [Desktop Entry]
 Type=Application
-Name=Install Conjunction OS
-Comment=Launch the Conjunction OS graphical installer
-Exec=/usr/local/bin/conjunction-installer-gui
+Name=Install Conjunction Linux
+GenericName=Live System Installer
+Comment=Install Conjunction Linux permanently to disk
+Exec=/usr/bin/conjunction-installer
 Icon=conjunction-installer
 Terminal=false
 Categories=System;Settings;

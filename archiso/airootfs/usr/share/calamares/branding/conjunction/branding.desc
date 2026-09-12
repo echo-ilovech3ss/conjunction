@@ -1,0 +1,30 @@
+---
+componentName: conjunction
+welcomeStyleCalamares: false
+welcomeExpandingLogo: true
+windowExpanding: normal
+windowSize: 860px,600px
+
+strings:
+    productName: "Conjunction Linux"
+    shortProductName: "Conjunction"
+    version: "1.0"
+    shortVersion: "1.0"
+    versionedName: "Conjunction Linux 1.0"
+    shortVersionedName: "Conjunction 1.0"
+    bootloaderEntryName: "Conjunction"
+    productUrl: "https://conjunction.org"
+    supportUrl: "https://conjunction.org/support"
+    knownIssuesUrl: "https://conjunction.org/bugs"
+    releaseNotesUrl: "https://conjunction.org/release"
+
+images:
+    productLogo: "conjunction-logo.svg"
+    productIcon: "conjunction-logo.svg"
+    productWelcome: "welcome.png"
+
+style:
+    SidebarBackground: "#11141c"
+    SidebarText: "#e2e8f0"
+    SidebarTextCurrent: "#7c5cfc"
+    SidebarBackgroundCurrent: "#1a1f2c"

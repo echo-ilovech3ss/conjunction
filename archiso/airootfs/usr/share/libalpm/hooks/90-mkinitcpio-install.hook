@@ -1,0 +1,12 @@
+[Trigger]
+Type = Path
+Operation = Install
+Operation = Upgrade
+Target = usr/lib/modules/*/vmlinuz
+Target = usr/lib/initcpio/*
+Target = usr/lib/systemd/boot/efi/*
+
+[Action]
+Description = Updating Conjunction Linux Unified Kernel Images (UKIs)...
+When = PostTransaction
+Exec = /usr/bin/mkinitcpio -P

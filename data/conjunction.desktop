@@ -1,0 +1,7 @@
+[Desktop Entry]
+Name=Conjunction
+Comment=Conjunction Desktop Session
+Exec=/usr/bin/conjunction-session
+Type=Application
+DesktopNames=Conjunction;KDE
+Keywords=launch;conjunction;desktop;session;

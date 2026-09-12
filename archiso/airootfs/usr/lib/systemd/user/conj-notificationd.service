@@ -1,0 +1,13 @@
+[Unit]
+Description=Conjunction Notification Daemon
+PartOf=conjunction-session.target
+After=graphical-session-pre.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/conj-notificationd
+Restart=on-failure
+RestartSec=1s
+
+[Install]
+WantedBy=conjunction-session.target
