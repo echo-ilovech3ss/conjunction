@@ -44,6 +44,9 @@ int main(int argc, char *argv[]) {
     QCommandLineOption focusTestOption("focus-test", "Run automated keyboard focus cycling test");
     parser.addOption(focusTestOption);
 
+    QCommandLineOption keyboardTestOption("keyboard-test", "Run end-to-end automated keyboard-only workflow test");
+    parser.addOption(keyboardTestOption);
+
     parser.process(app);
 
     QQmlApplicationEngine engine;
@@ -103,7 +106,7 @@ int main(int argc, char *argv[]) {
     window->show();
 
     // Post-instantiation timer for CLI-driven actions
-    QTimer::singleShot(150, [window, &parser, reqTheme, reqRtl, reqReducedMotion, reqScale, screenshotOption, stressOption, focusTestOption]() {
+    QTimer::singleShot(150, [window, &parser, reqTheme, reqRtl, reqReducedMotion, reqScale, screenshotOption, stressOption, focusTestOption, keyboardTestOption]() {
         // Run stress test if requested
         if (parser.isSet(stressOption)) {
             int cycles = parser.value(stressOption).toInt();
@@ -137,6 +140,55 @@ int main(int argc, char *argv[]) {
                     QCoreApplication::sendEvent(window, &tabRelease);
                 }
                 fprintf(stderr, "Keyboard focus traversal verified without pointer input.\n");
+                fflush(stderr);
+                QCoreApplication::exit(0);
+            });
+            return;
+        }
+
+        // Run end-to-end keyboard test if requested
+        if (parser.isSet(keyboardTestOption)) {
+            fprintf(stderr, "Running end-to-end keyboard-only workflow test...\n");
+            QMetaObject::invokeMethod(window, "selectScene", Q_ARG(QVariant, "keyboard_workflow"));
+
+            QTimer::singleShot(150, [window]() {
+                fprintf(stderr, "  [1/6] Navigating to SearchField, typing query and clearing via Escape...\n");
+                QKeyEvent tab1(QEvent::KeyPress, Qt::Key_Tab, Qt::NoModifier);
+                QCoreApplication::sendEvent(window, &tab1);
+                QKeyEvent typeText(QEvent::KeyPress, Qt::Key_A, Qt::NoModifier, "test");
+                QCoreApplication::sendEvent(window, &typeText);
+                QKeyEvent esc1(QEvent::KeyPress, Qt::Key_Escape, Qt::NoModifier);
+                QCoreApplication::sendEvent(window, &esc1);
+
+                fprintf(stderr, "  [2/6] Tabbing to SegmentedControl and switching segment with Right arrow...\n");
+                QKeyEvent tab2(QEvent::KeyPress, Qt::Key_Tab, Qt::NoModifier);
+                QCoreApplication::sendEvent(window, &tab2);
+                QKeyEvent rightArrow(QEvent::KeyPress, Qt::Key_Right, Qt::NoModifier);
+                QCoreApplication::sendEvent(window, &rightArrow);
+
+                fprintf(stderr, "  [3/6] Tabbing to Sidebar and navigating down...\n");
+                QKeyEvent tab3(QEvent::KeyPress, Qt::Key_Tab, Qt::NoModifier);
+                QCoreApplication::sendEvent(window, &tab3);
+                QKeyEvent downArrow(QEvent::KeyPress, Qt::Key_Down, Qt::NoModifier);
+                QCoreApplication::sendEvent(window, &downArrow);
+
+                fprintf(stderr, "  [4/6] Tabbing to Menu button, opening menu and dismissing with Escape...\n");
+                QKeyEvent tab4(QEvent::KeyPress, Qt::Key_Tab, Qt::NoModifier);
+                QCoreApplication::sendEvent(window, &tab4);
+                QKeyEvent enterMenu(QEvent::KeyPress, Qt::Key_Return, Qt::NoModifier);
+                QCoreApplication::sendEvent(window, &enterMenu);
+                QKeyEvent escMenu(QEvent::KeyPress, Qt::Key_Escape, Qt::NoModifier);
+                QCoreApplication::sendEvent(window, &escMenu);
+
+                fprintf(stderr, "  [5/6] Tabbing to Dialog button, opening dialog and dismissing with Escape...\n");
+                QKeyEvent tab5(QEvent::KeyPress, Qt::Key_Tab, Qt::NoModifier);
+                QCoreApplication::sendEvent(window, &tab5);
+                QKeyEvent enterDlg(QEvent::KeyPress, Qt::Key_Return, Qt::NoModifier);
+                QCoreApplication::sendEvent(window, &enterDlg);
+                QKeyEvent escDlg(QEvent::KeyPress, Qt::Key_Escape, Qt::NoModifier);
+                QCoreApplication::sendEvent(window, &escDlg);
+
+                fprintf(stderr, "  [6/6] End-to-end keyboard workflow completed successfully with NO pointer input!\n");
                 fflush(stderr);
                 QCoreApplication::exit(0);
             });

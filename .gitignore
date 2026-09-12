@@ -17,4 +17,5 @@ target/
 !archiso/airootfs/usr/share/icons/**/*.png
 !archiso/airootfs/usr/share/pixmaps/*.png
 !archiso/airootfs/usr/share/conjunction/**/*.png
+!docs/design/screenshots/*.png
 

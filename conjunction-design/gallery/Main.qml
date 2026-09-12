@@ -181,6 +181,20 @@ ApplicationWindow {
                     clip: true
 
                     model: ListModel {
+                        ListElement { name: "Desktop Ref"; sceneId: "desktop_reference"; iconName: "settings" }
+                        ListElement { name: "Buttons"; sceneId: "controls_buttons"; iconName: "check" }
+                        ListElement { name: "Toggles"; sceneId: "controls_toggles"; iconName: "settings" }
+                        ListElement { name: "Text Inputs"; sceneId: "controls_inputs"; iconName: "search" }
+                        ListElement { name: "Segmented"; sceneId: "controls_segmented"; iconName: "copy" }
+                        ListElement { name: "Menus"; sceneId: "controls_menus"; iconName: "settings" }
+                        ListElement { name: "Sidebar"; sceneId: "controls_sidebar"; iconName: "arrow-right" }
+                        ListElement { name: "Lists & Tables"; sceneId: "controls_lists"; iconName: "copy" }
+                        ListElement { name: "Toolbar"; sceneId: "controls_toolbar"; iconName: "settings" }
+                        ListElement { name: "Popover"; sceneId: "controls_popover"; iconName: "refresh" }
+                        ListElement { name: "Dialogs/Sheets"; sceneId: "controls_dialogs"; iconName: "warning" }
+                        ListElement { name: "Progress/Slider"; sceneId: "controls_progress_slider"; iconName: "refresh" }
+                        ListElement { name: "Accessibility"; sceneId: "controls_accessibility"; iconName: "check" }
+                        ListElement { name: "Keyboard Test"; sceneId: "keyboard_workflow"; iconName: "check" }
                         ListElement { name: "Typography"; sceneId: "typography"; iconName: "copy" }
                         ListElement { name: "Colors"; sceneId: "colors"; iconName: "settings" }
                         ListElement { name: "Spacing"; sceneId: "spacing"; iconName: "arrow-right" }
@@ -242,6 +256,20 @@ ApplicationWindow {
 
                     source: {
                         var id = navList.model.get(navList.currentIndex).sceneId;
+                        if (id === "desktop_reference") return "scenes/DesktopReferenceScene.qml";
+                        if (id === "controls_buttons") return "scenes/ButtonsScene.qml";
+                        if (id === "controls_toggles") return "scenes/TogglesScene.qml";
+                        if (id === "controls_inputs") return "scenes/TextInputsScene.qml";
+                        if (id === "controls_segmented") return "scenes/SegmentedScene.qml";
+                        if (id === "controls_menus") return "scenes/MenusScene.qml";
+                        if (id === "controls_sidebar") return "scenes/SidebarScene.qml";
+                        if (id === "controls_lists") return "scenes/ListsScene.qml";
+                        if (id === "controls_toolbar") return "scenes/ToolbarScene.qml";
+                        if (id === "controls_popover") return "scenes/PopoverScene.qml";
+                        if (id === "controls_dialogs") return "scenes/DialogsScene.qml";
+                        if (id === "controls_progress_slider") return "scenes/ProgressSliderScene.qml";
+                        if (id === "controls_accessibility") return "scenes/AccessibilityScene.qml";
+                        if (id === "keyboard_workflow") return "scenes/KeyboardWorkflowScene.qml";
                         if (id === "typography") return "scenes/TypographyScene.qml";
                         if (id === "colors") return "scenes/ColorsScene.qml";
                         if (id === "spacing") return "scenes/SpacingScene.qml";
@@ -252,7 +280,7 @@ ApplicationWindow {
                         if (id === "motion") return "scenes/MotionScene.qml";
                         if (id === "icons") return "scenes/IconsScene.qml";
                         if (id === "benchmark") return "deterministic/DeterministicScene.qml";
-                        return "scenes/TypographyScene.qml";
+                        return "scenes/DesktopReferenceScene.qml";
                     }
                 }
             }

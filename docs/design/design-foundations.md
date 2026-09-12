@@ -11,7 +11,7 @@ The visual grammar is governed by eleven core principles:
 4. **Consistency**: Global semantic tokens govern colors, metrics, and transitions across all Conjunction applications.
 5. **High Typography Quality**: Proportional sans-serif letterforms with dedicated monospace roles and dynamic font scaling.
 6. **First-Class Focus Behavior**: Clear, unambiguous keyboard focus indicators distinct from mouse hover or selection states.
-7. **Predictable Spacing**: Strict alignment against an 8-point base grid ($2, 4, 8, 12, 16, 24, 32$ px).
+7. **Predictable Spacing**: A 4pt base rhythm with an 8pt dominant spacing cadence ($2, 4, 8, 12, 16, 24, 32$ px).
 8. **Subtle Depth**: Clean elevation tiers with low-radius soft boundaries optimized for CPU and GPU rasterization.
 9. **Strong Keyboard Usability**: Every interface element is reachable and actionable without pointer input.
 10. **High Information Quality**: Clean representation of data without decorative noise.
@@ -95,6 +95,8 @@ Redistributable system font stack: `DejaVu Sans`, `Liberation Sans`, `Noto Sans`
 ## 5. Spacing & Geometry
 
 ### 5.1 Spacing Scale
+The spacing scale is structured around a 4pt base rhythm with an 8pt dominant spacing cadence. Micro-increments (2px, 4px) support compact control padding and inline text-icon alignment, while multi-unit steps (8px, 12px, 16px, 24px, 32px) govern component separation and structural layouts.
+
 * `Spacing.none`: `0px`
 * `Spacing.xxs`: `2px`
 * `Spacing.xs`: `4px`
