@@ -88,6 +88,16 @@ Window {
         id: overviewOverlay
     }
 
+    // Floating Notification Banners
+    NotificationBanner {
+        id: notificationBanner
+    }
+
+    // Notification Center Drawer
+    NotificationCenter {
+        id: notificationCenter
+    }
+
     // Global keyboard shortcut to focus the Dock (Ctrl+Alt+D)
     Shortcut {
         sequence: "Ctrl+Alt+D"
@@ -107,5 +117,11 @@ Window {
     Shortcut {
         sequence: "Ctrl+Up"
         onActivated: ShellState.toggleOverview()
+    }
+
+    // Global keyboard shortcut for Notification Center (Ctrl+Alt+N)
+    Shortcut {
+        sequence: "Ctrl+Alt+N"
+        onActivated: ShellState.toggleNotificationCenter()
     }
 }

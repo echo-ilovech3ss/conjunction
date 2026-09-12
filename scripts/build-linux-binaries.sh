@@ -27,6 +27,11 @@ cp -f /tmp/target/release/conj-bundle /conjunction-repo/target/linux-release/
 cp -f /tmp/target/release/conj-appctl /conjunction-repo/target/linux-release/
 cp -f /tmp/target/release/conj-appd   /conjunction-repo/target/linux-release/
 cp -f /tmp/target/release/conj-open   /conjunction-repo/target/linux-release/
+cp -f /tmp/target/release/conj-bundle /usr/bin/
+cp -f /tmp/target/release/conj-appctl /usr/bin/
+cp -f /tmp/target/release/conj-appd   /usr/bin/
+cp -f /tmp/target/release/conj-open   /usr/bin/
+chmod 755 /usr/bin/conj-bundle /usr/bin/conj-appctl /usr/bin/conj-appd /usr/bin/conj-open
 "
 
 echo "[SUCCESS] Native Linux binaries compiled successfully to target/linux-release/"

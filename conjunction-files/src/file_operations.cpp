@@ -10,6 +10,9 @@
 #include <QDebug>
 #include <QStandardPaths>
 #include <QRegularExpression>
+#include <QMimeDatabase>
+#include <QSettings>
+#include <QSet>
 
 #ifdef HAVE_KF6_KIO
 #include <KIO/CopyJob>
@@ -27,20 +30,83 @@ bool FileOperations::openItem(const QString &filePath)
     QFileInfo info(filePath);
     if (!info.exists()) return false;
 
-    FileItem item = FileItem::fromPath(filePath);
-
-    // If it's a valid .app bundle, launch via conj-open or direct executable
-    if (item.isAppBundle) {
-        QString conjOpen = QStandardPaths::findExecutable("conj-open");
-        if (!conjOpen.isEmpty()) {
-            return QProcess::startDetached(conjOpen, QStringList() << filePath);
-        } else if (!item.bundleExecutable.isEmpty()) {
-            return QProcess::startDetached(item.bundleExecutable, QStringList());
+    // First try opening via conj-open which respects Conjunction app bundle and FreeDesktop mime mappings
+    QString conjOpen = QStandardPaths::findExecutable("conj-open");
+    if (!conjOpen.isEmpty()) {
+        if (QProcess::startDetached(conjOpen, QStringList() << filePath)) {
+            return true;
         }
+    }
+
+    FileItem item = FileItem::fromPath(filePath);
+    if (item.isAppBundle && !item.bundleExecutable.isEmpty()) {
+        return QProcess::startDetached(item.bundleExecutable, QStringList());
     }
 
     // Default desktop service opening
     return QDesktopServices::openUrl(QUrl::fromLocalFile(filePath));
+}
+
+QVariantList FileOperations::getOpenWithHandlers(const QString &filePath)
+{
+    QVariantList list;
+    QFileInfo info(filePath);
+    if (!info.exists()) return list;
+
+    QMimeDatabase db;
+    QMimeType mime = db.mimeTypeForFile(filePath);
+    QString mimeName = mime.name();
+
+    QSet<QString> seen;
+    QStringList searchDirs = {
+        QDir::homePath() + "/.local/share/applications",
+        "/usr/share/applications"
+    };
+
+    for (const QString &dirPath : searchDirs) {
+        QDir dir(dirPath);
+        const QStringList entries = dir.entryList(QStringList() << "*.desktop", QDir::Files);
+        for (const QString &entry : entries) {
+            if (seen.contains(entry)) continue;
+            QString fullPath = dir.filePath(entry);
+            QSettings s(fullPath, QSettings::IniFormat);
+            s.beginGroup("Desktop Entry");
+            if (s.value("NoDisplay", false).toBool()) continue;
+
+            QString mimes = s.value("MimeType").toString();
+            if (mimes.contains(mimeName) || (mimeName.startsWith("text/") && mimes.contains("text/plain"))) {
+                seen.insert(entry);
+                QVariantMap item;
+                item["desktopId"] = entry;
+                item["name"] = s.value("Name").toString();
+                item["icon"] = s.value("Icon").toString();
+                list.append(item);
+            }
+        }
+    }
+    return list;
+}
+
+bool FileOperations::openWith(const QString &filePath, const QString &desktopId, bool setAsDefault)
+{
+    QFileInfo info(filePath);
+    if (!info.exists()) return false;
+
+    if (setAsDefault) {
+        QMimeDatabase db;
+        QMimeType mime = db.mimeTypeForFile(filePath);
+        QString conjOpen = QStandardPaths::findExecutable("conj-open");
+        if (!conjOpen.isEmpty()) {
+            QProcess::startDetached(conjOpen, QStringList() << "--set-default" << mime.name() << desktopId);
+        }
+    }
+
+    QString conjAppctl = QStandardPaths::findExecutable("conj-appctl");
+    if (!conjAppctl.isEmpty()) {
+        return QProcess::startDetached(conjAppctl, QStringList() << "launch" << desktopId << filePath);
+    }
+
+    return QProcess::startDetached("gtk-launch", QStringList() << desktopId << filePath);
 }
 
 bool FileOperations::openInTerminal(const QString &targetPath)

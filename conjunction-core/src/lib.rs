@@ -48,6 +48,9 @@ pub use settings::{
     SettingsRegistry,
 };
 
+pub mod mime;
+pub use mime::{detect_mime, parse_mimeapps_file, resolve_default_handler, set_default_handler};
+
 use std::path::{Path, PathBuf};
 
 pub fn get_user_home() -> PathBuf {

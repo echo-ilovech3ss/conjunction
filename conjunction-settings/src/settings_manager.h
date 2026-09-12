@@ -12,6 +12,7 @@ class SettingsManager : public QObject {
 
     Q_PROPERTY(QString appearanceMode READ appearanceMode WRITE setAppearanceMode NOTIFY appearanceModeChanged)
     Q_PROPERTY(QString appearanceAccent READ appearanceAccent WRITE setAppearanceAccent NOTIFY appearanceAccentChanged)
+    Q_PROPERTY(bool reducedMotion READ reducedMotion WRITE setReducedMotion NOTIFY reducedMotionChanged)
     Q_PROPERTY(int dockSize READ dockSize WRITE setDockSize NOTIFY dockSizeChanged)
     Q_PROPERTY(bool dockMagnification READ dockMagnification WRITE setDockMagnification NOTIFY dockMagnificationChanged)
     Q_PROPERTY(qreal dockMagnificationScale READ dockMagnificationScale WRITE setDockMagnificationScale NOTIFY dockMagnificationScaleChanged)
@@ -22,6 +23,9 @@ class SettingsManager : public QObject {
     Q_PROPERTY(bool wifiEnabled READ wifiEnabled WRITE setWifiEnabled NOTIFY wifiEnabledChanged)
     Q_PROPERTY(bool bluetoothEnabled READ bluetoothEnabled WRITE setBluetoothEnabled NOTIFY bluetoothEnabledChanged)
     Q_PROPERTY(QString desktopWallpaper READ desktopWallpaper WRITE setDesktopWallpaper NOTIFY desktopWallpaperChanged)
+
+    Q_PROPERTY(QVariantList defaultAppCategories READ defaultAppCategories NOTIFY defaultAppsChanged)
+    Q_PROPERTY(QVariantList shortcuts READ shortcuts NOTIFY shortcutsChanged)
 
     Q_PROPERTY(QString activePage READ activePage WRITE setActivePage NOTIFY activePageChanged)
     Q_PROPERTY(QString highlightedSetting READ highlightedSetting WRITE setHighlightedSetting NOTIFY highlightedSettingChanged)
@@ -38,6 +42,9 @@ public:
 
     QString appearanceAccent() const;
     void setAppearanceAccent(const QString &accent);
+
+    bool reducedMotion() const;
+    void setReducedMotion(bool enabled);
 
     int dockSize() const;
     void setDockSize(int size);
@@ -81,6 +88,14 @@ public:
     QVariantList searchResults() const;
     QVariantList pages() const;
 
+    QVariantList defaultAppCategories() const;
+    Q_INVOKABLE QVariantList getAvailableHandlers(const QString &mimeType) const;
+    Q_INVOKABLE bool setDefaultHandler(const QString &mimeType, const QString &desktopId);
+
+    QVariantList shortcuts() const;
+    Q_INVOKABLE bool updateShortcut(const QString &id, const QString &keySequence);
+    Q_INVOKABLE void resetShortcuts();
+
     Q_INVOKABLE void navigateTo(const QString &page, const QString &settingId = QString());
     Q_INVOKABLE void handleUrl(const QString &url);
     Q_INVOKABLE void resetSetting(const QString &key);
@@ -88,6 +103,9 @@ public:
 Q_SIGNALS:
     void appearanceModeChanged();
     void appearanceAccentChanged();
+    void reducedMotionChanged();
+    void defaultAppsChanged();
+    void shortcutsChanged();
     void dockSizeChanged();
     void dockMagnificationChanged();
     void dockMagnificationScaleChanged();
@@ -124,9 +142,13 @@ private:
     bool m_wifiEnabled = true;
     bool m_bluetoothEnabled = true;
     QString m_desktopWallpaper = "default.jpg";
-
+    bool m_reducedMotion = false;
     QString m_activePage = "about";
     QString m_highlightedSetting;
     QString m_searchQuery;
     QVariantList m_searchResults;
+    QMap<QString, QString> m_customShortcuts;
+
+    void loadShortcuts();
+    QString resolveDefaultHandler(const QString &mimeType) const;
 };

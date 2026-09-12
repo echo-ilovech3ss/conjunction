@@ -63,6 +63,8 @@ ApplicationWindow {
                     switch (SettingsManager.activePage) {
                     case "about": return aboutComponent;
                     case "appearance": return appearanceComponent;
+                    case "default-apps": return defaultAppsComponent;
+                    case "shortcuts": return shortcutsComponent;
                     case "dock": return dockComponent;
                     case "displays": return displaysComponent;
                     case "sound": return soundComponent;
@@ -76,6 +78,8 @@ ApplicationWindow {
             Component { id: searchComponent; Pages.SearchResultsPage {} }
             Component { id: aboutComponent; Pages.GeneralAboutPage {} }
             Component { id: appearanceComponent; Pages.AppearancePage {} }
+            Component { id: defaultAppsComponent; Pages.DefaultAppsPage {} }
+            Component { id: shortcutsComponent; Pages.ShortcutsPage {} }
             Component { id: dockComponent; Pages.DesktopDockPage {} }
             Component { id: displaysComponent; Pages.DisplaysPage {} }
             Component { id: soundComponent; Pages.SoundPage {} }

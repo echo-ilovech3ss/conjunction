@@ -50,6 +50,12 @@ class ShellState : public QObject {
 
     Q_PROPERTY(bool overviewActive READ overviewActive WRITE setOverviewActive NOTIFY overviewActiveChanged)
 
+    // Phase 7A Additions:
+    Q_PROPERTY(bool notificationCenterVisible READ notificationCenterVisible WRITE setNotificationCenterVisible NOTIFY notificationCenterVisibleChanged)
+    Q_PROPERTY(QVariantList activeBanners READ activeBanners NOTIFY activeBannersChanged)
+    Q_PROPERTY(QVariantList notificationHistory READ notificationHistory NOTIFY notificationHistoryChanged)
+    Q_PROPERTY(bool reducedMotion READ reducedMotion WRITE setReducedMotion NOTIFY reducedMotionChanged)
+
 public:
     explicit ShellState(WindowManager *winMgr, MenuRegistrar *menuReg, QObject *parent = nullptr);
     ~ShellState() override;
@@ -91,6 +97,14 @@ public:
 
     bool overviewActive() const;
     void setOverviewActive(bool active);
+
+    // Phase 7A getters
+    bool notificationCenterVisible() const;
+    void setNotificationCenterVisible(bool visible);
+    QVariantList activeBanners() const;
+    QVariantList notificationHistory() const;
+    bool reducedMotion() const;
+    void setReducedMotion(bool rm);
 
     bool initDBus();
     void loadSettings();
@@ -137,9 +151,27 @@ public Q_SLOTS:
     // Mission Control / Overview
     Q_INVOKABLE void toggleOverview();
 
+    // Notifications (Phase 7A)
+    Q_INVOKABLE void toggleNotificationCenter();
+    Q_INVOKABLE void dismissNotification(uint id);
+    Q_INVOKABLE void invokeNotificationAction(uint id, const QString &actionKey);
+    Q_INVOKABLE void clearNotificationHistory();
+
+    // Power & Session Management (Phase 7A)
+    Q_INVOKABLE void lockScreen();
+    Q_INVOKABLE void suspendSession();
+    Q_INVOKABLE void restartSystem();
+    Q_INVOKABLE void shutdownSystem();
+    Q_INVOKABLE void logoutSession();
+    Q_INVOKABLE QVariantList checkInhibitors() const;
+    Q_INVOKABLE bool canSuspend() const;
+    Q_INVOKABLE bool canReboot() const;
+    Q_INVOKABLE bool canPowerOff() const;
+
     // Testing helper to inject/simulate apps and windows
     Q_INVOKABLE void simulateWindow(const QString &winId, const QString &title, const QString &appId, bool active);
     Q_INVOKABLE void simulateGlobalMenu(const QVariantList &menus);
+    Q_INVOKABLE void simulateNotification(uint id, const QString &appName, const QString &summary, const QString &body);
 
 Q_SIGNALS:
     void SettingChanged(const QString &key, const QVariant &value);
@@ -167,16 +199,30 @@ Q_SIGNALS:
     void dockScaleMaxChanged();
     void overviewActiveChanged();
 
+    void notificationCenterVisibleChanged();
+    void activeBannersChanged();
+    void notificationHistoryChanged();
+    void reducedMotionChanged();
+
 private Q_SLOTS:
     void onWindowListChanged();
     void onActiveWindowChanged(const QString &winId);
     void onMenuUpdated(uint windowId);
     void onTimeTick();
 
+    // Notification listener slots
+    void onNotificationAdded(uint id, const QString &json);
+    void onNotificationUpdated(uint id, const QString &json);
+    void onNotificationRemoved(uint id);
+    void onNotificationHistoryChanged();
+
 private:
     void updateDockItems();
     void updateActiveApp();
     RegisteredAppInfo resolveApp(const ShellWindowEntry &win);
+    void initNotificationService();
+    void fetchNotifications();
+    void syncPortalAppearance();
 
     WindowManager *m_winMgr;
     MenuRegistrar *m_menuReg;
@@ -210,6 +256,12 @@ private:
     qreal m_dockScaleMax = 1.35;
 
     bool m_overviewActive = false;
+
+    // Phase 7A state
+    bool m_notificationCenterVisible = false;
+    QVariantList m_activeBanners;
+    QVariantList m_notificationHistory;
+    bool m_reducedMotion = false;
 
     void performSearch(const QString &query);
 };

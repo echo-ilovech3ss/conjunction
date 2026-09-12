@@ -171,6 +171,43 @@ ScrollView {
             }
         }
 
+        // Accessibility & Motion Section
+        Rectangle {
+            id: motionCard
+            Layout.fillWidth: true
+            radius: 12
+            color: Theme.isDark ? "#14FFFFFF" : "#08000000"
+            border.color: (SettingsManager.highlightedSetting === "accessibility.reducedMotion") ? Theme.accent : Theme.separator
+            border.width: (SettingsManager.highlightedSetting === "accessibility.reducedMotion") ? 2 : 1
+            implicitHeight: 74
+
+            RowLayout {
+                anchors.fill: parent
+                anchors.margins: 16
+                spacing: 16
+
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: 2
+                    Text {
+                        text: "Reduced Motion"
+                        font: Typography.headline
+                        color: Theme.textPrimary
+                    }
+                    Text {
+                        text: "Minimize animations and transitions across the desktop and apps"
+                        font: Typography.caption
+                        color: Theme.textSecondary
+                    }
+                }
+
+                Controls.Switch {
+                    checked: SettingsManager.reducedMotion
+                    onToggled: SettingsManager.setReducedMotion(checked)
+                }
+            }
+        }
+
         Item { height: 20 }
     }
 }

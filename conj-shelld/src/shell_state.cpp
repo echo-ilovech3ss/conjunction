@@ -15,6 +15,7 @@
 #include <QDBusConnection>
 #include <QDBusMessage>
 #include <QDBusVariant>
+#include <QDBusArgument>
 
 ShellState::ShellState(WindowManager *winMgr, MenuRegistrar *menuReg, QObject *parent)
     : QObject(parent)
@@ -52,6 +53,7 @@ void ShellState::setIsDark(bool dark)
     if (m_isDark != dark) {
         m_isDark = dark;
         saveSetting("appearance.mode", dark ? "dark" : "light");
+        syncPortalAppearance();
         Q_EMIT themeChanged();
     }
 }
@@ -68,6 +70,7 @@ void ShellState::setSpotlightVisible(bool visible)
         m_spotlightVisible = visible;
         if (visible) {
             setControlCenterVisible(false);
+            setNotificationCenterVisible(false);
             performSearch(m_searchQuery);
         }
         Q_EMIT spotlightVisibleChanged();
@@ -91,6 +94,7 @@ void ShellState::setControlCenterVisible(bool visible)
         m_controlCenterVisible = visible;
         if (visible) {
             setSpotlightVisible(false);
+            setNotificationCenterVisible(false);
         }
         Q_EMIT controlCenterVisibleChanged();
     }
@@ -276,6 +280,8 @@ bool ShellState::initDBus()
     }
 
     qInfo() << "[ShellState] Successfully registered org.conjunction.Settings on session bus";
+    initNotificationService();
+    syncPortalAppearance();
     return true;
 }
 
@@ -302,6 +308,12 @@ void ShellState::loadSettings()
     if (s.contains("Bluetooth/enabled")) {
         m_bluetoothEnabled = s.value("Bluetooth/enabled", true).toBool();
     }
+    if (s.contains("Sound/doNotDisturb")) {
+        m_doNotDisturb = s.value("Sound/doNotDisturb", false).toBool();
+    }
+    if (s.contains("Accessibility/reducedMotion")) {
+        m_reducedMotion = s.value("Accessibility/reducedMotion", false).toBool();
+    }
 }
 
 void ShellState::saveSetting(const QString &key, const QVariant &val)
@@ -318,6 +330,10 @@ void ShellState::saveSetting(const QString &key, const QVariant &val)
         s.setValue("Dock/magnification", val.toBool());
     } else if (key == "dock.magnificationScale") {
         s.setValue("Dock/magnification_scale", val.toReal());
+    } else if (key == "sound.doNotDisturb") {
+        s.setValue("Sound/doNotDisturb", val.toBool());
+    } else if (key == "accessibility.reducedMotion") {
+        s.setValue("Accessibility/reducedMotion", val.toBool());
     } else if (key == "sound.volume") {
         s.setValue("Sound/volume", val.toInt());
     } else if (key == "network.wifi.enabled") {
@@ -343,6 +359,8 @@ QDBusVariant ShellState::GetSetting(const QString &key) const
     if (key == "network.wifi.enabled") return QDBusVariant(m_wifiEnabled);
     if (key == "bluetooth.enabled") return QDBusVariant(m_bluetoothEnabled);
     if (key == "displays.scale") return QDBusVariant(1.0);
+    if (key == "sound.doNotDisturb") return QDBusVariant(m_doNotDisturb);
+    if (key == "accessibility.reducedMotion") return QDBusVariant(m_reducedMotion);
 
     QString path = settingsFilePath();
     QSettings s(path, QSettings::IniFormat);
@@ -395,6 +413,16 @@ bool ShellState::SetSetting(const QString &key, const QDBusVariant &dbusValue)
         setBluetoothEnabled(value.toBool());
         return true;
     }
+    if (key == "sound.doNotDisturb") {
+        if (!value.canConvert<bool>()) return false;
+        setDoNotDisturb(value.toBool());
+        return true;
+    }
+    if (key == "accessibility.reducedMotion") {
+        if (!value.canConvert<bool>()) return false;
+        setReducedMotion(value.toBool());
+        return true;
+    }
 
     saveSetting(key, value);
     return true;
@@ -410,6 +438,8 @@ QVariantMap ShellState::GetAllSettings() const
     map["network.wifi.enabled"] = m_wifiEnabled;
     map["bluetooth.enabled"] = m_bluetoothEnabled;
     map["displays.scale"] = 1.0;
+    map["sound.doNotDisturb"] = m_doNotDisturb;
+    map["accessibility.reducedMotion"] = m_reducedMotion;
     return map;
 }
 
@@ -747,22 +777,6 @@ void ShellState::quitApp(const QString &appId)
     }
 }
 
-void ShellState::requestSystemAction(const QString &action)
-{
-    qInfo() << "[ShellState] System action requested:" << action;
-    Q_EMIT systemActionTriggered(action);
-    if (action == "logout") {
-#ifdef Q_OS_UNIX
-        QProcess::startDetached("loginctl", QStringList() << "terminate-user" << QString::number(getuid()));
-#else
-        QProcess::startDetached("loginctl", QStringList() << "terminate-session" << "self");
-#endif
-    } else if (action == "restart") {
-        QProcess::startDetached("systemctl", QStringList() << "reboot");
-    } else if (action == "shutdown") {
-        QProcess::startDetached("systemctl", QStringList() << "poweroff");
-    }
-}
 
 void ShellState::simulateWindow(const QString &winId, const QString &title, const QString &appId, bool active)
 {
@@ -777,6 +791,20 @@ void ShellState::simulateGlobalMenu(const QVariantList &menus)
 {
     m_globalMenus = menus;
     Q_EMIT globalMenusChanged();
+}
+
+void ShellState::simulateNotification(uint id, const QString &appName, const QString &summary, const QString &body)
+{
+    QJsonObject obj;
+    obj["id"] = (int)id;
+    obj["appName"] = appName;
+    obj["summary"] = summary;
+    obj["body"] = body;
+    obj["icon"] = "dialog-information";
+    obj["urgency"] = 1;
+    obj["actions"] = QJsonArray();
+    QJsonDocument doc(obj);
+    onNotificationAdded(id, QString::fromUtf8(doc.toJson(QJsonDocument::Compact)));
 }
 
 void ShellState::performSearch(const QString &query)
@@ -919,4 +947,389 @@ void ShellState::activateSearchResult(int index)
         QString path = actionData.mid(5);
         QProcess::startDetached("xdg-open", QStringList() << path);
     }
+}
+
+// ==================== Phase 7A Additions ====================
+
+bool ShellState::notificationCenterVisible() const { return m_notificationCenterVisible; }
+void ShellState::setNotificationCenterVisible(bool visible)
+{
+    if (m_notificationCenterVisible != visible) {
+        m_notificationCenterVisible = visible;
+        if (visible) {
+            setControlCenterVisible(false);
+            setSpotlightVisible(false);
+            onNotificationHistoryChanged();
+        }
+        Q_EMIT notificationCenterVisibleChanged();
+    }
+}
+
+QVariantList ShellState::activeBanners() const { return m_activeBanners; }
+QVariantList ShellState::notificationHistory() const { return m_notificationHistory; }
+
+bool ShellState::reducedMotion() const { return m_reducedMotion; }
+void ShellState::setReducedMotion(bool rm)
+{
+    if (m_reducedMotion != rm) {
+        m_reducedMotion = rm;
+        saveSetting("accessibility.reducedMotion", rm);
+        syncPortalAppearance();
+        Q_EMIT reducedMotionChanged();
+    }
+}
+
+void ShellState::toggleNotificationCenter()
+{
+    setNotificationCenterVisible(!m_notificationCenterVisible);
+}
+
+void ShellState::dismissNotification(uint id)
+{
+    QDBusMessage msg = QDBusMessage::createMethodCall(
+        QStringLiteral("org.conjunction.Notifications"),
+        QStringLiteral("/org/conjunction/Notifications"),
+        QStringLiteral("org.conjunction.Notifications"),
+        QStringLiteral("Dismiss")
+    );
+    msg << id;
+    QDBusConnection::sessionBus().call(msg, QDBus::NoBlock);
+
+    onNotificationRemoved(id);
+}
+
+void ShellState::invokeNotificationAction(uint id, const QString &actionKey)
+{
+    QDBusMessage msg = QDBusMessage::createMethodCall(
+        QStringLiteral("org.conjunction.Notifications"),
+        QStringLiteral("/org/conjunction/Notifications"),
+        QStringLiteral("org.conjunction.Notifications"),
+        QStringLiteral("TriggerAction")
+    );
+    msg << id << actionKey;
+    QDBusConnection::sessionBus().call(msg, QDBus::NoBlock);
+
+    onNotificationRemoved(id);
+}
+
+void ShellState::clearNotificationHistory()
+{
+    QDBusMessage msg = QDBusMessage::createMethodCall(
+        QStringLiteral("org.conjunction.Notifications"),
+        QStringLiteral("/org/conjunction/Notifications"),
+        QStringLiteral("org.conjunction.Notifications"),
+        QStringLiteral("ClearAll")
+    );
+    QDBusConnection::sessionBus().call(msg, QDBus::NoBlock);
+
+    m_activeBanners.clear();
+    m_notificationHistory.clear();
+    Q_EMIT activeBannersChanged();
+    Q_EMIT notificationHistoryChanged();
+}
+
+void ShellState::lockScreen()
+{
+    QDBusMessage call = QDBusMessage::createMethodCall(
+        QStringLiteral("org.freedesktop.ScreenSaver"),
+        QStringLiteral("/ScreenSaver"),
+        QStringLiteral("org.freedesktop.ScreenSaver"),
+        QStringLiteral("Lock")
+    );
+    QDBusConnection::sessionBus().call(call, QDBus::NoBlock);
+    Q_EMIT systemActionTriggered("lock");
+}
+
+void ShellState::suspendSession()
+{
+    QDBusMessage call = QDBusMessage::createMethodCall(
+        QStringLiteral("org.freedesktop.login1"),
+        QStringLiteral("/org/freedesktop/login1"),
+        QStringLiteral("org.freedesktop.login1.Manager"),
+        QStringLiteral("Suspend")
+    );
+    call << true;
+    QDBusConnection::systemBus().call(call, QDBus::NoBlock);
+    Q_EMIT systemActionTriggered("suspend");
+}
+
+void ShellState::restartSystem()
+{
+    QDBusMessage call = QDBusMessage::createMethodCall(
+        QStringLiteral("org.freedesktop.login1"),
+        QStringLiteral("/org/freedesktop/login1"),
+        QStringLiteral("org.freedesktop.login1.Manager"),
+        QStringLiteral("Reboot")
+    );
+    call << true;
+    QDBusConnection::systemBus().call(call, QDBus::NoBlock);
+    Q_EMIT systemActionTriggered("restart");
+}
+
+void ShellState::shutdownSystem()
+{
+    QDBusMessage call = QDBusMessage::createMethodCall(
+        QStringLiteral("org.freedesktop.login1"),
+        QStringLiteral("/org/freedesktop/login1"),
+        QStringLiteral("org.freedesktop.login1.Manager"),
+        QStringLiteral("PowerOff")
+    );
+    call << true;
+    QDBusConnection::systemBus().call(call, QDBus::NoBlock);
+    Q_EMIT systemActionTriggered("shutdown");
+}
+
+void ShellState::logoutSession()
+{
+    QDBusMessage call = QDBusMessage::createMethodCall(
+        QStringLiteral("org.kde.ksmserver"),
+        QStringLiteral("/KSMServer"),
+        QStringLiteral("org.kde.KSMServerInterface"),
+        QStringLiteral("logout")
+    );
+    call << 0 << 0 << 0;
+    QDBusConnection::sessionBus().call(call, QDBus::NoBlock);
+    Q_EMIT systemActionTriggered("logout");
+}
+
+void ShellState::requestSystemAction(const QString &action)
+{
+    if (action == "lock") lockScreen();
+    else if (action == "suspend" || action == "sleep") suspendSession();
+    else if (action == "restart" || action == "reboot") restartSystem();
+    else if (action == "shutdown" || action == "poweroff") shutdownSystem();
+    else if (action == "logout") logoutSession();
+}
+
+bool ShellState::canSuspend() const
+{
+    QDBusMessage call = QDBusMessage::createMethodCall(
+        QStringLiteral("org.freedesktop.login1"),
+        QStringLiteral("/org/freedesktop/login1"),
+        QStringLiteral("org.freedesktop.login1.Manager"),
+        QStringLiteral("CanSuspend")
+    );
+    QDBusMessage reply = QDBusConnection::systemBus().call(call, QDBus::Block, 500);
+    if (reply.type() == QDBusMessage::ReplyMessage && !reply.arguments().isEmpty()) {
+        return reply.arguments().at(0).toString() == QStringLiteral("yes");
+    }
+    return true;
+}
+
+bool ShellState::canReboot() const
+{
+    QDBusMessage call = QDBusMessage::createMethodCall(
+        QStringLiteral("org.freedesktop.login1"),
+        QStringLiteral("/org/freedesktop/login1"),
+        QStringLiteral("org.freedesktop.login1.Manager"),
+        QStringLiteral("CanReboot")
+    );
+    QDBusMessage reply = QDBusConnection::systemBus().call(call, QDBus::Block, 500);
+    if (reply.type() == QDBusMessage::ReplyMessage && !reply.arguments().isEmpty()) {
+        return reply.arguments().at(0).toString() == QStringLiteral("yes");
+    }
+    return true;
+}
+
+bool ShellState::canPowerOff() const
+{
+    QDBusMessage call = QDBusMessage::createMethodCall(
+        QStringLiteral("org.freedesktop.login1"),
+        QStringLiteral("/org/freedesktop/login1"),
+        QStringLiteral("org.freedesktop.login1.Manager"),
+        QStringLiteral("CanPowerOff")
+    );
+    QDBusMessage reply = QDBusConnection::systemBus().call(call, QDBus::Block, 500);
+    if (reply.type() == QDBusMessage::ReplyMessage && !reply.arguments().isEmpty()) {
+        return reply.arguments().at(0).toString() == QStringLiteral("yes");
+    }
+    return true;
+}
+
+QVariantList ShellState::checkInhibitors() const
+{
+    QVariantList list;
+    QDBusMessage msg = QDBusMessage::createMethodCall(
+        QStringLiteral("org.freedesktop.login1"),
+        QStringLiteral("/org/freedesktop/login1"),
+        QStringLiteral("org.freedesktop.login1.Manager"),
+        QStringLiteral("ListInhibitors")
+    );
+    QDBusMessage reply = QDBusConnection::systemBus().call(msg, QDBus::Block, 500);
+    if (reply.type() == QDBusMessage::ReplyMessage && !reply.arguments().isEmpty()) {
+        const QDBusArgument arg = reply.arguments().at(0).value<QDBusArgument>();
+        arg.beginArray();
+        while (!arg.atEnd()) {
+            arg.beginStructure();
+            QString what, who, why, mode;
+            uint uid, pid;
+            arg >> what >> who >> why >> mode >> uid >> pid;
+            arg.endStructure();
+            QVariantMap item;
+            item["what"] = what;
+            item["who"] = who;
+            item["why"] = why;
+            item["mode"] = mode;
+            item["uid"] = uid;
+            item["pid"] = pid;
+            list.append(item);
+        }
+        arg.endArray();
+    }
+    return list;
+}
+
+void ShellState::initNotificationService()
+{
+    QDBusConnection session = QDBusConnection::sessionBus();
+    session.connect(
+        QStringLiteral("org.conjunction.Notifications"),
+        QStringLiteral("/org/conjunction/Notifications"),
+        QStringLiteral("org.conjunction.Notifications"),
+        QStringLiteral("NotificationAdded"),
+        this,
+        SLOT(onNotificationAdded(uint,QString))
+    );
+    session.connect(
+        QStringLiteral("org.conjunction.Notifications"),
+        QStringLiteral("/org/conjunction/Notifications"),
+        QStringLiteral("org.conjunction.Notifications"),
+        QStringLiteral("NotificationUpdated"),
+        this,
+        SLOT(onNotificationUpdated(uint,QString))
+    );
+    session.connect(
+        QStringLiteral("org.conjunction.Notifications"),
+        QStringLiteral("/org/conjunction/Notifications"),
+        QStringLiteral("org.conjunction.Notifications"),
+        QStringLiteral("NotificationRemoved"),
+        this,
+        SLOT(onNotificationRemoved(uint))
+    );
+    session.connect(
+        QStringLiteral("org.conjunction.Notifications"),
+        QStringLiteral("/org/conjunction/Notifications"),
+        QStringLiteral("org.conjunction.Notifications"),
+        QStringLiteral("HistoryChanged"),
+        this,
+        SLOT(onNotificationHistoryChanged())
+    );
+
+    fetchNotifications();
+}
+
+void ShellState::fetchNotifications()
+{
+    QDBusMessage msg = QDBusMessage::createMethodCall(
+        QStringLiteral("org.conjunction.Notifications"),
+        QStringLiteral("/org/conjunction/Notifications"),
+        QStringLiteral("org.conjunction.Notifications"),
+        QStringLiteral("GetActiveBannersJson")
+    );
+    QDBusMessage reply = QDBusConnection::sessionBus().call(msg, QDBus::Block, 500);
+    if (reply.type() == QDBusMessage::ReplyMessage && !reply.arguments().isEmpty()) {
+        QString json = reply.arguments().at(0).toString();
+        QJsonDocument doc = QJsonDocument::fromJson(json.toUtf8());
+        if (doc.isArray()) {
+            QVariantList list;
+            for (const auto &val : doc.array()) {
+                list.append(val.toObject().toVariantMap());
+            }
+            m_activeBanners = list;
+            Q_EMIT activeBannersChanged();
+        }
+    }
+
+    onNotificationHistoryChanged();
+}
+
+void ShellState::onNotificationAdded(uint id, const QString &json)
+{
+    Q_UNUSED(id);
+    QJsonDocument doc = QJsonDocument::fromJson(json.toUtf8());
+    if (doc.isObject()) {
+        QVariantMap map = doc.object().toVariantMap();
+        bool bannerVis = map.value("bannerVisible", true).toBool();
+        if (bannerVis) {
+            m_activeBanners.append(map);
+            Q_EMIT activeBannersChanged();
+        }
+    }
+    onNotificationHistoryChanged();
+}
+
+void ShellState::onNotificationUpdated(uint id, const QString &json)
+{
+    QJsonDocument doc = QJsonDocument::fromJson(json.toUtf8());
+    if (doc.isObject()) {
+        QVariantMap map = doc.object().toVariantMap();
+        for (int i = 0; i < m_activeBanners.size(); ++i) {
+            if (m_activeBanners[i].toMap().value("id").toUInt() == id) {
+                m_activeBanners[i] = map;
+                Q_EMIT activeBannersChanged();
+                break;
+            }
+        }
+    }
+    onNotificationHistoryChanged();
+}
+
+void ShellState::onNotificationRemoved(uint id)
+{
+    for (int i = 0; i < m_activeBanners.size(); ++i) {
+        if (m_activeBanners[i].toMap().value("id").toUInt() == id) {
+            m_activeBanners.removeAt(i);
+            Q_EMIT activeBannersChanged();
+            break;
+        }
+    }
+}
+
+void ShellState::onNotificationHistoryChanged()
+{
+    QDBusMessage msg = QDBusMessage::createMethodCall(
+        QStringLiteral("org.conjunction.Notifications"),
+        QStringLiteral("/org/conjunction/Notifications"),
+        QStringLiteral("org.conjunction.Notifications"),
+        QStringLiteral("GetHistoryJson")
+    );
+    QDBusMessage reply = QDBusConnection::sessionBus().call(msg, QDBus::Block, 500);
+    if (reply.type() == QDBusMessage::ReplyMessage && !reply.arguments().isEmpty()) {
+        QString json = reply.arguments().at(0).toString();
+        QJsonDocument doc = QJsonDocument::fromJson(json.toUtf8());
+        if (doc.isArray()) {
+            QVariantList list;
+            for (const auto &val : doc.array()) {
+                list.append(val.toObject().toVariantMap());
+            }
+            m_notificationHistory = list;
+            Q_EMIT notificationHistoryChanged();
+        }
+    }
+}
+
+void ShellState::syncPortalAppearance()
+{
+    QString configDir = QStandardPaths::writableLocation(QStandardPaths::ConfigLocation);
+    QDir().mkpath(configDir);
+
+    // 1. Update kdeglobals for xdg-desktop-portal-kde
+    QString kdeglobalsPath = configDir + "/kdeglobals";
+    QSettings kde(kdeglobalsPath, QSettings::IniFormat);
+    kde.beginGroup("General");
+    kde.setValue("ColorScheme", m_isDark ? "BreezeDark" : "BreezeLight");
+    kde.endGroup();
+    kde.beginGroup("KDE");
+    kde.setValue("widgetStyle", "Breeze");
+    kde.setValue("AnimationDurationFactor", m_reducedMotion ? 0.0 : 1.0);
+    kde.endGroup();
+    kde.sync();
+
+    // 2. Update kwinrc for animations
+    QString kwinrcPath = configDir + "/kwinrc";
+    QSettings kwin(kwinrcPath, QSettings::IniFormat);
+    kwin.beginGroup("Windows");
+    kwin.setValue("AnimationSpeed", m_reducedMotion ? 0 : 3);
+    kwin.endGroup();
+    kwin.sync();
 }

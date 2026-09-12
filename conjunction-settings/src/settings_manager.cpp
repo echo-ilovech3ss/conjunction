@@ -7,6 +7,8 @@
 #include <QDBusConnection>
 #include <QDBusMessage>
 #include <QDBusInterface>
+#include <QProcess>
+#include <QSet>
 #include <QDebug>
 
 static QString settingsFilePath()
@@ -43,6 +45,7 @@ void SettingsManager::loadSettings()
 
     m_appearanceMode = s.value("Appearance/mode", "dark").toString();
     m_appearanceAccent = s.value("Appearance/accent", "#0066CC").toString();
+    m_reducedMotion = s.value("Accessibility/reduced_motion", false).toBool();
 
     m_dockSize = s.value("Dock/size", 68).toInt();
     m_dockMagnification = s.value("Dock/magnification", true).toBool();
@@ -55,6 +58,8 @@ void SettingsManager::loadSettings()
     m_wifiEnabled = s.value("Network/wifi_enabled", true).toBool();
     m_bluetoothEnabled = s.value("Bluetooth/enabled", true).toBool();
     m_desktopWallpaper = s.value("Desktop/wallpaper", "default.jpg").toString();
+
+    loadShortcuts();
 }
 
 void SettingsManager::writeSetting(const QString &key, const QVariant &value)
@@ -75,6 +80,7 @@ void SettingsManager::writeSetting(const QString &key, const QVariant &value)
     else if (key == "sound.muted") s.setValue("Sound/muted", value.toBool());
     else if (key == "network.wifi.enabled") s.setValue("Network/wifi_enabled", value.toBool());
     else if (key == "bluetooth.enabled") s.setValue("Bluetooth/enabled", value.toBool());
+    else if (key == "accessibility.reducedMotion") s.setValue("Accessibility/reduced_motion", value.toBool());
     else if (key == "desktop.wallpaper") s.setValue("Desktop/wallpaper", value.toString());
     s.sync();
 
@@ -158,6 +164,12 @@ void SettingsManager::onDBusSettingChanged(const QString &key, const QVariant &v
             m_bluetoothEnabled = b;
             Q_EMIT bluetoothEnabledChanged();
         }
+    } else if (key == "accessibility.reducedMotion") {
+        bool b = value.toBool();
+        if (m_reducedMotion != b) {
+            m_reducedMotion = b;
+            Q_EMIT reducedMotionChanged();
+        }
     }
 }
 
@@ -180,6 +192,16 @@ void SettingsManager::setAppearanceAccent(const QString &accent)
         m_appearanceAccent = accent;
         writeSetting("appearance.accent", accent);
         Q_EMIT appearanceAccentChanged();
+    }
+}
+
+bool SettingsManager::reducedMotion() const { return m_reducedMotion; }
+void SettingsManager::setReducedMotion(bool enabled)
+{
+    if (m_reducedMotion != enabled) {
+        m_reducedMotion = enabled;
+        writeSetting("accessibility.reducedMotion", enabled);
+        Q_EMIT reducedMotionChanged();
     }
 }
 
@@ -331,6 +353,8 @@ QVariantList SettingsManager::pages() const
 
     addPage("about", "General", "System", "help-about");
     addPage("appearance", "Appearance", "Personalization", "preferences-desktop-theme");
+    addPage("default-apps", "Default Apps", "Personalization", "preferences-desktop-default-applications");
+    addPage("shortcuts", "Shortcuts", "Personalization", "preferences-desktop-keyboard");
     addPage("dock", "Desktop & Dock", "Personalization", "preferences-desktop");
     addPage("displays", "Displays", "Hardware", "video-display");
     addPage("sound", "Sound", "Hardware", "audio-volume-high");
@@ -380,6 +404,9 @@ void SettingsManager::handleUrl(const QString &url)
         else if (settingId.startsWith("sound.")) page = "sound";
         else if (settingId.startsWith("network.")) page = "network";
         else if (settingId.startsWith("bluetooth.")) page = "bluetooth";
+        else if (settingId.startsWith("default-apps.")) page = "default-apps";
+        else if (settingId.startsWith("shortcuts.")) page = "shortcuts";
+        else if (settingId.startsWith("accessibility.")) page = "appearance";
         else page = "about";
     }
 
@@ -396,6 +423,243 @@ void SettingsManager::resetSetting(const QString &key)
     else if (key == "sound.volume") setSoundVolume(75);
     else if (key == "sound.muted") setSoundMuted(false);
     else if (key == "appearance.mode") setAppearanceMode("dark");
+    else if (key == "accessibility.reducedMotion") setReducedMotion(false);
+}
+
+void SettingsManager::loadShortcuts()
+{
+    QString path = settingsFilePath();
+    QSettings s(path, QSettings::IniFormat);
+    s.beginGroup("Shortcuts");
+    const QStringList keys = s.allKeys();
+    for (const QString &k : keys) {
+        m_customShortcuts[k] = s.value(k).toString();
+    }
+    s.endGroup();
+}
+
+QVariantList SettingsManager::shortcuts() const
+{
+    QVariantList list;
+    struct DefShortcut {
+        const char *id;
+        const char *title;
+        const char *def;
+        const char *category;
+    };
+    static const DefShortcut defs[] = {
+        {"spotlight", "Spotlight Search", "Alt+Space", "System"},
+        {"terminal", "Conjunction Terminal", "Ctrl+Alt+T", "Applications"},
+        {"files", "Files", "Super+E", "Applications"},
+        {"overview", "Mission Control / Overview", "Ctrl+Up", "Window Management"},
+        {"notifications", "Notification Center", "Ctrl+Alt+N", "System"},
+        {"lock", "Lock Screen", "Super+L", "System"}
+    };
+
+    for (const auto &d : defs) {
+        QVariantMap m;
+        m["id"] = QString::fromUtf8(d.id);
+        m["title"] = QString::fromUtf8(d.title);
+        m["defaultShortcut"] = QString::fromUtf8(d.def);
+        m["category"] = QString::fromUtf8(d.category);
+        m["shortcut"] = m_customShortcuts.value(m["id"].toString(), m["defaultShortcut"].toString());
+        list.append(m);
+    }
+    return list;
+}
+
+bool SettingsManager::updateShortcut(const QString &id, const QString &keySequence)
+{
+    m_customShortcuts[id] = keySequence;
+    QString path = settingsFilePath();
+    QSettings s(path, QSettings::IniFormat);
+    s.setValue("Shortcuts/" + id, keySequence);
+    s.sync();
+    Q_EMIT shortcutsChanged();
+    return true;
+}
+
+void SettingsManager::resetShortcuts()
+{
+    m_customShortcuts.clear();
+    QString path = settingsFilePath();
+    QSettings s(path, QSettings::IniFormat);
+    s.remove("Shortcuts");
+    s.sync();
+    Q_EMIT shortcutsChanged();
+}
+
+struct MimeCategoryDef {
+    const char *id;
+    const char *title;
+    const char *mime;
+    const char *fallbackDesktop;
+    const char *icon;
+};
+
+static const MimeCategoryDef kMimeCategories[] = {
+    {"browser", "Web Browser", "x-scheme-handler/http", "org.mozilla.firefox.desktop", "internet-web-browser"},
+    {"email", "Email Client", "x-scheme-handler/mailto", "org.kde.kmail2.desktop", "mail-message"},
+    {"files", "File Manager", "inode/directory", "conjunction-files.desktop", "system-file-manager"},
+    {"terminal", "Terminal Emulator", "x-scheme-handler/terminal", "conjunction-terminal.desktop", "utilities-terminal"},
+    {"editor", "Text Editor", "text/plain", "org.kde.kwrite.desktop", "accessories-text-editor"},
+    {"image", "Image Viewer", "image/png", "org.kde.gwenview.desktop", "image-x-generic"},
+    {"pdf", "PDF Document Viewer", "application/pdf", "org.kde.okular.desktop", "application-pdf"}
+};
+
+static QVariantMap getAppInfo(const QString &desktopId)
+{
+    QVariantMap info;
+    info["desktopId"] = desktopId;
+    info["name"] = desktopId;
+    info["icon"] = "application-x-executable";
+
+    QStringList searchDirs = {
+        QDir::homePath() + "/.local/share/applications",
+        "/usr/local/share/applications",
+        "/usr/share/applications"
+    };
+
+    for (const QString &dir : searchDirs) {
+        QString desktopPath = dir + "/" + desktopId;
+        if (QFile::exists(desktopPath)) {
+            QSettings s(desktopPath, QSettings::IniFormat);
+            s.beginGroup("Desktop Entry");
+            QString name = s.value("Name").toString();
+            QString icon = s.value("Icon").toString();
+            if (!name.isEmpty()) info["name"] = name;
+            if (!icon.isEmpty()) info["icon"] = icon;
+            return info;
+        }
+    }
+    return info;
+}
+
+QString SettingsManager::resolveDefaultHandler(const QString &mimeType) const
+{
+    QString userMime = QDir::homePath() + "/.config/mimeapps.list";
+    if (QFile::exists(userMime)) {
+        QSettings s(userMime, QSettings::IniFormat);
+        s.beginGroup("Default Applications");
+        QString val = s.value(mimeType).toString();
+        if (!val.isEmpty()) {
+            if (val.contains(';')) val = val.split(';', Qt::SkipEmptyParts).first();
+            return val.trimmed();
+        }
+    }
+    QString sysMime = "/usr/share/applications/mimeapps.list";
+    if (QFile::exists(sysMime)) {
+        QSettings s(sysMime, QSettings::IniFormat);
+        s.beginGroup("Default Applications");
+        QString val = s.value(mimeType).toString();
+        if (!val.isEmpty()) {
+            if (val.contains(';')) val = val.split(';', Qt::SkipEmptyParts).first();
+            return val.trimmed();
+        }
+    }
+    for (const auto &c : kMimeCategories) {
+        if (QString::fromUtf8(c.mime) == mimeType) {
+            return QString::fromUtf8(c.fallbackDesktop);
+        }
+    }
+    return QString();
+}
+
+QVariantList SettingsManager::defaultAppCategories() const
+{
+    QVariantList list;
+    for (const auto &c : kMimeCategories) {
+        QVariantMap cat;
+        QString mime = QString::fromUtf8(c.mime);
+        QString currentDesktop = resolveDefaultHandler(mime);
+        QVariantMap appInfo = getAppInfo(currentDesktop);
+
+        cat["id"] = QString::fromUtf8(c.id);
+        cat["title"] = QString::fromUtf8(c.title);
+        cat["mime"] = mime;
+        cat["currentDesktopId"] = currentDesktop;
+        cat["currentName"] = appInfo["name"].toString();
+        cat["icon"] = appInfo["icon"].toString().isEmpty() ? QString::fromUtf8(c.icon) : appInfo["icon"].toString();
+        list.append(cat);
+    }
+    return list;
+}
+
+QVariantList SettingsManager::getAvailableHandlers(const QString &mimeType) const
+{
+    QVariantList list;
+    QSet<QString> seen;
+    QStringList searchDirs = {
+        QDir::homePath() + "/.local/share/applications",
+        "/usr/share/applications"
+    };
+
+    for (const QString &dirPath : searchDirs) {
+        QDir dir(dirPath);
+        const QStringList entries = dir.entryList(QStringList() << "*.desktop", QDir::Files);
+        for (const QString &entry : entries) {
+            if (seen.contains(entry)) continue;
+            QString fullPath = dir.filePath(entry);
+            QSettings s(fullPath, QSettings::IniFormat);
+            s.beginGroup("Desktop Entry");
+            if (s.value("NoDisplay", false).toBool()) continue;
+
+            QString mimes = s.value("MimeType").toString();
+            QString cats = s.value("Categories").toString();
+            QString name = s.value("Name").toString();
+            QString icon = s.value("Icon").toString();
+
+            bool matches = false;
+            if (mimes.contains(mimeType)) matches = true;
+            else if (mimeType.contains("http") && (cats.contains("WebBrowser") || entry.contains("firefox") || entry.contains("chromium") || entry.contains("browser"))) matches = true;
+            else if (mimeType.contains("terminal") && (cats.contains("TerminalEmulator") || entry.contains("terminal") || entry.contains("konsole"))) matches = true;
+            else if (mimeType == "inode/directory" && (cats.contains("FileManager") || entry.contains("file") || entry.contains("dolphin"))) matches = true;
+            else if (mimeType == "text/plain" && (cats.contains("TextEditor") || entry.contains("kate") || entry.contains("kwrite") || entry.contains("text"))) matches = true;
+
+            if (matches) {
+                seen.insert(entry);
+                QVariantMap item;
+                item["desktopId"] = entry;
+                item["name"] = name.isEmpty() ? entry : name;
+                item["icon"] = icon.isEmpty() ? "application-x-executable" : icon;
+                list.append(item);
+            }
+        }
+    }
+
+    QString current = resolveDefaultHandler(mimeType);
+    if (!current.isEmpty() && !seen.contains(current)) {
+        QVariantMap curInfo = getAppInfo(current);
+        list.prepend(curInfo);
+    }
+    return list;
+}
+
+bool SettingsManager::setDefaultHandler(const QString &mimeType, const QString &desktopId)
+{
+    QString configDir = QDir::homePath() + "/.config";
+    QDir().mkpath(configDir);
+    QString mimeFile = configDir + "/mimeapps.list";
+
+    QSettings s(mimeFile, QSettings::IniFormat);
+    s.beginGroup("Default Applications");
+    s.setValue(mimeType, desktopId);
+    if (mimeType == "x-scheme-handler/http") {
+        s.setValue("x-scheme-handler/https", desktopId);
+    } else if (mimeType == "image/png") {
+        s.setValue("image/jpeg", desktopId);
+        s.setValue("image/webp", desktopId);
+    }
+    s.endGroup();
+    s.sync();
+
+    QProcess::startDetached("conj-open", QStringList() << "--set-default" << mimeType << desktopId);
+    if (mimeType == "x-scheme-handler/http") {
+        QProcess::startDetached("conj-open", QStringList() << "--set-default" << "x-scheme-handler/https" << desktopId);
+    }
+
+    Q_EMIT defaultAppsChanged();
+    return true;
 }
 
 void SettingsManager::performSearch(const QString &query)
@@ -432,6 +696,13 @@ void SettingsManager::performSearch(const QString &query)
         {"network.wifi.enabled", "network", "Wi-Fi", "Wi-Fi", "Enable or disable wireless networking", "network-wireless", "wifi wireless network internet ssid hotspot"},
         {"bluetooth.enabled", "bluetooth", "Bluetooth Adapter", "Bluetooth", "Enable or disable Bluetooth wireless adapter", "bluetooth", "bluetooth wireless pair devices mouse keyboard"},
         {"desktop.wallpaper", "dock", "Wallpaper", "Desktop Background", "Wallpaper image and desktop style", "preferences-desktop-wallpaper", "wallpaper background desktop picture"},
+        {"accessibility.reducedMotion", "appearance", "Accessibility", "Reduced Motion", "Minimize animations and visual effects", "preferences-desktop-theme", "motion animation reduce transition accessibility"},
+        {"default-apps.browser", "default-apps", "Default Applications", "Default Web Browser", "Default application for web links and internet addresses", "preferences-desktop-default-applications", "browser web internet default url http https"},
+        {"default-apps.files", "default-apps", "Default Applications", "Default File Manager", "Default application for opening folders and directories", "preferences-desktop-default-applications", "files folder file manager finder default directory"},
+        {"default-apps.terminal", "default-apps", "Default Applications", "Default Terminal", "Default terminal emulator for command-line tools", "preferences-desktop-default-applications", "terminal console shell cli default emulator"},
+        {"shortcuts.spotlight", "shortcuts", "Shortcuts", "Spotlight Search Shortcut", "Global keyboard shortcut to toggle Spotlight launcher", "preferences-desktop-keyboard", "shortcut key spotlight search launcher hotkey"},
+        {"shortcuts.notifications", "shortcuts", "Shortcuts", "Notification Center Shortcut", "Global keyboard shortcut to toggle Notification Center", "preferences-desktop-keyboard", "shortcut key notification center drawer hotkey"},
+        {"shortcuts.lock", "shortcuts", "Shortcuts", "Lock Screen Shortcut", "Global keyboard shortcut to lock the screen", "preferences-desktop-keyboard", "shortcut key lock screen lockscreen hotkey"},
         {"general.about", "about", "System", "About Conjunction", "OS, kernel, processor, memory, and specs", "help-about", "about system kernel cpu ram specs info version"}
     };
 

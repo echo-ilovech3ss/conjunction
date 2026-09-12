@@ -44,6 +44,8 @@ int main(int argc, char *argv[])
     QCommandLineOption controlCenterOption("control-center", "Show Control Center drawer");
     QCommandLineOption overviewOption("overview", "Show Mission Control / Overview overlay");
     QCommandLineOption magnifyOption("magnify", "Enable dock magnification test");
+    QCommandLineOption notifBannerOption("notification-banner", "Show simulated notification banner");
+    QCommandLineOption notifCenterOption("notification-center", "Show notification center drawer");
 
     parser.addOption(screenshotOption);
     parser.addOption(darkOption);
@@ -57,6 +59,8 @@ int main(int argc, char *argv[])
     parser.addOption(controlCenterOption);
     parser.addOption(overviewOption);
     parser.addOption(magnifyOption);
+    parser.addOption(notifBannerOption);
+    parser.addOption(notifCenterOption);
     parser.process(app);
 
     if (parser.isSet(rtlOption)) {
@@ -91,6 +95,13 @@ int main(int argc, char *argv[])
     }
     if (parser.isSet(magnifyOption)) {
         shellState->setDockMagnification(true);
+    }
+    if (parser.isSet(notifBannerOption)) {
+        shellState->simulateNotification(1, "Conjunction Update", "Phase 7A System Integration is ready.", "Utilities");
+    }
+    if (parser.isSet(notifCenterOption)) {
+        shellState->simulateNotification(1, "Build Succeeded", "All 32 integration checks passed.", "Terminal");
+        shellState->setNotificationCenterVisible(true);
     }
 
     QQmlApplicationEngine engine;
@@ -187,23 +198,27 @@ int main(int argc, char *argv[])
 
     if (parser.isSet(screenshotOption)) {
         QString outPath = parser.value(screenshotOption);
-        QTimer::singleShot(400, [window, outPath]() {
+        int delay = parser.isSet(timeoutOption) ? parser.value(timeoutOption).toInt() : 600;
+        QTimer::singleShot(delay, [window, outPath]() {
             if (window) {
                 QImage img = window->grabWindow();
+                QDir().mkpath(QFileInfo(outPath).absolutePath());
                 if (img.save(outPath)) {
                     qInfo() << "[conj-shelld] Saved screenshot to:" << outPath << "(" << img.width() << "x" << img.height() << ")";
                 } else {
                     qWarning() << "[conj-shelld] Failed to save screenshot to:" << outPath;
                 }
             }
-            QGuiApplication::quit();
+            std::exit(0);
         });
     }
 
     if (parser.isSet(timeoutOption)) {
         int ms = parser.value(timeoutOption).toInt();
         if (ms > 0) {
-            QTimer::singleShot(ms, &app, &QGuiApplication::quit);
+            QTimer::singleShot(ms, []() {
+                std::exit(0);
+            });
         }
     }
 

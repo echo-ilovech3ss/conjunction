@@ -4,5 +4,6 @@ TopBar 1.0 TopBar.qml
 Dock 1.0 Dock.qml
 Spotlight 1.0 Spotlight.qml
 ControlCenter 1.0 ControlCenter.qml
-OverviewOverlay 1.0 OverviewOverlay.qml
+NotificationBanner 1.0 NotificationBanner.qml
+NotificationCenter 1.0 NotificationCenter.qml
 

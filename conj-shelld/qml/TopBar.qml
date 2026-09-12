@@ -315,12 +315,53 @@ Rectangle {
                 color: Theme.textPrimary
             }
 
-            // Clock
-            Text {
-                text: ShellState.systemTime
-                font: Typography.controlLabel
-                color: Theme.textPrimary
-                verticalAlignment: Text.AlignVCenter
+            // Notification Center toggle button
+            Rectangle {
+                width: 22
+                height: 20
+                radius: 4
+                color: notifHover.hovered || ShellState.notificationCenterVisible ? (Theme.isDark ? "#28FFFFFF" : "#1A000000") : "transparent"
+
+                Text {
+                    anchors.centerIn: parent
+                    text: "🔔"
+                    font.pixelSize: 11
+                }
+
+                // Unread indicator dot
+                Rectangle {
+                    width: 6
+                    height: 6
+                    radius: 3
+                    color: Theme.accent
+                    anchors.top: parent.top
+                    anchors.right: parent.right
+                    anchors.topMargin: 2
+                    anchors.rightMargin: 2
+                    visible: ShellState.notificationHistory.length > 0
+                }
+
+                HoverHandler { id: notifHover }
+                TapHandler { onTapped: ShellState.toggleNotificationCenter() }
+            }
+
+            // Clock (clicking toggles Notification Center)
+            Rectangle {
+                height: 20
+                width: clockText.implicitWidth + 8
+                radius: 4
+                color: clockHover.hovered ? (Theme.isDark ? "#28FFFFFF" : "#1A000000") : "transparent"
+
+                Text {
+                    id: clockText
+                    anchors.centerIn: parent
+                    text: ShellState.systemTime
+                    font: Typography.controlLabel
+                    color: Theme.textPrimary
+                }
+
+                HoverHandler { id: clockHover }
+                TapHandler { onTapped: ShellState.toggleNotificationCenter() }
             }
         }
     }

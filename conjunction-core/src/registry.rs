@@ -889,7 +889,82 @@ impl AppRegistry {
             }
         }
 
+        // Check for URI schemes (e.g. http://, https://, mailto:)
+        let is_uri = target.contains("://") || target.starts_with("mailto:");
+        if is_uri {
+            let scheme = if let Some(idx) = target.find(':') {
+                &target[..idx]
+            } else {
+                "http"
+            };
+            let scheme_key = format!("x-scheme-handler/{}", scheme);
+            let home = crate::get_user_home();
+            let handler = crate::mime::resolve_default_handler(&scheme_key, &home).or_else(|| {
+                if scheme == "https" {
+                    crate::mime::resolve_default_handler("x-scheme-handler/http", &home)
+                } else if scheme == "http" {
+                    crate::mime::resolve_default_handler("x-scheme-handler/https", &home)
+                } else {
+                    None
+                }
+            });
+            if let Some(handler_desktop) = handler {
+                if let Some(res) = self.launch_by_desktop_id(&handler_desktop, &[target.to_string()]) {
+                    return res;
+                }
+            }
+        }
+
+        // Check if target is an existing file or directory
+        if target_path.exists() {
+            let mime = crate::mime::detect_mime(target_path);
+            let home = crate::get_user_home();
+            if let Some(handler_desktop) = crate::mime::resolve_default_handler(&mime, &home) {
+                let abs_target = target_path.canonicalize().unwrap_or_else(|_| target_path.to_path_buf());
+                if let Some(res) = self.launch_by_desktop_id(&handler_desktop, &[abs_target.to_string_lossy().to_string()]) {
+                    return res;
+                }
+            }
+
+            // Fallback for directory: open with Conjunction Files or file manager
+            if target_path.is_dir() {
+                if let Some(files_app) = self.active.get("org.conjunction.files") {
+                    return self.spawn_exec_captured(&files_app.executable_path, &[target_path.to_string_lossy().to_string()]);
+                }
+            }
+        }
+
         Err(RegistryError::AppNotFound(target.to_string()))
+    }
+
+    fn launch_by_desktop_id(&self, desktop_id: &str, args: &[String]) -> Option<Result<LaunchResult, RegistryError>> {
+        let clean_id = desktop_id.trim_end_matches(".desktop");
+        if let Some(app) = self.active.get(clean_id).or_else(|| self.active.get(desktop_id)) {
+            return Some(self.launch_captured(&app.id, args));
+        }
+
+        for app in self.active.values() {
+            if let Some(fname) = app.bundle_path.file_name().and_then(|f| f.to_str()) {
+                if fname == desktop_id || fname.trim_end_matches(".desktop") == clean_id {
+                    return Some(self.launch_captured(&app.id, args));
+                }
+            }
+        }
+
+        // Direct desktop entry launch from /usr/share/applications if not in active registry
+        let sys_desktop = Path::new("/usr/share/applications").join(desktop_id);
+        if sys_desktop.exists() {
+            if let Ok(entry) = DesktopEntry::parse_file(&sys_desktop) {
+                if let Ok(mut argv) = entry.expand_exec(args) {
+                    if entry.terminal {
+                        argv = wrap_terminal_argv(argv);
+                    }
+                    return Some(self.spawn_argv_captured(&argv));
+                }
+            }
+        }
+
+        None
     }
 
     fn spawn_exec_captured(&self, exec: &Path, args: &[String]) -> Result<LaunchResult, RegistryError> {
