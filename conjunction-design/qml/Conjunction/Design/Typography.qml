@@ -1,4 +1,4 @@
-﻿pragma Singleton
+pragma Singleton
 import QtQuick
 
 QtObject {
@@ -27,4 +27,6 @@ QtObject {
     readonly property font caption: makeFont(9, Font.Normal, false)
     readonly property font controlLabel: makeFont(11, Font.Medium, false)
     readonly property font monospace: makeFont(10, Font.Normal, true)
+    readonly property font title: makeFont(16, Font.DemiBold, false)
+    readonly property font headline: makeFont(13, Font.DemiBold, false)
 }

@@ -42,6 +42,12 @@ pub use files::{
     get_trash_dir, move_to_trash, remove_app_data, FileItemInfo, QuickLookPreview, QuickLookType,
 };
 
+pub mod settings;
+pub use settings::{
+    SettingControlType, SettingDescriptor, SettingSearchResult, SettingValue, SettingValueType,
+    SettingsRegistry,
+};
+
 use std::path::{Path, PathBuf};
 
 pub fn get_user_home() -> PathBuf {

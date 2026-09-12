@@ -6,6 +6,7 @@
 #include <QVariantMap>
 #include <QTimer>
 #include <QDateTime>
+#include <QDBusVariant>
 #include "window_manager.h"
 #include "menu_registrar.h"
 
@@ -20,6 +21,7 @@ struct RegisteredAppInfo {
 
 class ShellState : public QObject {
     Q_OBJECT
+    Q_CLASSINFO("D-Bus Interface", "org.conjunction.Settings")
 
     Q_PROPERTY(QString activeAppName READ activeAppName NOTIFY activeAppChanged)
     Q_PROPERTY(QString activeAppId READ activeAppId NOTIFY activeAppChanged)
@@ -90,11 +92,20 @@ public:
     bool overviewActive() const;
     void setOverviewActive(bool active);
 
+    bool initDBus();
+    void loadSettings();
+    void saveSetting(const QString &key, const QVariant &val);
     void loadDockConfig();
     void saveDockConfig();
     void reloadKnownApps();
 
 public Q_SLOTS:
+    // D-Bus Scriptable Settings Methods
+    Q_SCRIPTABLE QDBusVariant GetSetting(const QString &key) const;
+    Q_SCRIPTABLE bool SetSetting(const QString &key, const QDBusVariant &value);
+    Q_SCRIPTABLE QVariantMap GetAllSettings() const;
+    Q_SCRIPTABLE void OpenSetting(const QString &target);
+
     Q_INVOKABLE void launchApp(const QString &appId);
     Q_INVOKABLE void focusApp(const QString &appId);
     Q_INVOKABLE void activateWindow(const QString &windowId);
@@ -131,6 +142,8 @@ public Q_SLOTS:
     Q_INVOKABLE void simulateGlobalMenu(const QVariantList &menus);
 
 Q_SIGNALS:
+    void SettingChanged(const QString &key, const QVariant &value);
+
     void activeAppChanged();
     void fullscreenChanged();
     void globalMenusChanged();

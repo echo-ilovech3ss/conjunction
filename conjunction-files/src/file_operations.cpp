@@ -280,7 +280,12 @@ bool FileOperations::moveItems(const QStringList &sources, const QString &destDi
 
 void FileOperations::cleanApplicationData(const QString &appId)
 {
-    if (appId.trimmed().isEmpty()) return;
+    QString trimmed = appId.trimmed();
+    if (trimmed.isEmpty() || trimmed != appId) return;
+    if (appId.contains('/') || appId.contains('\\') || appId.contains("..")) return;
+
+    static QRegularExpression safeIdRegex("^[a-zA-Z0-9_-]+(\\.[a-zA-Z0-9_-]+)+$");
+    if (!safeIdRegex.match(appId).hasMatch()) return;
 
     QString home = QDir::homePath();
     QStringList targets = {
@@ -293,8 +298,11 @@ void FileOperations::cleanApplicationData(const QString &appId)
 
     for (const QString &tgt : targets) {
         QFileInfo fi(tgt);
-        if (fi.exists()) {
-            if (fi.isDir()) {
+        if (fi.exists() || fi.isSymLink()) {
+            if (fi.isSymLink()) {
+                // If it is a symlink, delete only the link, never traverse
+                QFile::remove(tgt);
+            } else if (fi.isDir()) {
                 QDir(tgt).removeRecursively();
             } else {
                 QFile::remove(tgt);

@@ -113,121 +113,61 @@ impl SearchProvider for AppSearchProvider {
     }
 }
 
-/// Static definition for a system setting or action item.
+/// Static system action definition.
 #[derive(Debug, Clone)]
-struct StaticItem {
+struct StaticAction {
     id: &'static str,
     title: &'static str,
     subtitle: &'static str,
     keywords: &'static [&'static str],
-    category: SearchCategory,
     icon: &'static str,
     action_data: &'static str,
 }
 
-const STATIC_SYSTEM_ITEMS: &[StaticItem] = &[
-    StaticItem {
-        id: "settings.display",
-        title: "Displays & Brightness",
-        subtitle: "Resolution, refresh rate, Night Shift",
-        keywords: &["screen", "monitor", "resolution", "brightness", "night shift"],
-        category: SearchCategory::Settings,
-        icon: "video-display",
-        action_data: "settings:display",
-    },
-    StaticItem {
-        id: "settings.sound",
-        title: "Sound & Audio",
-        subtitle: "Output volume, inputs, alert sound",
-        keywords: &["audio", "volume", "speakers", "microphone", "sound"],
-        category: SearchCategory::Settings,
-        icon: "audio-volume-high",
-        action_data: "settings:sound",
-    },
-    StaticItem {
-        id: "settings.network",
-        title: "Wi-Fi & Network",
-        subtitle: "Wireless connections, Ethernet, DNS",
-        keywords: &["wifi", "wireless", "ethernet", "internet", "network", "ip"],
-        category: SearchCategory::Settings,
-        icon: "network-wireless",
-        action_data: "settings:network",
-    },
-    StaticItem {
-        id: "settings.bluetooth",
-        title: "Bluetooth",
-        subtitle: "Connected devices, pairing",
-        keywords: &["bluetooth", "wireless", "headphones", "keyboard", "mouse"],
-        category: SearchCategory::Settings,
-        icon: "bluetooth",
-        action_data: "settings:bluetooth",
-    },
-    StaticItem {
-        id: "settings.appearance",
-        title: "Appearance & Theme",
-        subtitle: "Dark mode, light mode, accent colors",
-        keywords: &["theme", "dark mode", "light mode", "color", "accent", "appearance"],
-        category: SearchCategory::Settings,
-        icon: "preferences-desktop-theme",
-        action_data: "settings:appearance",
-    },
-    StaticItem {
-        id: "settings.dock",
-        title: "Desktop & Dock",
-        subtitle: "Dock size, magnification, auto-hide",
-        keywords: &["dock", "desktop", "magnification", "autohide", "taskbar"],
-        category: SearchCategory::Settings,
-        icon: "preferences-desktop",
-        action_data: "settings:dock",
-    },
-    StaticItem {
+const STATIC_SYSTEM_ACTIONS: &[StaticAction] = &[
+    StaticAction {
         id: "action.lock",
         title: "Lock Screen",
         subtitle: "Lock current user session (Ctrl+Alt+L)",
         keywords: &["lock", "screen", "session", "secure"],
-        category: SearchCategory::Actions,
         icon: "system-lock-screen",
         action_data: "action:lock",
     },
-    StaticItem {
+    StaticAction {
         id: "action.logout",
         title: "Log Out",
         subtitle: "Log out of current user session",
         keywords: &["logout", "sign out", "exit", "session"],
-        category: SearchCategory::Actions,
         icon: "system-log-out",
         action_data: "action:logout",
     },
-    StaticItem {
+    StaticAction {
         id: "action.restart",
         title: "Restart Computer",
         subtitle: "Reboot system",
         keywords: &["restart", "reboot", "restarting"],
-        category: SearchCategory::Actions,
         icon: "system-reboot",
         action_data: "action:restart",
     },
-    StaticItem {
+    StaticAction {
         id: "action.shutdown",
         title: "Shut Down",
         subtitle: "Power off system",
         keywords: &["shutdown", "power off", "turn off"],
-        category: SearchCategory::Actions,
         icon: "system-shutdown",
         action_data: "action:shutdown",
     },
-    StaticItem {
+    StaticAction {
         id: "action.overview",
         title: "Mission Control / Overview",
         subtitle: "Show all open windows and workspaces",
         keywords: &["mission control", "overview", "expose", "windows", "switch"],
-        category: SearchCategory::Actions,
         icon: "view-paged",
         action_data: "action:overview",
     },
 ];
 
-/// Searches settings and system actions.
+/// Searches settings via Canonical Registry and system actions.
 pub struct SettingsSearchProvider;
 
 impl SearchProvider for SettingsSearchProvider {
@@ -247,8 +187,24 @@ impl SearchProvider for SettingsSearchProvider {
 
         let mut results = Vec::new();
 
-        for item in STATIC_SYSTEM_ITEMS {
-            let title_lower = item.title.to_lowercase();
+        // 1. Search canonical settings registry
+        let reg = crate::settings::SettingsRegistry::canonical();
+        let setting_hits = reg.search(&q);
+        for hit in setting_hits {
+            results.push(SearchResult {
+                id: hit.setting_id,
+                title: hit.title,
+                subtitle: Some(format!("{} • {}", hit.section, hit.description)),
+                category: SearchCategory::Settings,
+                icon: Some(hit.icon),
+                action_data: hit.deep_link,
+                score: hit.score,
+            });
+        }
+
+        // 2. Search system actions
+        for act in STATIC_SYSTEM_ACTIONS {
+            let title_lower = act.title.to_lowercase();
             let mut score = 0u32;
 
             if title_lower == q {
@@ -257,20 +213,20 @@ impl SearchProvider for SettingsSearchProvider {
                 score = 750;
             } else if title_lower.contains(&q) {
                 score = 450;
-            } else if item.keywords.iter().any(|kw| kw.starts_with(&q)) {
+            } else if act.keywords.iter().any(|kw| kw.starts_with(&q)) {
                 score = 400;
-            } else if item.keywords.iter().any(|kw| kw.contains(&q)) {
+            } else if act.keywords.iter().any(|kw| kw.contains(&q)) {
                 score = 250;
             }
 
             if score > 0 {
                 results.push(SearchResult {
-                    id: item.id.to_string(),
-                    title: item.title.to_string(),
-                    subtitle: Some(item.subtitle.to_string()),
-                    category: item.category,
-                    icon: Some(item.icon.to_string()),
-                    action_data: item.action_data.to_string(),
+                    id: act.id.to_string(),
+                    title: act.title.to_string(),
+                    subtitle: Some(act.subtitle.to_string()),
+                    category: SearchCategory::Actions,
+                    icon: Some(act.icon.to_string()),
+                    action_data: act.action_data.to_string(),
                     score,
                 });
             }

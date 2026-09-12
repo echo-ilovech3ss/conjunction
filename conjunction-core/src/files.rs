@@ -382,12 +382,27 @@ impl QuickLookPreview {
     }
 }
 
+/// Validates that an application ID adheres to safe reverse-DNS syntax and contains no traversal.
+pub fn is_safe_app_id(id: &str) -> bool {
+    let trimmed = id.trim();
+    if trimmed.is_empty() || trimmed != id {
+        return false;
+    }
+    if id.contains('/') || id.contains('\\') || id.contains("..") || id.contains('\0') {
+        return false;
+    }
+    crate::bundle::Bundle::validate_id(id).is_ok()
+}
+
 /// Calculate all standard user application data paths for clean removal.
 pub fn get_app_data_paths(
     bundle_id: &str,
     is_flatpak: bool,
     flatpak_id: Option<&str>,
 ) -> Vec<PathBuf> {
+    if !is_safe_app_id(bundle_id) {
+        return Vec::new();
+    }
     let home = get_user_home();
     let mut paths = Vec::new();
 
@@ -398,7 +413,9 @@ pub fn get_app_data_paths(
 
     if is_flatpak {
         let f_id = flatpak_id.unwrap_or(bundle_id);
-        paths.push(home.join(".var").join("app").join(f_id));
+        if is_safe_app_id(f_id) {
+            paths.push(home.join(".var").join("app").join(f_id));
+        }
     }
 
     paths
@@ -410,15 +427,44 @@ pub fn remove_app_data(
     is_flatpak: bool,
     flatpak_id: Option<&str>,
 ) -> std::io::Result<usize> {
+    if !is_safe_app_id(bundle_id) {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            format!("Invalid application ID: {}", bundle_id),
+        ));
+    }
+    if is_flatpak {
+        if let Some(f_id) = flatpak_id {
+            if !is_safe_app_id(f_id) {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidInput,
+                    format!("Invalid flatpak ID: {}", f_id),
+                ));
+            }
+        }
+    }
+
     let paths = get_app_data_paths(bundle_id, is_flatpak, flatpak_id);
     let mut count = 0;
+    let home = get_user_home();
 
     for p in paths {
-        if p.exists() {
-            if p.is_dir() {
+        // Enforce that path is strictly within home
+        if !p.starts_with(&home) {
+            continue;
+        }
+
+        // Use symlink_metadata to NEVER follow symlinks
+        if let Ok(meta) = fs::symlink_metadata(&p) {
+            let file_type = meta.file_type();
+            if file_type.is_symlink() {
+                // If it is a symlink, delete the symlink itself; NEVER traverse into the target directory!
+                fs::remove_file(&p)?;
+                count += 1;
+            } else if file_type.is_dir() {
                 fs::remove_dir_all(&p)?;
                 count += 1;
-            } else if p.is_file() {
+            } else if file_type.is_file() {
                 fs::remove_file(&p)?;
                 count += 1;
             }

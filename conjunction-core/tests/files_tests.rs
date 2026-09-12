@@ -150,3 +150,99 @@ fn test_trash_spec_lifecycle() {
 
     let _ = fs::remove_dir_all(&tmp);
 }
+
+#[test]
+fn test_remove_app_data_security_regression_cannot_escape_via_symlink_or_traversal() {
+    // 1. Crafted / malicious IDs with path traversal or absolute paths must be rejected
+    let malicious_ids = vec![
+        "../../etc",
+        "/etc/passwd",
+        "org.evil/app",
+        "org.evil\\app",
+        "org.evil..app",
+        "..",
+        "",
+        "   ",
+        "org.evil.app/../../safe",
+        "org.evil.app\0payload",
+    ];
+
+    for bad_id in malicious_ids {
+        let paths = get_app_data_paths(bad_id, true, Some(bad_id));
+        assert!(
+            paths.is_empty(),
+            "get_app_data_paths must return empty for malicious ID '{}'",
+            bad_id
+        );
+
+        let res = remove_app_data(bad_id, true, Some(bad_id));
+        assert!(
+            res.is_err(),
+            "remove_app_data must error on malicious ID '{}'",
+            bad_id
+        );
+    }
+
+    // 2. Symlink escape protection: ensure symlinked app data directories do NOT delete target data
+    let tmp = std::env::temp_dir().join("conj_file_test_symlink_escape");
+    let _ = fs::remove_dir_all(&tmp);
+    fs::create_dir_all(&tmp).unwrap();
+
+    let external_sensitive_dir = tmp.join("critical_system_data");
+    fs::create_dir_all(&external_sensitive_dir).unwrap();
+    let sensitive_file = external_sensitive_dir.join("vital_payload.txt");
+    fs::write(&sensitive_file, "CRITICAL DATA MUST NOT BE REMOVED").unwrap();
+
+    // Create a mock app data symlink pointing to the sensitive directory
+    let home = conjunction_core::get_user_home();
+    let config_dir = home.join(".config");
+    let _ = fs::create_dir_all(&config_dir);
+    let app_symlink = config_dir.join("org.conjunction.symlinkvictim");
+
+    // Clean up before test
+    if app_symlink.exists() || app_symlink.is_symlink() {
+        let _ = fs::remove_file(&app_symlink);
+        let _ = fs::remove_dir_all(&app_symlink);
+    }
+
+    let symlink_created = {
+        #[cfg(unix)]
+        {
+            std::os::unix::fs::symlink(&external_sensitive_dir, &app_symlink).is_ok()
+        }
+        #[cfg(windows)]
+        {
+            std::os::windows::fs::symlink_dir(&external_sensitive_dir, &app_symlink).is_ok()
+        }
+    };
+
+    if symlink_created {
+        assert!(app_symlink.is_symlink(), "Symlink must exist");
+        assert!(sensitive_file.exists(), "Target file must exist before cleanup");
+
+        // Attempt removal of data
+        let res = remove_app_data("org.conjunction.symlinkvictim", false, None);
+        assert!(res.is_ok(), "remove_app_data should succeed in cleaning link");
+
+        // CRITICAL REGRESSION PROOF:
+        // The symlink itself should be removed
+        assert!(
+            !app_symlink.exists() && !app_symlink.is_symlink(),
+            "App data symlink must be removed"
+        );
+        // The TARGET directory and files outside MUST REMAIN UNTOUCHED
+        assert!(
+            external_sensitive_dir.exists(),
+            "Target directory MUST NOT be deleted via symlink escape!"
+        );
+        assert!(
+            sensitive_file.exists(),
+            "Sensitive files inside target MUST NOT be deleted via symlink escape!"
+        );
+        let content = fs::read_to_string(&sensitive_file).unwrap();
+        assert_eq!(content, "CRITICAL DATA MUST NOT BE REMOVED");
+    }
+
+    let _ = fs::remove_dir_all(&tmp);
+}
+

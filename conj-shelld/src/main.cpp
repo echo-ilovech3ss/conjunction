@@ -70,6 +70,7 @@ int main(int argc, char *argv[])
     menuReg->initDBus();
 
     auto *shellState = new ShellState(winMgr, menuReg, &app);
+    shellState->initDBus();
 
     if (parser.isSet(darkOption)) {
         shellState->setIsDark(true);

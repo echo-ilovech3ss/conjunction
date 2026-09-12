@@ -11,6 +11,11 @@
 #include <unistd.h>
 #endif
 
+#include <QSettings>
+#include <QDBusConnection>
+#include <QDBusMessage>
+#include <QDBusVariant>
+
 ShellState::ShellState(WindowManager *winMgr, MenuRegistrar *menuReg, QObject *parent)
     : QObject(parent)
     , m_winMgr(winMgr)
@@ -25,6 +30,7 @@ ShellState::ShellState(WindowManager *winMgr, MenuRegistrar *menuReg, QObject *p
     connect(m_winMgr, &WindowManager::activeWindowChanged, this, &ShellState::onActiveWindowChanged);
     connect(m_menuReg, &MenuRegistrar::menuUpdated, this, &ShellState::onMenuUpdated);
 
+    loadSettings();
     reloadKnownApps();
     loadDockConfig();
     updateDockItems();
@@ -45,6 +51,7 @@ void ShellState::setIsDark(bool dark)
 {
     if (m_isDark != dark) {
         m_isDark = dark;
+        saveSetting("appearance.mode", dark ? "dark" : "light");
         Q_EMIT themeChanged();
     }
 }
@@ -94,6 +101,7 @@ void ShellState::setVolume(int vol)
     vol = qBound(0, vol, 100);
     if (m_volume != vol) {
         m_volume = vol;
+        saveSetting("sound.volume", vol);
         Q_EMIT volumeChanged();
     }
 }
@@ -111,6 +119,7 @@ void ShellState::setWifiEnabled(bool enabled)
 {
     if (m_wifiEnabled != enabled) {
         m_wifiEnabled = enabled;
+        saveSetting("network.wifi.enabled", enabled);
         Q_EMIT wifiChanged();
     }
 }
@@ -120,6 +129,7 @@ void ShellState::setBluetoothEnabled(bool enabled)
 {
     if (m_bluetoothEnabled != enabled) {
         m_bluetoothEnabled = enabled;
+        saveSetting("bluetooth.enabled", enabled);
         Q_EMIT bluetoothChanged();
     }
 }
@@ -137,6 +147,7 @@ void ShellState::setDockMagnification(bool enabled)
 {
     if (m_dockMagnification != enabled) {
         m_dockMagnification = enabled;
+        saveSetting("dock.magnification", enabled);
         Q_EMIT dockMagnificationChanged();
     }
 }
@@ -145,6 +156,7 @@ void ShellState::setDockScaleMax(qreal maxScale)
 {
     if (!qFuzzyCompare(m_dockScaleMax, maxScale)) {
         m_dockScaleMax = maxScale;
+        saveSetting("dock.magnificationScale", maxScale);
         Q_EMIT dockScaleMaxChanged();
     }
 }
@@ -238,6 +250,176 @@ void ShellState::onTimeTick()
         m_systemTime = newTime;
         Q_EMIT systemTimeChanged();
     }
+}
+
+static QString settingsFilePath()
+{
+    QString configDir = QStandardPaths::writableLocation(QStandardPaths::ConfigLocation);
+    return configDir + "/conjunction/settings.ini";
+}
+
+bool ShellState::initDBus()
+{
+    QDBusConnection bus = QDBusConnection::sessionBus();
+    if (!bus.isConnected()) {
+        qWarning() << "[ShellState] Session D-Bus not connected";
+        return false;
+    }
+
+    if (!bus.registerService("org.conjunction.Settings")) {
+        qWarning() << "[ShellState] Failed to register service org.conjunction.Settings:" << bus.lastError().message();
+    }
+
+    if (!bus.registerObject("/org/conjunction/Settings", this, QDBusConnection::ExportAllContents)) {
+        qWarning() << "[ShellState] Failed to register object /org/conjunction/Settings:" << bus.lastError().message();
+        return false;
+    }
+
+    qInfo() << "[ShellState] Successfully registered org.conjunction.Settings on session bus";
+    return true;
+}
+
+void ShellState::loadSettings()
+{
+    QString path = settingsFilePath();
+    QSettings s(path, QSettings::IniFormat);
+
+    QString mode = s.value("Appearance/mode", "dark").toString();
+    m_isDark = (mode != "light");
+
+    if (s.contains("Dock/magnification")) {
+        m_dockMagnification = s.value("Dock/magnification", true).toBool();
+    }
+    if (s.contains("Dock/magnification_scale")) {
+        m_dockScaleMax = s.value("Dock/magnification_scale", 1.35).toReal();
+    }
+    if (s.contains("Sound/volume")) {
+        m_volume = s.value("Sound/volume", 75).toInt();
+    }
+    if (s.contains("Network/wifi_enabled")) {
+        m_wifiEnabled = s.value("Network/wifi_enabled", true).toBool();
+    }
+    if (s.contains("Bluetooth/enabled")) {
+        m_bluetoothEnabled = s.value("Bluetooth/enabled", true).toBool();
+    }
+}
+
+void ShellState::saveSetting(const QString &key, const QVariant &val)
+{
+    QString path = settingsFilePath();
+    QDir().mkpath(QFileInfo(path).absolutePath());
+    QSettings s(path, QSettings::IniFormat);
+
+    if (key == "appearance.mode") {
+        s.setValue("Appearance/mode", val.toString());
+    } else if (key == "dock.size") {
+        s.setValue("Dock/size", val.toInt());
+    } else if (key == "dock.magnification") {
+        s.setValue("Dock/magnification", val.toBool());
+    } else if (key == "dock.magnificationScale") {
+        s.setValue("Dock/magnification_scale", val.toReal());
+    } else if (key == "sound.volume") {
+        s.setValue("Sound/volume", val.toInt());
+    } else if (key == "network.wifi.enabled") {
+        s.setValue("Network/wifi_enabled", val.toBool());
+    } else if (key == "bluetooth.enabled") {
+        s.setValue("Bluetooth/enabled", val.toBool());
+    }
+    s.sync();
+    Q_EMIT SettingChanged(key, val);
+}
+
+QDBusVariant ShellState::GetSetting(const QString &key) const
+{
+    if (key == "appearance.mode") return QDBusVariant(m_isDark ? "dark" : "light");
+    if (key == "dock.size") {
+        QString path = settingsFilePath();
+        QSettings s(path, QSettings::IniFormat);
+        return QDBusVariant(s.value("Dock/size", 68).toInt());
+    }
+    if (key == "dock.magnification") return QDBusVariant(m_dockMagnification);
+    if (key == "dock.magnificationScale") return QDBusVariant(m_dockScaleMax);
+    if (key == "sound.volume") return QDBusVariant(m_volume);
+    if (key == "network.wifi.enabled") return QDBusVariant(m_wifiEnabled);
+    if (key == "bluetooth.enabled") return QDBusVariant(m_bluetoothEnabled);
+    if (key == "displays.scale") return QDBusVariant(1.0);
+
+    QString path = settingsFilePath();
+    QSettings s(path, QSettings::IniFormat);
+    return QDBusVariant(s.value(key));
+}
+
+bool ShellState::SetSetting(const QString &key, const QDBusVariant &dbusValue)
+{
+    QVariant value = dbusValue.variant();
+    // Authoritative boundary validation
+    if (key == "appearance.mode") {
+        QString mode = value.toString().toLower();
+        if (mode != "dark" && mode != "light") return false;
+        setIsDark(mode == "dark");
+        return true;
+    }
+    if (key == "dock.size") {
+        bool ok = false;
+        int sz = value.toInt(&ok);
+        if (!ok || sz < 32 || sz > 128) return false;
+        saveSetting("dock.size", sz);
+        return true;
+    }
+    if (key == "dock.magnification") {
+        if (!value.canConvert<bool>()) return false;
+        setDockMagnification(value.toBool());
+        return true;
+    }
+    if (key == "dock.magnificationScale") {
+        bool ok = false;
+        qreal scale = value.toReal(&ok);
+        if (!ok || scale < 1.1 || scale > 2.0) return false;
+        setDockScaleMax(scale);
+        return true;
+    }
+    if (key == "sound.volume") {
+        bool ok = false;
+        int vol = value.toInt(&ok);
+        if (!ok || vol < 0 || vol > 100) return false;
+        setVolume(vol);
+        return true;
+    }
+    if (key == "network.wifi.enabled") {
+        if (!value.canConvert<bool>()) return false;
+        setWifiEnabled(value.toBool());
+        return true;
+    }
+    if (key == "bluetooth.enabled") {
+        if (!value.canConvert<bool>()) return false;
+        setBluetoothEnabled(value.toBool());
+        return true;
+    }
+
+    saveSetting(key, value);
+    return true;
+}
+
+QVariantMap ShellState::GetAllSettings() const
+{
+    QVariantMap map;
+    map["appearance.mode"] = m_isDark ? "dark" : "light";
+    map["dock.magnification"] = m_dockMagnification;
+    map["dock.magnificationScale"] = m_dockScaleMax;
+    map["sound.volume"] = m_volume;
+    map["network.wifi.enabled"] = m_wifiEnabled;
+    map["bluetooth.enabled"] = m_bluetoothEnabled;
+    map["displays.scale"] = 1.0;
+    return map;
+}
+
+void ShellState::OpenSetting(const QString &target)
+{
+    QString url = target;
+    if (!url.startsWith("settings://")) {
+        url = "settings://" + target;
+    }
+    QProcess::startDetached("conjunction-settings", QStringList() << "--url" << url);
 }
 
 static QString dockConfigPath()
@@ -637,15 +819,27 @@ void ShellState::performSearch(const QString &query)
         }
     }
 
-    // 2. Search Settings & Actions
+    // 2. Search Settings & Actions from Canonical Registry
     struct SettingDef { const char *id; const char *title; const char *sub; const char *icon; const char *act; const char *kw; };
     static const SettingDef settingsList[] = {
-        {"settings.display", "Displays & Brightness", "Resolution, refresh rate", "video-display", "settings:display", "screen monitor brightness night"},
-        {"settings.sound", "Sound & Audio", "Output volume, alert sound", "audio-volume-high", "settings:sound", "audio volume speaker sound"},
-        {"settings.network", "Wi-Fi & Network", "Wireless connections, IP", "network-wireless", "settings:network", "wifi wireless internet network"},
-        {"settings.bluetooth", "Bluetooth", "Connected devices, pairing", "bluetooth", "settings:bluetooth", "bluetooth wireless keyboard mouse"},
-        {"settings.appearance", "Appearance & Theme", "Dark mode, light mode, accents", "preferences-desktop-theme", "settings:appearance", "theme dark light color"},
-        {"settings.dock", "Desktop & Dock", "Dock size, magnification, auto-hide", "preferences-desktop", "settings:dock", "dock magnification autohide"},
+        {"appearance.mode", "Appearance Mode", "Theme • Switch between Light and Dark desktop themes", "preferences-desktop-theme", "settings://appearance?setting=appearance.mode", "dark light theme mode night color"},
+        {"appearance.accent", "Accent Color", "Theme • System highlight and focus tint color", "preferences-desktop-theme", "settings://appearance?setting=appearance.accent", "accent tint highlight color blue"},
+        {"dock.magnification", "Dock Magnification", "Dock • Magnify Dock icons on pointer hover", "preferences-desktop", "settings://dock?setting=dock.magnification", "dock magnification zoom hover scale"},
+        {"dock.size", "Dock Size", "Dock • Base height and icon scale of the desktop Dock", "preferences-desktop", "settings://dock?setting=dock.size", "dock size icons height bar"},
+        {"dock.magnificationScale", "Magnification Scale", "Dock • Maximum scale multiplier for hovered Dock icons", "preferences-desktop", "settings://dock?setting=dock.magnificationScale", "dock zoom scale max magnification"},
+        {"displays.scale", "Display Scale", "Scale & Resolution • User interface scaling factor for displays", "video-display", "settings://displays?setting=displays.scale", "screen scale monitor resolution hidpi zoom"},
+        {"sound.volume", "Output Volume", "Output • Main speaker and headphone output volume", "audio-volume-high", "settings://sound?setting=sound.volume", "sound volume speaker audio loudness"},
+        {"sound.muted", "Mute Sound", "Output • Mute all audio output", "audio-volume-muted", "settings://sound?setting=sound.muted", "mute sound silence audio"},
+        {"network.wifi.enabled", "Wi-Fi", "Wi-Fi • Enable or disable wireless networking", "network-wireless", "settings://network?setting=network.wifi.enabled", "wifi wireless network internet ssid hotspot"},
+        {"bluetooth.enabled", "Bluetooth", "Bluetooth Adapter • Enable or disable Bluetooth wireless adapter", "bluetooth", "settings://bluetooth?setting=bluetooth.enabled", "bluetooth wireless pair devices mouse keyboard"},
+        {"desktop.wallpaper", "Desktop Background", "Wallpaper • Wallpaper image and desktop style", "preferences-desktop-wallpaper", "settings://dock?setting=desktop.wallpaper", "wallpaper background desktop picture"},
+        {"general.about", "About Conjunction", "System • OS, kernel, specs, and memory", "help-about", "settings://about", "about system kernel cpu ram specs info version"},
+        {"settings.appearance", "Appearance & Theme", "Appearance • Dark mode, light mode, and accent colors", "preferences-desktop-theme", "settings://appearance", "theme dark light appearance"},
+        {"settings.dock", "Desktop & Dock", "Dock • Dock size, magnification, and auto-hide", "preferences-desktop", "settings://dock", "dock desktop magnification autohide"},
+        {"settings.display", "Displays & Brightness", "Displays • Resolution, refresh rate, scaling", "video-display", "settings://displays", "screen monitor resolution brightness displays"},
+        {"settings.sound", "Sound & Audio", "Sound • Output volume, audio devices", "audio-volume-high", "settings://sound", "audio volume speakers sound"},
+        {"settings.network", "Wi-Fi & Network", "Network • Wireless connections, Ethernet", "network-wireless", "settings://network", "wifi wireless network internet"},
+        {"settings.bluetooth", "Bluetooth", "Bluetooth • Connected devices and wireless pairing", "bluetooth", "settings://bluetooth", "bluetooth wireless pair devices"},
         {"action.lock", "Lock Screen", "Lock session (Ctrl+Alt+L)", "system-lock-screen", "action:lock", "lock screen session"},
         {"action.logout", "Log Out", "Log out current user", "system-log-out", "action:logout", "logout exit sign out"},
         {"action.restart", "Restart Computer", "Reboot system", "system-reboot", "action:restart", "restart reboot"},
@@ -708,8 +902,12 @@ void ShellState::activateSearchResult(int index)
     if (actionData.startsWith("app:")) {
         QString appId = actionData.mid(4);
         focusApp(appId);
-    } else if (actionData.startsWith("settings:")) {
-        launchApp("org.conjunction.settings");
+    } else if (actionData.startsWith("settings://") || actionData.startsWith("settings:")) {
+        QString url = actionData;
+        if (url.startsWith("settings:") && !url.startsWith("settings://")) {
+            url = "settings://" + url.mid(9);
+        }
+        QProcess::startDetached("conjunction-settings", QStringList() << "--url" << url);
     } else if (actionData.startsWith("action:")) {
         QString act = actionData.mid(7);
         if (act == "overview") {

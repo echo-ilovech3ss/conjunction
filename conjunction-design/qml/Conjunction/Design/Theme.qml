@@ -26,6 +26,10 @@ QtObject {
 
     // Disabled text
     readonly property color textDisabled: isDark ? "#5D6069" : "#9DA0A8"
+    readonly property color textPlaceholder: textDisabled
+
+    // Background aliases
+    readonly property color backgroundPrimary: background
 
     // Separators & borders
     readonly property color separator: isDark ? "#373A44" : "#D3D6DC"
