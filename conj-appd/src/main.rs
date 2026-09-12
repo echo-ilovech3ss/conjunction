@@ -60,13 +60,6 @@ fn main() -> ExitCode {
         }
     }
 
-    log::info!("Starting Conjunction Application Daemon (conj-appd)...");
-    if let Err(e) = registry.reconcile() {
-        log::error!("Initial reconciliation error: {}", e);
-    } else {
-        log::info!("Initial reconciliation complete.");
-    }
-
     #[cfg(unix)]
     {
         use std::os::unix::net::UnixListener;
@@ -83,6 +76,13 @@ fn main() -> ExitCode {
         let _ = fs::set_permissions(&sock_path, fs::Permissions::from_mode(0o600));
 
         log::info!("Application Services daemon listening at {}", sock_path.display());
+
+        log::info!("Starting Conjunction Application Daemon (conj-appd)...");
+        if let Err(e) = registry.reconcile() {
+            log::error!("Initial reconciliation error: {}", e);
+        } else {
+            log::info!("Initial reconciliation complete.");
+        }
 
         for stream in listener.incoming() {
             match stream {
@@ -141,7 +141,7 @@ fn handle_request(registry: &mut AppRegistry, req: AppdRequest) -> AppdResponse 
             Err(e) => AppdResponse::err(e.to_string()),
         },
 
-        AppdRequest::Uninstall { id } => match registry.uninstall(&id) {
+        AppdRequest::Uninstall { id, yes } => match registry.uninstall_with_options(&id, yes) {
             Ok(()) => AppdResponse::ok(serde_json::json!({ "uninstalled": id })),
             Err(e) => AppdResponse::err(e.to_string()),
         },

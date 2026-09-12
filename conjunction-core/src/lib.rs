@@ -1,11 +1,20 @@
 pub mod bundle;
 pub use bundle::{Bundle, BundleError, Manifest, CURRENT_BUNDLE_FORMAT, SUPPORTED_ARCHITECTURES};
 
+pub mod desktop_entry;
+pub use desktop_entry::{DesktopEntry, DesktopEntryError};
+
+pub mod package;
+pub use package::{PackageManagerQuery, PacmanPackageInfo, SystemPacmanQuery};
+
+pub mod flatpak;
+pub use flatpak::FlatpakAppInfo;
+
 pub mod registry;
 pub use registry::{
-    AppConflict, AppRegistry, AppScope, InstalledApp, LaunchResult, RegistryError, RegistryItem,
-    is_reserved_id, user_applications_dir, system_applications_dir, user_desktop_dir,
-    user_state_dir, user_config_dir,
+    AppBackend, AppConflict, AppRegistry, AppScope, InstalledApp, LaunchResult, RegistryError,
+    RegistryItem, is_reserved_id, system_applications_dir, user_applications_dir,
+    user_config_dir, user_desktop_dir, user_state_dir,
 };
 
 pub mod ipc;

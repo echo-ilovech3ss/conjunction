@@ -7,7 +7,11 @@ pub enum AppdRequest {
     List,
     Inspect { id: String },
     Install { path: PathBuf },
-    Uninstall { id: String },
+    Uninstall {
+        id: String,
+        #[serde(default)]
+        yes: bool,
+    },
     Launch { target: String, args: Vec<String> },
     Reconcile,
     Ping,

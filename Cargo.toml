@@ -8,7 +8,8 @@ members = [
     "conj-bundle",
     "conj-appd",
     "conj-appctl",
-    "conj-open"
+    "conj-open",
+    "conj-sysd"
 ]
 
 [workspace.dependencies]

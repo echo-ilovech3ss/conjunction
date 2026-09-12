@@ -47,6 +47,9 @@ enum Commands {
     Uninstall {
         #[arg(help = "Application reverse-DNS identifier")]
         id: String,
+
+        #[arg(short, long, help = "Confirm removal of package providing multiple applications")]
+        yes: bool,
     },
 
     #[command(about = "Launch a Conjunction application by ID or bundle path")]
@@ -82,7 +85,10 @@ fn main() -> ExitCode {
         Commands::List => AppdRequest::List,
         Commands::Inspect { id } => AppdRequest::Inspect { id: id.clone() },
         Commands::Install { path } => AppdRequest::Install { path: path.clone() },
-        Commands::Uninstall { id } => AppdRequest::Uninstall { id: id.clone() },
+        Commands::Uninstall { id, yes } => AppdRequest::Uninstall {
+            id: id.clone(),
+            yes: *yes,
+        },
         Commands::Launch { target, args } => AppdRequest::Launch {
             target: target.clone(),
             args: args.clone(),
@@ -120,16 +126,17 @@ fn main() -> ExitCode {
                     match item {
                         RegistryItem::Active(app) => {
                             println!(
-                                "{:<30} {:<20} {:<10} [{}] {}",
+                                "{:<32} {:<20} {:<10} [{}] [{}] {}",
                                 app.id,
                                 app.name,
                                 app.version,
                                 app.scope,
+                                app.backend,
                                 app.bundle_path.display()
                             );
                         }
                         RegistryItem::Conflict(conflict) => {
-                            println!("{:<30} [CONFLICT DETECTED]", conflict.id);
+                            println!("{:<32} [CONFLICT DETECTED]", conflict.id);
                             for candidate in conflict.candidate_paths {
                                 println!("    -> candidate: {}", candidate.display());
                             }
@@ -148,8 +155,19 @@ fn main() -> ExitCode {
                         println!("Name:             {}", app.name);
                         println!("Version:          {}", app.version);
                         println!("Scope:            {}", app.scope);
+                        println!("Backend:          {}", app.backend);
                         println!("Bundle Path:      {}", app.bundle_path.display());
                         println!("Executable Path:  {}", app.executable_path.display());
+                        if let Some(pkg) = &app.package_name {
+                            let ver_str = app.package_version.as_deref().map(|v| format!(" {}", v)).unwrap_or_default();
+                            println!("Package:          {}{}", pkg, ver_str);
+                        }
+                        if !app.sibling_apps.is_empty() {
+                            println!("Sibling Apps:     {}", app.sibling_apps.join(", "));
+                        }
+                        if let Some(fp_id) = &app.flatpak_id {
+                            println!("Flatpak ID:       {}", fp_id);
+                        }
                         if let Some(icon) = app.icon {
                             println!("Icon:             {}", icon);
                         }
@@ -188,7 +206,7 @@ fn main() -> ExitCode {
             ExitCode::SUCCESS
         }
 
-        Commands::Uninstall { id } => {
+        Commands::Uninstall { id, .. } => {
             println!("Uninstalled '{}' successfully", id);
             ExitCode::SUCCESS
         }
@@ -241,16 +259,17 @@ fn run_standalone(cmd: Commands) -> ExitCode {
                 match item {
                     RegistryItem::Active(app) => {
                         println!(
-                            "{:<30} {:<20} {:<10} [{}] {}",
+                            "{:<32} {:<20} {:<10} [{}] [{}] {}",
                             app.id,
                             app.name,
                             app.version,
                             app.scope,
+                            app.backend,
                             app.bundle_path.display()
                         );
                     }
                     RegistryItem::Conflict(conflict) => {
-                        println!("{:<30} [CONFLICT DETECTED]", conflict.id);
+                        println!("{:<32} [CONFLICT DETECTED]", conflict.id);
                         for candidate in conflict.candidate_paths {
                             println!("    -> candidate: {}", candidate.display());
                         }
@@ -267,8 +286,25 @@ fn run_standalone(cmd: Commands) -> ExitCode {
                     println!("Name:             {}", app.name);
                     println!("Version:          {}", app.version);
                     println!("Scope:            {}", app.scope);
+                    println!("Backend:          {}", app.backend);
                     println!("Bundle Path:      {}", app.bundle_path.display());
                     println!("Executable Path:  {}", app.executable_path.display());
+                    if let Some(pkg) = &app.package_name {
+                        let ver_str = app.package_version.as_deref().map(|v| format!(" {}", v)).unwrap_or_default();
+                        println!("Package:          {}{}", pkg, ver_str);
+                    }
+                    if !app.sibling_apps.is_empty() {
+                        println!("Sibling Apps:     {}", app.sibling_apps.join(", "));
+                    }
+                    if let Some(fp_id) = &app.flatpak_id {
+                        println!("Flatpak ID:       {}", fp_id);
+                    }
+                    if let Some(icon) = app.icon {
+                        println!("Icon:             {}", icon);
+                    }
+                    if !app.mime_types.is_empty() {
+                        println!("MIME Types:       {}", app.mime_types.join(", "));
+                    }
                     ExitCode::SUCCESS
                 }
                 Ok(RegistryItem::Conflict(conflict)) => {

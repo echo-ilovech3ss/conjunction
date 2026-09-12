@@ -178,6 +178,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "conj-sysd"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "conjunction-core",
+ "env_logger",
+ "log",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "conjunction-core"
 version = "0.1.0"
 dependencies = [
