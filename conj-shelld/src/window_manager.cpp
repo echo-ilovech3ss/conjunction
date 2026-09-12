@@ -156,3 +156,27 @@ void WindowManager::closeWindow(const QString &internalId)
     // If local window
     WindowRemoved(internalId);
 }
+
+void WindowManager::minimizeWindow(const QString &internalId)
+{
+    QDBusMessage msg = QDBusMessage::createMethodCall(
+        "org.conjunction.KWinBridge",
+        "/org/conjunction/KWinBridge",
+        "org.conjunction.KWinBridge",
+        "MinimizeWindow"
+    );
+    msg << internalId;
+    QDBusConnection::sessionBus().send(msg);
+}
+
+void WindowManager::unminimizeWindow(const QString &internalId)
+{
+    QDBusMessage msg = QDBusMessage::createMethodCall(
+        "org.conjunction.KWinBridge",
+        "/org/conjunction/KWinBridge",
+        "org.conjunction.KWinBridge",
+        "UnminimizeWindow"
+    );
+    msg << internalId;
+    QDBusConnection::sessionBus().send(msg);
+}

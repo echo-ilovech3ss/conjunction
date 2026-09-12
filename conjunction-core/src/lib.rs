@@ -25,8 +25,15 @@ pub use ipc::{
 
 pub mod shell;
 pub use shell::{
-    AppIdentity, DockClickAction, DockConfig, DockItem, DockModel, GlobalMenuRegistrar,
-    MenuItemInfo, ScreenInfo, ScreenModel, WindowInfo, WindowMatcher,
+    AppIdentity, DockClickAction, DockConfig, DockDisplayPolicy, DockItem, DockModel,
+    GlobalMenuRegistrar, MenuItemInfo, ScreenInfo, ScreenModel, TopBarDisplayPolicy, WindowInfo,
+    WindowMatcher,
+};
+
+pub mod search;
+pub use search::{
+    AppSearchProvider, FileSearchProvider, SearchCategory, SearchEngine, SearchProvider,
+    SearchResult, SettingsSearchProvider,
 };
 
 use std::path::{Path, PathBuf};

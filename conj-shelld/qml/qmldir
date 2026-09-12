@@ -2,6 +2,7 @@ module Conjunction.Shell
 ShellWindow 1.0 ShellWindow.qml
 TopBar 1.0 TopBar.qml
 Dock 1.0 Dock.qml
-SystemMenu 1.0 SystemMenu.qml
-StatusArea 1.0 StatusArea.qml
-Clock 1.0 Clock.qml
+Spotlight 1.0 Spotlight.qml
+ControlCenter 1.0 ControlCenter.qml
+OverviewOverlay 1.0 OverviewOverlay.qml
+

@@ -73,12 +73,39 @@ Window {
         z: 100
     }
 
-    // Global keyboard shortcut to focus the Dock
+    // Spotlight Global Search Dialog
+    Spotlight {
+        id: spotlight
+    }
+
+    // Control Center Drawer
+    ControlCenter {
+        id: controlCenter
+    }
+
+    // Mission Control / Exposé Overview Overlay
+    OverviewOverlay {
+        id: overviewOverlay
+    }
+
+    // Global keyboard shortcut to focus the Dock (Ctrl+Alt+D)
     Shortcut {
         sequence: "Ctrl+Alt+D"
         onActivated: {
             dock.focus = true;
             dock.focusedIndex = 0;
         }
+    }
+
+    // Global keyboard shortcut for Spotlight Search (Ctrl+Space)
+    Shortcut {
+        sequence: "Ctrl+Space"
+        onActivated: ShellState.toggleSpotlight()
+    }
+
+    // Global keyboard shortcut for Mission Control / Overview (Ctrl+Up)
+    Shortcut {
+        sequence: "Ctrl+Up"
+        onActivated: ShellState.toggleOverview()
     }
 }

@@ -31,6 +31,8 @@ public:
 
     void activateWindow(const QString &internalId);
     void closeWindow(const QString &internalId);
+    void minimizeWindow(const QString &internalId);
+    void unminimizeWindow(const QString &internalId);
 
 public Q_SLOTS:
     Q_SCRIPTABLE void WindowAdded(const QString &internalId, const QString &title, const QString &appId, uint pid, bool isFullscreen);

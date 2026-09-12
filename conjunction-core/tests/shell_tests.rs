@@ -1,7 +1,7 @@
 use conjunction_core::registry::{AppBackend, AppScope, InstalledApp};
 use conjunction_core::shell::{
-    DockClickAction, DockConfig, DockModel, GlobalMenuRegistrar, MenuItemInfo, ScreenInfo,
-    ScreenModel, WindowInfo, WindowMatcher,
+    DockClickAction, DockConfig, DockDisplayPolicy, DockModel, GlobalMenuRegistrar, MenuItemInfo,
+    ScreenInfo, ScreenModel, TopBarDisplayPolicy, WindowInfo, WindowMatcher,
 };
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -475,4 +475,60 @@ fn test_screen_model_multi_monitor_and_primary() {
     model.remove_screen("DP-1");
     assert_eq!(model.screens.len(), 1);
     assert_eq!(model.primary_screen().unwrap().id, "eDP-1");
+}
+
+#[test]
+fn test_screen_model_policies_and_negative_coords() {
+    let mut model = ScreenModel::new();
+
+    let internal = ScreenInfo {
+        id: "eDP-1".to_string(),
+        name: "Laptop".to_string(),
+        x: 0,
+        y: 0,
+        width: 1920,
+        height: 1080,
+        scale: 1.0,
+        is_primary: true,
+    };
+
+    let left_external = ScreenInfo {
+        id: "HDMI-1".to_string(),
+        name: "Left Monitor".to_string(),
+        x: -1920,
+        y: 0,
+        width: 1920,
+        height: 1080,
+        scale: 1.0,
+        is_primary: false,
+    };
+
+    model.add_screen(internal);
+    model.add_screen(left_external);
+
+    // Hit test with negative coordinates
+    let s_neg = model.screen_at(-500, 200);
+    assert!(s_neg.is_some());
+    assert_eq!(s_neg.unwrap().id, "HDMI-1");
+
+    let s_pos = model.screen_at(100, 200);
+    assert!(s_pos.is_some());
+    assert_eq!(s_pos.unwrap().id, "eDP-1");
+
+    // Dock policy PrimaryOnly
+    model.dock_policy = DockDisplayPolicy::PrimaryOnly;
+    let dock_screens = model.screens_for_dock(None);
+    assert_eq!(dock_screens.len(), 1);
+    assert_eq!(dock_screens[0].id, "eDP-1");
+
+    // Dock policy AllScreens
+    model.dock_policy = DockDisplayPolicy::AllScreens;
+    let all_dock = model.screens_for_dock(None);
+    assert_eq!(all_dock.len(), 2);
+
+    // Dock policy FollowActiveWindow
+    model.dock_policy = DockDisplayPolicy::FollowActiveWindow;
+    let follow_dock = model.screens_for_dock(Some("HDMI-1"));
+    assert_eq!(follow_dock.len(), 1);
+    assert_eq!(follow_dock[0].id, "HDMI-1");
 }

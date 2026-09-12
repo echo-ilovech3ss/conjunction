@@ -21,6 +21,19 @@ Rectangle {
     }
 
     property int focusedIndex: -1
+    property real pointerX: -1000
+    property bool mouseInside: false
+
+    HoverHandler {
+        id: dockHover
+        onHoveredChanged: {
+            root.mouseInside = hovered;
+            if (!hovered) root.pointerX = -1000;
+        }
+        onPointChanged: {
+            root.pointerX = point.position.x;
+        }
+    }
 
     // Keyboard navigation
     focus: true
@@ -59,11 +72,16 @@ Rectangle {
                 property bool isHovered: itemHover.hovered
                 property bool isKeySelected: root.focusedIndex === index
 
-                // Magnification preparation: dynamic scale property
-                property real targetScale: isHovered ? 1.15 : 1.0
-                scale: targetScale
-                Behavior on scale {
-                    NumberAnimation { duration: 120; easing.type: Easing.OutQuad }
+                // Pointer-distance magnification physics
+                readonly property real itemCenterX: dockRow.x + x + width / 2
+                readonly property real dist: Math.abs(root.pointerX - itemCenterX)
+                readonly property real magnifyRadius: 100
+                readonly property real magnifyScale: {
+                    if (!ShellState.dockMagnification || !root.mouseInside || dist >= magnifyRadius) {
+                        return isHovered ? 1.12 : 1.0;
+                    }
+                    var cosVal = Math.cos((Math.PI * dist) / (2 * magnifyRadius));
+                    return 1.0 + (ShellState.dockScaleMax - 1.0) * (cosVal * cosVal);
                 }
 
                 // Keyboard selection focus ring
@@ -96,6 +114,11 @@ Rectangle {
                     }
                     border.color: Theme.separator
                     border.width: 1
+                    transformOrigin: Item.Bottom
+                    scale: dockItemDelegate.magnifyScale
+                    Behavior on scale {
+                        NumberAnimation { duration: 90; easing.type: Easing.OutQuad }
+                    }
 
                     Icon {
                         anchors.centerIn: parent

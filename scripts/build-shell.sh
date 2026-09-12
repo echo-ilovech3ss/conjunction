@@ -45,6 +45,9 @@ cp -r "${REPO_ROOT}/conjunction-design/qml/"* "${CHROOT}/usr/share/conjunction/q
 cp -r "${REPO_ROOT}/conj-shelld/qml/"* "${CHROOT}/usr/share/conjunction/shell/"
 cp -r "${REPO_ROOT}/conjunction-design/reference_app/"* "${CHROOT}/usr/share/conjunction/reference/"
 
+mkdir -p "${CHROOT}/usr/share/kwin/effects/conjunction-overview"
+cp -r "${REPO_ROOT}/data/conjunction-overview/"* "${CHROOT}/usr/share/kwin/effects/conjunction-overview/"
+
 mkdir -p /tmp/wsl-target/release
 cp "${CHROOT}/usr/bin/conj-shelld" /tmp/wsl-target/release/conj-shelld
 cp "${CHROOT}/usr/bin/conjunction-reference-app" /tmp/wsl-target/release/conjunction-reference-app

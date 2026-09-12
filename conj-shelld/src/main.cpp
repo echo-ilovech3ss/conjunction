@@ -40,6 +40,10 @@ int main(int argc, char *argv[])
     QCommandLineOption testModeOption("test-mode", "Run automated shell acceptance self-test");
     QCommandLineOption scaleOption("scale", "UI scale factor (e.g. 1.5, 2.0)", "factor");
     QCommandLineOption timeoutOption("timeout", "Exit after ms", "ms");
+    QCommandLineOption spotlightOption("spotlight", "Show Spotlight search overlay with query", "query");
+    QCommandLineOption controlCenterOption("control-center", "Show Control Center drawer");
+    QCommandLineOption overviewOption("overview", "Show Mission Control / Overview overlay");
+    QCommandLineOption magnifyOption("magnify", "Enable dock magnification test");
 
     parser.addOption(screenshotOption);
     parser.addOption(darkOption);
@@ -49,6 +53,10 @@ int main(int argc, char *argv[])
     parser.addOption(testModeOption);
     parser.addOption(scaleOption);
     parser.addOption(timeoutOption);
+    parser.addOption(spotlightOption);
+    parser.addOption(controlCenterOption);
+    parser.addOption(overviewOption);
+    parser.addOption(magnifyOption);
     parser.process(app);
 
     if (parser.isSet(rtlOption)) {
@@ -67,6 +75,21 @@ int main(int argc, char *argv[])
         shellState->setIsDark(true);
     } else if (parser.isSet(lightOption)) {
         shellState->setIsDark(false);
+    }
+
+    if (parser.isSet(spotlightOption)) {
+        shellState->setSpotlightVisible(true);
+        QString q = parser.value(spotlightOption);
+        shellState->setSearchQuery(!q.isEmpty() ? q : "Fire");
+    }
+    if (parser.isSet(controlCenterOption)) {
+        shellState->setControlCenterVisible(true);
+    }
+    if (parser.isSet(overviewOption)) {
+        shellState->setOverviewActive(true);
+    }
+    if (parser.isSet(magnifyOption)) {
+        shellState->setDockMagnification(true);
     }
 
     QQmlApplicationEngine engine;

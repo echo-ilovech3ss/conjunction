@@ -110,15 +110,69 @@ Rectangle {
             }
         }
 
-        // 2. Active Application Name (Semibold)
-        Text {
-            id: appNameText
-            text: ShellState.activeAppName
-            font: Typography.sectionHeading
-            color: Theme.textPrimary
-            verticalAlignment: Text.AlignVCenter
-            Layout.leftMargin: 4
-            Layout.rightMargin: 8
+        // 2. Active Application Menu (About, Settings, Hide, Quit)
+        Rectangle {
+            id: appNameBtn
+            height: 22
+            width: appNameText.implicitWidth + 14
+            radius: 4
+            color: appNameHover.hovered || appMenu.visible ? (Theme.isDark ? "#28FFFFFF" : "#1A000000") : "transparent"
+            Layout.alignment: Qt.AlignVCenter
+
+            Text {
+                id: appNameText
+                anchors.centerIn: parent
+                text: ShellState.activeAppName
+                font: Typography.sectionHeading
+                color: Theme.textPrimary
+            }
+
+            HoverHandler { id: appNameHover }
+            TapHandler {
+                onTapped: {
+                    if (appMenu.visible) appMenu.close();
+                    else appMenu.open();
+                }
+            }
+
+            Controls.Menu {
+                id: appMenu
+                y: appNameBtn.height + 4
+
+                Controls.MenuItem {
+                    text: "About " + ShellState.activeAppName
+                    iconName: "info"
+                    onTriggered: ShellState.aboutCurrentApp()
+                }
+                Controls.MenuItem {
+                    text: "Settings..."
+                    iconName: "gear"
+                    shortcutText: "Ctrl+,"
+                    onTriggered: ShellState.launchApp("org.conjunction.settings")
+                }
+                Controls.MenuSeparator {}
+                Controls.MenuItem {
+                    text: "Hide " + ShellState.activeAppName
+                    shortcutText: "Ctrl+H"
+                    onTriggered: ShellState.hideCurrentApp()
+                }
+                Controls.MenuItem {
+                    text: "Hide Others"
+                    shortcutText: "Ctrl+Alt+H"
+                    onTriggered: ShellState.hideOthers()
+                }
+                Controls.MenuItem {
+                    text: "Show All"
+                    onTriggered: ShellState.showAll()
+                }
+                Controls.MenuSeparator {}
+                Controls.MenuItem {
+                    text: "Quit " + ShellState.activeAppName
+                    iconName: "close"
+                    shortcutText: "Ctrl+Q"
+                    onTriggered: ShellState.quitCurrentApp()
+                }
+            }
         }
 
         // 3. Application Global Menus (File, Edit, View, Window, Help)
@@ -181,10 +235,55 @@ Rectangle {
             Layout.fillWidth: true
         }
 
-        // 4. Status Area (Sound, Network, Clock)
+        // 4. Status Area (Search, Control Center, Theme, Sound, Network, Clock)
         RowLayout {
-            spacing: 12
+            spacing: 10
             Layout.alignment: Qt.AlignVCenter
+
+            // Spotlight Search Trigger
+            Rectangle {
+                width: 22
+                height: 22
+                radius: 4
+                color: searchHover.hovered || ShellState.spotlightVisible ? (Theme.isDark ? "#28FFFFFF" : "#1A000000") : "transparent"
+                Icon {
+                    anchors.centerIn: parent
+                    name: "search"
+                    size: 14
+                    color: ShellState.spotlightVisible ? Theme.accent : Theme.textPrimary
+                }
+                HoverHandler { id: searchHover }
+                TapHandler { onTapped: ShellState.toggleSpotlight() }
+            }
+
+            // Control Center Trigger
+            Rectangle {
+                width: 22
+                height: 22
+                radius: 4
+                color: ccHover.hovered || ShellState.controlCenterVisible ? (Theme.isDark ? "#28FFFFFF" : "#1A000000") : "transparent"
+
+                // Double slider switch icon representation
+                Canvas {
+                    anchors.centerIn: parent
+                    width: 14
+                    height: 12
+                    onPaint: {
+                        var ctx = getContext("2d");
+                        ctx.reset();
+                        ctx.fillStyle = ShellState.controlCenterVisible ? Theme.accent : Theme.textPrimary;
+                        // Top track and knob
+                        ctx.fillRect(0, 1, 14, 3);
+                        ctx.fillRect(8, 0, 4, 5);
+                        // Bottom track and knob
+                        ctx.fillRect(0, 7, 14, 3);
+                        ctx.fillRect(2, 6, 4, 5);
+                    }
+                }
+
+                HoverHandler { id: ccHover }
+                TapHandler { onTapped: ShellState.toggleControlCenter() }
+            }
 
             // Theme toggle helper
             Rectangle {
@@ -195,7 +294,7 @@ Rectangle {
                 Icon {
                     anchors.centerIn: parent
                     name: Theme.isDark ? "eye" : "close"
-                    size: 14
+                    size: 13
                     color: Theme.textSecondary
                 }
                 HoverHandler { id: themeHover }

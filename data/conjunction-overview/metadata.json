@@ -1,0 +1,17 @@
+{
+    "KPlugin": {
+        "Name": "Conjunction Mission Control",
+        "Description": "macOS-style Mission Control and Exposé window overview for Conjunction",
+        "Id": "conjunction-overview",
+        "Version": "1.0",
+        "Author": "Conjunction Project",
+        "License": "GPL-2.0-or-later",
+        "Category": "Window Management"
+    },
+    "X-KDE-Ordering": 60,
+    "X-Plasma-API": "declarativescript",
+    "X-KWin-Config-TranslationDomain": "kwin_effects",
+    "KWin": {
+        "Exclusive": false
+    }
+}

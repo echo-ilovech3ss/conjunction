@@ -376,16 +376,32 @@ pub struct ScreenInfo {
     pub is_primary: bool,
 }
 
-/// Screen manager enforcing the Phase 5A multi-monitor policy:
-/// Top bar and Dock are hosted on the primary display.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum DockDisplayPolicy {
+    PrimaryOnly,
+    AllScreens,
+    FollowActiveWindow,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum TopBarDisplayPolicy {
+    AllScreens,
+    PrimaryOnly,
+}
+
+/// Screen manager managing multi-monitor geometry and shell display policies.
 pub struct ScreenModel {
     pub screens: Vec<ScreenInfo>,
+    pub dock_policy: DockDisplayPolicy,
+    pub topbar_policy: TopBarDisplayPolicy,
 }
 
 impl ScreenModel {
     pub fn new() -> Self {
         ScreenModel {
             screens: Vec::new(),
+            dock_policy: DockDisplayPolicy::PrimaryOnly,
+            topbar_policy: TopBarDisplayPolicy::AllScreens,
         }
     }
 
@@ -406,6 +422,43 @@ impl ScreenModel {
 
     pub fn primary_screen(&self) -> Option<&ScreenInfo> {
         self.screens.iter().find(|s| s.is_primary).or_else(|| self.screens.first())
+    }
+
+    /// Finds the screen containing point (x, y), properly handling negative coordinate offsets.
+    pub fn screen_at(&self, x: i32, y: i32) -> Option<&ScreenInfo> {
+        self.screens.iter().find(|s| {
+            let right = s.x + s.width as i32;
+            let bottom = s.y + s.height as i32;
+            x >= s.x && x < right && y >= s.y && y < bottom
+        })
+    }
+
+    /// Returns the target screens where the Dock should be displayed according to configured policy.
+    pub fn screens_for_dock(&self, active_screen_id: Option<&str>) -> Vec<&ScreenInfo> {
+        match self.dock_policy {
+            DockDisplayPolicy::AllScreens => self.screens.iter().collect(),
+            DockDisplayPolicy::PrimaryOnly => {
+                self.primary_screen().into_iter().collect()
+            }
+            DockDisplayPolicy::FollowActiveWindow => {
+                if let Some(act_id) = active_screen_id {
+                    if let Some(s) = self.screens.iter().find(|s| s.id == act_id) {
+                        return vec![s];
+                    }
+                }
+                self.primary_screen().into_iter().collect()
+            }
+        }
+    }
+
+    /// Returns the target screens where the Top Bar should be displayed according to configured policy.
+    pub fn screens_for_topbar(&self) -> Vec<&ScreenInfo> {
+        match self.topbar_policy {
+            TopBarDisplayPolicy::AllScreens => self.screens.iter().collect(),
+            TopBarDisplayPolicy::PrimaryOnly => {
+                self.primary_screen().into_iter().collect()
+            }
+        }
     }
 }
 

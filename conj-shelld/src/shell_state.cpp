@@ -54,6 +54,183 @@ void ShellState::toggleTheme()
     setIsDark(!m_isDark);
 }
 
+bool ShellState::spotlightVisible() const { return m_spotlightVisible; }
+void ShellState::setSpotlightVisible(bool visible)
+{
+    if (m_spotlightVisible != visible) {
+        m_spotlightVisible = visible;
+        if (visible) {
+            setControlCenterVisible(false);
+            performSearch(m_searchQuery);
+        }
+        Q_EMIT spotlightVisibleChanged();
+    }
+}
+QString ShellState::searchQuery() const { return m_searchQuery; }
+void ShellState::setSearchQuery(const QString &query)
+{
+    if (m_searchQuery != query) {
+        m_searchQuery = query;
+        performSearch(query);
+        Q_EMIT searchQueryChanged();
+    }
+}
+QVariantList ShellState::searchResults() const { return m_searchResults; }
+
+bool ShellState::controlCenterVisible() const { return m_controlCenterVisible; }
+void ShellState::setControlCenterVisible(bool visible)
+{
+    if (m_controlCenterVisible != visible) {
+        m_controlCenterVisible = visible;
+        if (visible) {
+            setSpotlightVisible(false);
+        }
+        Q_EMIT controlCenterVisibleChanged();
+    }
+}
+int ShellState::volume() const { return m_volume; }
+void ShellState::setVolume(int vol)
+{
+    vol = qBound(0, vol, 100);
+    if (m_volume != vol) {
+        m_volume = vol;
+        Q_EMIT volumeChanged();
+    }
+}
+int ShellState::brightness() const { return m_brightness; }
+void ShellState::setBrightness(int bri)
+{
+    bri = qBound(0, bri, 100);
+    if (m_brightness != bri) {
+        m_brightness = bri;
+        Q_EMIT brightnessChanged();
+    }
+}
+bool ShellState::wifiEnabled() const { return m_wifiEnabled; }
+void ShellState::setWifiEnabled(bool enabled)
+{
+    if (m_wifiEnabled != enabled) {
+        m_wifiEnabled = enabled;
+        Q_EMIT wifiChanged();
+    }
+}
+QString ShellState::wifiSsid() const { return m_wifiEnabled ? m_wifiSsid : "Not Connected"; }
+bool ShellState::bluetoothEnabled() const { return m_bluetoothEnabled; }
+void ShellState::setBluetoothEnabled(bool enabled)
+{
+    if (m_bluetoothEnabled != enabled) {
+        m_bluetoothEnabled = enabled;
+        Q_EMIT bluetoothChanged();
+    }
+}
+bool ShellState::doNotDisturb() const { return m_doNotDisturb; }
+void ShellState::setDoNotDisturb(bool dnd)
+{
+    if (m_doNotDisturb != dnd) {
+        m_doNotDisturb = dnd;
+        Q_EMIT doNotDisturbChanged();
+    }
+}
+
+bool ShellState::dockMagnification() const { return m_dockMagnification; }
+void ShellState::setDockMagnification(bool enabled)
+{
+    if (m_dockMagnification != enabled) {
+        m_dockMagnification = enabled;
+        Q_EMIT dockMagnificationChanged();
+    }
+}
+qreal ShellState::dockScaleMax() const { return m_dockScaleMax; }
+void ShellState::setDockScaleMax(qreal maxScale)
+{
+    if (!qFuzzyCompare(m_dockScaleMax, maxScale)) {
+        m_dockScaleMax = maxScale;
+        Q_EMIT dockScaleMaxChanged();
+    }
+}
+
+bool ShellState::overviewActive() const { return m_overviewActive; }
+void ShellState::setOverviewActive(bool active)
+{
+    if (m_overviewActive != active) {
+        m_overviewActive = active;
+        Q_EMIT overviewActiveChanged();
+    }
+}
+
+void ShellState::toggleSpotlight()
+{
+    setSpotlightVisible(!m_spotlightVisible);
+}
+
+void ShellState::toggleControlCenter()
+{
+    setControlCenterVisible(!m_controlCenterVisible);
+}
+
+void ShellState::toggleWifi()
+{
+    setWifiEnabled(!m_wifiEnabled);
+}
+
+void ShellState::toggleBluetooth()
+{
+    setBluetoothEnabled(!m_bluetoothEnabled);
+}
+
+void ShellState::toggleDoNotDisturb()
+{
+    setDoNotDisturb(!m_doNotDisturb);
+}
+
+void ShellState::toggleOverview()
+{
+    setOverviewActive(!m_overviewActive);
+    QDBusMessage msg = QDBusMessage::createMethodCall(
+        "org.kde.KWin",
+        "/Effects",
+        "org.kde.kwin.Effects",
+        "toggleEffect"
+    );
+    msg << QString("conjunction-overview");
+    QDBusConnection::sessionBus().send(msg);
+}
+
+void ShellState::aboutCurrentApp()
+{
+    qInfo() << "[ShellState] About requested for:" << m_activeAppName;
+}
+
+void ShellState::hideCurrentApp()
+{
+    if (!m_activeWindowId.isEmpty()) {
+        m_winMgr->minimizeWindow(m_activeWindowId);
+    }
+}
+
+void ShellState::hideOthers()
+{
+    for (const auto &win : m_winMgr->windows()) {
+        if (win.internalId != m_activeWindowId) {
+            m_winMgr->minimizeWindow(win.internalId);
+        }
+    }
+}
+
+void ShellState::showAll()
+{
+    for (const auto &win : m_winMgr->windows()) {
+        m_winMgr->unminimizeWindow(win.internalId);
+    }
+}
+
+void ShellState::quitCurrentApp()
+{
+    if (!m_activeWindowId.isEmpty()) {
+        closeWindow(m_activeWindowId);
+    }
+}
+
 void ShellState::onTimeTick()
 {
     QString newTime = QDateTime::currentDateTime().toString("HH:mm");
@@ -418,4 +595,130 @@ void ShellState::simulateGlobalMenu(const QVariantList &menus)
 {
     m_globalMenus = menus;
     Q_EMIT globalMenusChanged();
+}
+
+void ShellState::performSearch(const QString &query)
+{
+    QString q = query.trimmed().toLower();
+    QVariantList results;
+
+    if (q.isEmpty()) {
+        QStringList defaultAppIds = {"dev.conjunction.gallery", "dev.conjunction.reference", "org.conjunction.files"};
+        for (const auto &appId : defaultAppIds) {
+            if (m_knownApps.contains(appId)) {
+                RegisteredAppInfo app = m_knownApps[appId];
+                QVariantMap item;
+                item["id"] = app.id;
+                item["title"] = app.name;
+                item["subtitle"] = "Application • " + app.id;
+                item["category"] = "Applications";
+                item["icon"] = app.icon;
+                item["actionData"] = "app:" + app.id;
+                results.append(item);
+            }
+        }
+        m_searchResults = results;
+        Q_EMIT searchResultsChanged();
+        return;
+    }
+
+    // 1. Search Applications
+    for (auto it = m_knownApps.constBegin(); it != m_knownApps.constEnd(); ++it) {
+        const auto &app = it.value();
+        if (app.name.toLower().contains(q) || app.id.toLower().contains(q) || app.packageName.toLower().contains(q)) {
+            QVariantMap item;
+            item["id"] = app.id;
+            item["title"] = app.name;
+            item["subtitle"] = "Application • " + app.id;
+            item["category"] = "Applications";
+            item["icon"] = app.icon;
+            item["actionData"] = "app:" + app.id;
+            results.append(item);
+        }
+    }
+
+    // 2. Search Settings & Actions
+    struct SettingDef { const char *id; const char *title; const char *sub; const char *icon; const char *act; const char *kw; };
+    static const SettingDef settingsList[] = {
+        {"settings.display", "Displays & Brightness", "Resolution, refresh rate", "video-display", "settings:display", "screen monitor brightness night"},
+        {"settings.sound", "Sound & Audio", "Output volume, alert sound", "audio-volume-high", "settings:sound", "audio volume speaker sound"},
+        {"settings.network", "Wi-Fi & Network", "Wireless connections, IP", "network-wireless", "settings:network", "wifi wireless internet network"},
+        {"settings.bluetooth", "Bluetooth", "Connected devices, pairing", "bluetooth", "settings:bluetooth", "bluetooth wireless keyboard mouse"},
+        {"settings.appearance", "Appearance & Theme", "Dark mode, light mode, accents", "preferences-desktop-theme", "settings:appearance", "theme dark light color"},
+        {"settings.dock", "Desktop & Dock", "Dock size, magnification, auto-hide", "preferences-desktop", "settings:dock", "dock magnification autohide"},
+        {"action.lock", "Lock Screen", "Lock session (Ctrl+Alt+L)", "system-lock-screen", "action:lock", "lock screen session"},
+        {"action.logout", "Log Out", "Log out current user", "system-log-out", "action:logout", "logout exit sign out"},
+        {"action.restart", "Restart Computer", "Reboot system", "system-reboot", "action:restart", "restart reboot"},
+        {"action.shutdown", "Shut Down", "Power off system", "system-shutdown", "action:shutdown", "shutdown power off"},
+        {"action.overview", "Mission Control / Overview", "Show all open windows", "view-paged", "action:overview", "overview mission control expose windows"}
+    };
+
+    for (const auto &s : settingsList) {
+        QString titleStr = QString::fromUtf8(s.title);
+        QString kwStr = QString::fromUtf8(s.kw);
+        if (titleStr.toLower().contains(q) || kwStr.contains(q)) {
+            QVariantMap item;
+            item["id"] = QString::fromUtf8(s.id);
+            item["title"] = titleStr;
+            item["subtitle"] = QString::fromUtf8(s.sub);
+            item["category"] = "Settings & Actions";
+            item["icon"] = QString::fromUtf8(s.icon);
+            item["actionData"] = QString::fromUtf8(s.act);
+            results.append(item);
+        }
+    }
+
+    // 3. Search Bounded Files in Home
+    QString home = QDir::homePath();
+    QStringList searchDirs = { home + "/Documents", home + "/Downloads", home + "/Desktop" };
+    int fileCount = 0;
+    for (const auto &dirPath : searchDirs) {
+        if (fileCount >= 5) break;
+        QDir dir(dirPath);
+        if (dir.exists()) {
+            QFileInfoList entries = dir.entryInfoList(QDir::Files | QDir::NoDotAndDotDot);
+            for (const auto &fi : entries) {
+                if (fileCount >= 5) break;
+                if (fi.fileName().toLower().contains(q)) {
+                    QVariantMap item;
+                    item["id"] = fi.absoluteFilePath();
+                    item["title"] = fi.fileName();
+                    item["subtitle"] = fi.absolutePath();
+                    item["category"] = "Files";
+                    item["icon"] = "text-x-generic";
+                    item["actionData"] = "file:" + fi.absoluteFilePath();
+                    results.append(item);
+                    fileCount++;
+                }
+            }
+        }
+    }
+
+    m_searchResults = results;
+    Q_EMIT searchResultsChanged();
+}
+
+void ShellState::activateSearchResult(int index)
+{
+    if (index < 0 || index >= m_searchResults.size()) return;
+    QVariantMap item = m_searchResults[index].toMap();
+    QString actionData = item["actionData"].toString();
+    setSpotlightVisible(false);
+
+    if (actionData.startsWith("app:")) {
+        QString appId = actionData.mid(4);
+        focusApp(appId);
+    } else if (actionData.startsWith("settings:")) {
+        launchApp("org.conjunction.settings");
+    } else if (actionData.startsWith("action:")) {
+        QString act = actionData.mid(7);
+        if (act == "overview") {
+            toggleOverview();
+        } else {
+            requestSystemAction(act);
+        }
+    } else if (actionData.startsWith("file:")) {
+        QString path = actionData.mid(5);
+        QProcess::startDetached("xdg-open", QStringList() << path);
+    }
 }
