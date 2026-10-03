@@ -27,9 +27,11 @@ EOF
     chmod 0440 "/etc/sudoers.d/10-conjunction-live" || true
     echo "root:conjunction" | chpasswd || true
     echo "${username}:conjunction" | chpasswd || true
-    mkdir -p /etc/ssh/sshd_config.d || true
-    printf "PermitRootLogin yes\nPasswordAuthentication yes\nPermitEmptyPasswords yes\n" > /etc/ssh/sshd_config.d/10-live.conf || true
-    
+    # NOTE: sshd is deliberately not configured or started in the live session.
+    # The live user auto-logs in and has NOPASSWD sudo, and the live passwords are
+    # well-known, so exposing sshd here would grant unauthenticated network access
+    # to a root-equivalent shell. See AUDIT-2026-10.md.
+
     # Skel setup
     mkdir -p "/home/${username}/Desktop" || true
     cp -a /etc/skel/. "/home/${username}/" || true
@@ -39,11 +41,9 @@ EOF
 }
 
 main() {
-    # Ensure live ssh and passwords are configured
+    # Ensure live passwords are configured
     echo "root:conjunction" | chpasswd 2>/dev/null || true
     echo "conjunction:conjunction" | chpasswd 2>/dev/null || true
-    mkdir -p /etc/ssh/sshd_config.d 2>/dev/null || true
-    printf "PermitRootLogin yes\nPasswordAuthentication yes\nPermitEmptyPasswords yes\n" > /etc/ssh/sshd_config.d/10-live.conf 2>/dev/null || true
 
     # If conjunction already exists, exit success
     if id "conjunction" &>/dev/null; then

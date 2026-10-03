@@ -61,7 +61,10 @@ if systemctl is-active --quiet display-manager; then
 else
     systemctl start sddm 2>/dev/null || true
 fi
-systemctl start sshd 2>/dev/null || true
+
+# sshd is intentionally NOT started in the live session. The live user has
+# NOPASSWD sudo and a well-known password, so a listening sshd would hand out a
+# root-equivalent shell to anyone on the network. See AUDIT-2026-10.md.
 
 # Wait for network connectivity
 log "Waiting for network connectivity..."

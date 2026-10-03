@@ -414,6 +414,22 @@ class InstallationRunner:
                     return loc
         return shutil.which("bash")
 
+    @staticmethod
+    def _write_private_json(target: Path, data: dict) -> None:
+        """Write JSON to `target` mode 0600, refusing to follow a symlink.
+
+        The payload carries the plaintext user and root passwords, and this runs
+        as root, so the file must not be world-readable and a pre-existing
+        symlink at `target` must not be followed.
+        """
+        target.unlink(missing_ok=True)
+        flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
+        if hasattr(os, "O_NOFOLLOW"):
+            flags |= os.O_NOFOLLOW
+        fd = os.open(target, flags, 0o600)
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2)
+
     def _write_unattended_config(self, target_path: Optional[Path] = None) -> Path:
         data = {
             "target_disk": self.config.target_disk,
@@ -433,22 +449,19 @@ class InstallationRunner:
         if target_path:
             target = Path(target_path)
             target.parent.mkdir(parents=True, exist_ok=True)
-            with open(target, "w", encoding="utf-8") as f:
-                json.dump(data, f, indent=2)
+            self._write_private_json(target, data)
             return target
 
         candidates = [Path("/tmp/conjunction-install-config.json"), Path(tempfile.gettempdir()) / "conjunction-install-config.json"]
         for target in candidates:
             try:
                 target.parent.mkdir(parents=True, exist_ok=True)
-                with open(target, "w", encoding="utf-8") as f:
-                    json.dump(data, f, indent=2)
+                self._write_private_json(target, data)
                 return target
             except Exception:
                 continue
         fallback = Path("conjunction-install-config.json")
-        with open(fallback, "w", encoding="utf-8") as f:
-            json.dump(data, f, indent=2)
+        self._write_private_json(fallback, data)
         return fallback
 
     def _write_config_file(self) -> Path:
