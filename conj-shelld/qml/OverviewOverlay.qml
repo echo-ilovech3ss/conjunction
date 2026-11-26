@@ -1,213 +1,157 @@
 import QtQuick
 import QtQuick.Layouts
 import Conjunction.Design
-import Conjunction.Controls as Controls
 
+// SPEC §4.4 Mission Control: 525 ms enter transition, 135 pt Spaces bar, decluttered 16 pt window cards
 Item {
     id: root
-    anchors.fill: parent
-    visible: ShellState.overviewActive
-    z: 150
+    property Item backdropItem: null
 
-    property int selectedIndex: 0
-
-    onVisibleChanged: {
-        if (visible) {
-            selectedIndex = 0;
-            root.forceActiveFocus();
+    opacity: ShellState.overviewActive ? 1.0 : 0.0
+    Behavior on opacity {
+        NumberAnimation {
+            duration: Motion.duration(ShellState.overviewActive ? Motion.missionControlEnter : Motion.missionControlExit)
+            easing.type: Easing.OutCubic
         }
     }
 
-    focus: visible
-    Keys.onEscapePressed: ShellState.overviewActive = false
-    Keys.onLeftPressed: {
-        if (selectedIndex > 0) selectedIndex--;
-    }
-    Keys.onRightPressed: {
-        if (selectedIndex < openWindowsModel.count - 1) selectedIndex++;
-    }
-    Keys.onReturnPressed: {
-        if (selectedIndex >= 0 && selectedIndex < openWindowsModel.count) {
-            var item = openWindowsModel.get(selectedIndex);
-            ShellState.activateWindow(item.winId);
-            ShellState.overviewActive = false;
-        }
-    }
-
-    // Dark frosted backdrop
+    // Subtle dark scrim behind overview
     Rectangle {
         anchors.fill: parent
-        color: Theme.isDark ? "#D914151B" : "#D92D3748"
-        TapHandler {
-            onTapped: ShellState.overviewActive = false
+        color: Appearance.isDark ? Qt.rgba(0.05, 0.06, 0.09, 0.52) : Qt.rgba(0.06, 0.08, 0.14, 0.36)
+        MouseArea { anchors.fill: parent; onClicked: ShellState.overviewActive = false }
+    }
+
+    // 1. Top 135 pt Spaces Strip (SPEC §4.4)
+    GlassSurface {
+        id: spacesStrip
+        anchors.top: parent.top
+        anchors.left: parent.left
+        anchors.right: parent.right
+        height: 135
+        variant: "regular"
+        cornerRadius: 0
+        shadowPreset: "pill"
+        backdropItem: root.backdropItem
+
+        RowLayout {
+            anchors.centerIn: parent
+            spacing: 24
+
+            Repeater {
+                model: [
+                    { "name": "Desktop 1", "active": true },
+                    { "name": "Desktop 2", "active": false }
+                ]
+                delegate: Column {
+                    spacing: 6
+                    Rectangle {
+                        width: 148; height: 88; radius: 10
+                        gradient: Gradient {
+                            GradientStop { position: 0.0; color: Appearance.isDark ? "#1B2E4B" : "#569CD6" }
+                            GradientStop { position: 1.0; color: Appearance.isDark ? "#2E1C47" : "#89C4F4" }
+                        }
+                        border.width: modelData.active ? 2.5 : 1
+                        border.color: modelData.active ? "#FFFFFF" : Qt.rgba(1,1,1,0.3)
+                    }
+                    Text {
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        text: modelData.name
+                        color: "#FFFFFF"
+                        font: Typography.subheadlineBold
+                    }
+                }
+            }
+
+            // Add Space button
+            Rectangle {
+                width: 44; height: 88; radius: 10
+                color: Qt.rgba(1, 1, 1, 0.14)
+                border.width: 1; border.color: Qt.rgba(1, 1, 1, 0.25)
+                Icon { anchors.centerIn: parent; name: "plus"; size: 22; color: "#FFFFFF" }
+            }
         }
     }
 
-    ColumnLayout {
-        anchors.fill: parent
-        anchors.margins: 24
-        spacing: 20
+    // 2. Window Exposé Cards (16 pt continuous corners, SPEC §4.4)
+    GridLayout {
+        anchors.top: spacesStrip.bottom
+        anchors.bottom: parent.bottom
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.margins: 48
+        columns: 2
+        rowSpacing: 32
+        columnSpacing: 32
 
-        // Spaces Bar Across Top
-        Row {
-            Layout.alignment: Qt.AlignHCenter
-            spacing: 12
+        Repeater {
+            model: ShellState.dockItems
+            delegate: Item {
+                visible: !!modelData.running
+                Layout.fillWidth: true
+                Layout.fillHeight: true
 
-            Rectangle {
-                width: 140
-                height: 32
-                radius: 8
-                color: Theme.accent
-                Text {
+                GlassSurface {
                     anchors.centerIn: parent
-                    text: "Desktop 1"
-                    font: Typography.controlLabel
-                    color: "#FFFFFF"
-                }
-            }
+                    width: Math.min(parent.width, 460)
+                    height: Math.min(parent.height, 270)
+                    variant: "clear"
+                    cornerRadius: 16
+                    shadowPreset: "window"
+                    backdropItem: root.backdropItem
 
-            Rectangle {
-                width: 140
-                height: 32
-                radius: 8
-                color: Theme.isDark ? "#28FFFFFF" : "#1AFFFFFF"
-                border.color: Theme.separator
-                border.width: 1
-                Text {
-                    anchors.centerIn: parent
-                    text: "+ New Space"
-                    font: Typography.controlLabel
-                    color: Theme.textSecondary
-                }
-            }
-        }
+                    ColumnLayout {
+                        anchors.fill: parent
+                        anchors.margins: 14
+                        spacing: 10
 
-        // Window Cards Grid
-        Item {
-            Layout.fillWidth: true
-            Layout.fillHeight: true
+                        // Simulated clean window chrome preview
+                        RowLayout {
+                            Layout.fillWidth: true
+                            TrafficLights { active: !!modelData.active }
+                            Text {
+                                Layout.fillWidth: true
+                                text: modelData.name || modelData.id
+                                color: Theme.labelColor
+                                font: Typography.headline
+                                horizontalAlignment: Text.AlignHCenter
+                            }
+                            Item { width: 52 }
+                        }
 
-            Row {
-                anchors.centerIn: parent
-                spacing: 24
-
-                Repeater {
-                    id: winRepeater
-                    model: openWindowsModel
+                        Rectangle {
+                            Layout.fillWidth: true
+                            Layout.fillHeight: true
+                            radius: 10
+                            color: Appearance.isDark ? Qt.rgba(0.14, 0.15, 0.18, 0.88) : Qt.rgba(1, 1, 1, 0.88)
+                            Icon {
+                                anchors.centerIn: parent
+                                name: modelData.icon || "applications"
+                                size: 48
+                                color: Theme.systemBlue
+                            }
+                        }
+                    }
 
                     Rectangle {
-                        id: windowCard
-                        width: 340
-                        height: 240
-                        radius: 12
-                        color: Theme.isDark ? "#2A202228" : "#F8FAFC"
-                        border.color: root.selectedIndex === index ? Theme.accent : (cardHover.hovered ? Theme.textSecondary : Theme.separator)
-                        border.width: root.selectedIndex === index ? 3 : 1
+                        anchors.fill: parent
+                        radius: 16
+                        color: "transparent"
+                        border.width: cardHover.containsMouse ? 2 : 0
+                        border.color: Theme.systemBlue
+                    }
 
-                        property bool isSelected: root.selectedIndex === index
-
-                        // Header with App Icon & Title
-                        Rectangle {
-                            id: cardHeader
-                            anchors.top: parent.top
-                            anchors.left: parent.left
-                            anchors.right: parent.right
-                            height: 38
-                            radius: 12
-                            color: "transparent"
-
-                            RowLayout {
-                                anchors.fill: parent
-                                anchors.leftMargin: 12
-                                anchors.rightMargin: 12
-                                spacing: 8
-
-                                Rectangle {
-                                    width: 22
-                                    height: 22
-                                    radius: 5
-                                    color: Theme.accent
-                                    Icon {
-                                        anchors.centerIn: parent
-                                        name: model.icon || "application-x-executable"
-                                        size: 14
-                                        color: "#FFFFFF"
-                                    }
-                                }
-
-                                Text {
-                                    text: model.title
-                                    font: Typography.controlLabel
-                                    color: Theme.textPrimary
-                                    elide: Text.ElideRight
-                                    Layout.fillWidth: true
-                                }
-                            }
-                        }
-
-                        // Window Live Thumbnail Canvas Area
-                        Rectangle {
-                            anchors.top: cardHeader.bottom
-                            anchors.left: parent.left
-                            anchors.right: parent.right
-                            anchors.bottom: parent.bottom
-                            anchors.margins: 10
-                            radius: 8
-                            color: Theme.isDark ? "#16171B" : "#E2E8F0"
-                            clip: true
-
-                            ColumnLayout {
-                                anchors.centerIn: parent
-                                spacing: 8
-
-                                Icon {
-                                    Layout.alignment: Qt.AlignHCenter
-                                    name: "window"
-                                    size: 36
-                                    color: Theme.textSecondary
-                                }
-                                Text {
-                                    Layout.alignment: Qt.AlignHCenter
-                                    text: model.appName
-                                    font: Typography.caption
-                                    color: Theme.textSecondary
-                                }
-                            }
-                        }
-
-                        HoverHandler {
-                            id: cardHover
-                            onHoveredChanged: {
-                                if (hovered) root.selectedIndex = index;
-                            }
-                        }
-
-                        TapHandler {
-                            onTapped: {
-                                ShellState.activateWindow(model.winId);
-                                ShellState.overviewActive = false;
-                            }
+                    MouseArea {
+                        id: cardHover
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        onClicked: {
+                            ShellState.overviewActive = false;
+                            ShellState.focusApp(modelData.id);
                         }
                     }
                 }
             }
-        }
-    }
-
-    ListModel {
-        id: openWindowsModel
-
-        ListElement {
-            winId: "1001"
-            appName: "Desktop Reference"
-            title: "Conjunction Reference App — Main Window"
-            icon: "preferences-desktop-theme"
-        }
-        ListElement {
-            winId: "1002"
-            appName: "Firefox"
-            title: "Mozilla Firefox — Start Page"
-            icon: "network"
         }
     }
 }

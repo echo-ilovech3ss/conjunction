@@ -2,27 +2,34 @@ import QtQuick
 import QtQuick.Layouts
 import Conjunction.Design
 
-Rectangle {
+Item {
     id: root
 
     property alias leadingItems: leadingRow.data
     property alias centerItems: centerRow.data
     property alias trailingItems: trailingRow.data
+    property bool scrolled: false
+    property Item backdropItem: null
 
-    implicitHeight: 52
-    color: Theme.surface
-    border.color: Theme.separator
-    border.width: Geometry.separatorThickness
+    // SPEC §4.6 Unified Toolbar 54 pt over ScrollPocket
+    implicitHeight: Geometry.toolbarHeightUnified
+
+    ScrollPocket {
+        anchors.fill: parent
+        scrolled: root.scrolled
+        pocketHeight: root.height
+        backdropItem: root.backdropItem
+    }
 
     RowLayout {
         anchors.fill: parent
-        anchors.leftMargin: Spacing.md
-        anchors.rightMargin: Spacing.md
+        anchors.leftMargin: Spacing.lg
+        anchors.rightMargin: Spacing.lg
         spacing: Spacing.sm
 
         RowLayout {
             id: leadingRow
-            spacing: Spacing.xs
+            spacing: Spacing.sm
         }
 
         Item { Layout.fillWidth: true }
@@ -36,7 +43,7 @@ Rectangle {
 
         RowLayout {
             id: trailingRow
-            spacing: Spacing.xs
+            spacing: Spacing.sm
         }
     }
 }

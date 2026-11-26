@@ -118,6 +118,24 @@ void WindowManager::WindowChanged(const QString &internalId, const QString &titl
     }
 }
 
+void WindowManager::WindowMinimizedChanged(const QString &internalId, const QString &title, const QString &appId, bool minimized)
+{
+    if (!m_windows.contains(internalId)) {
+        ShellWindowEntry entry;
+        entry.internalId = internalId;
+        entry.title = title;
+        entry.appId = appId;
+        entry.minimized = minimized;
+        m_windows.insert(internalId, entry);
+    } else {
+        m_windows[internalId].title = title;
+        if (!appId.isEmpty()) m_windows[internalId].appId = appId;
+        m_windows[internalId].minimized = minimized;
+        if (minimized) m_windows[internalId].active = false;
+    }
+    Q_EMIT windowListChanged();
+}
+
 void WindowManager::activateWindow(const QString &internalId)
 {
     // Send D-Bus call to KWin bridge script
@@ -159,6 +177,11 @@ void WindowManager::closeWindow(const QString &internalId)
 
 void WindowManager::minimizeWindow(const QString &internalId)
 {
+    if (m_windows.contains(internalId)) {
+        m_windows[internalId].minimized = true;
+        m_windows[internalId].active = false;
+        Q_EMIT windowListChanged();
+    }
     QDBusMessage msg = QDBusMessage::createMethodCall(
         "org.conjunction.KWinBridge",
         "/org/conjunction/KWinBridge",
@@ -171,6 +194,13 @@ void WindowManager::minimizeWindow(const QString &internalId)
 
 void WindowManager::unminimizeWindow(const QString &internalId)
 {
+    if (m_windows.contains(internalId)) {
+        m_windows[internalId].minimized = false;
+        m_windows[internalId].active = true;
+        m_activeWindowId = internalId;
+        Q_EMIT activeWindowChanged(internalId);
+        Q_EMIT windowListChanged();
+    }
     QDBusMessage msg = QDBusMessage::createMethodCall(
         "org.conjunction.KWinBridge",
         "/org/conjunction/KWinBridge",

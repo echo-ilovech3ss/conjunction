@@ -143,9 +143,17 @@ int main(int argc, char *argv[])
     engine.addImageProvider("icon", new IconImageProvider());
 
     QString appDir = QCoreApplication::applicationDirPath();
-    engine.addImportPath(appDir + "/../share/conjunction/qml");
+    auto addCompiledImportPath = [&](const QString &p) {
+        if (QFile::exists(p + "/Conjunction/Design/shaders/liquid_glass.frag.qsb")) {
+            engine.addImportPath(p);
+        }
+    };
+    addCompiledImportPath(appDir + "/../share/conjunction/qml");
+    addCompiledImportPath("/usr/share/conjunction/qml");
+    addCompiledImportPath("/tmp/build-design/qml");
     engine.addImportPath(appDir + "/../../conjunction-design/qml");
-    engine.addImportPath("/usr/share/conjunction/qml");
+    engine.addImportPath("/work/conjunction-design/qml");
+    engine.addImportPath("/usr/lib64/qt6/qml");
     engine.addImportPath("/usr/lib/qt6/qml");
 
     engine.rootContext()->setContextProperty("SettingsManager", settingsMgr);
@@ -159,7 +167,7 @@ int main(int argc, char *argv[])
     if (!QFile::exists(qmlFile)) qmlFile = "/usr/share/conjunction/settings/SettingsWindow.qml";
     if (!QFile::exists(qmlFile)) qmlFile = appDir + "/../qml/SettingsWindow.qml";
     if (!QFile::exists(qmlFile)) qmlFile = QDir::currentPath() + "/conjunction-settings/qml/SettingsWindow.qml";
-    if (!QFile::exists(qmlFile)) qmlFile = "/mnt/c/Users/Way4U/Coding-projects/conjunction/conjunction-settings/qml/SettingsWindow.qml";
+    if (!QFile::exists(qmlFile)) qmlFile = "/work/conjunction-settings/qml/SettingsWindow.qml";
 
     qInfo() << "[conjunction-settings] Loading Settings QML:" << qmlFile;
     engine.load(QUrl::fromLocalFile(qmlFile));

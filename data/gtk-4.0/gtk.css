@@ -1,0 +1,18 @@
+/* Conjunction GTK 4 / libadwaita Color Token Overrides mapped to SPEC §2.8 */
+:root {
+  --accent-bg-color: #007AFF;
+  --accent-fg-color: #FFFFFF;
+  --accent-color: #0088FF;
+  --window-bg-color: #ECECEC;
+  --window-fg-color: rgba(0, 0, 0, 0.847);
+  --view-bg-color: #FFFFFF;
+  --view-fg-color: rgba(0, 0, 0, 0.847);
+  --headerbar-bg-color: #ECECEC;
+  --headerbar-fg-color: rgba(0, 0, 0, 0.847);
+  --headerbar-border-color: rgba(0, 0, 0, 0.098);
+  --popover-bg-color: #F4F4F4;
+  --popover-fg-color: rgba(0, 0, 0, 0.847);
+  --card-bg-color: #FFFFFF;
+  --border-color: rgba(0, 0, 0, 0.098);
+  --destructive-bg-color: #FF383C;
+}

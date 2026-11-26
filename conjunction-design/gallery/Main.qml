@@ -2,13 +2,14 @@ import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls
 import Conjunction.Design
+import Conjunction.Controls as C
 
 ApplicationWindow {
     id: window
-    width: 860
-    height: 640
-    minimumWidth: 640
-    minimumHeight: 480
+    width: 1080
+    height: 760
+    minimumWidth: 720
+    minimumHeight: 540
     visible: true
     title: "Conjunction Design Gallery"
     color: Theme.background
@@ -16,29 +17,26 @@ ApplicationWindow {
     LayoutMirroring.enabled: Appearance.isRTL
     LayoutMirroring.childrenInherit: true
 
-    property string initialScene: "typography"
+    property string initialScene: "liquid_glass"
     property string screenshotPath: ""
     property bool autoCloseAfterScreenshot: false
 
-    function configure(theme, rtl, reducedMotion, scale) {
-        if (theme && theme !== "") {
-            Appearance.setMode(theme);
-        }
-        if (rtl) {
-            Appearance.setLayoutDirection(Qt.RightToLeft);
-        }
-        if (reducedMotion) {
-            Appearance.setReducedMotion(true);
-        }
+    function setKeyboardFocusActive(active) {
+        FocusModel.setKeyboardActive(!!active);
+    }
+
+    function configure(theme, rtl, reducedMotion, scale, reduceTransparency, increaseContrast) {
+        if (theme && theme !== "") Appearance.setMode(theme);
+        if (rtl !== undefined && rtl) Appearance.setLayoutDirection(Qt.RightToLeft);
+        if (reducedMotion !== undefined) Appearance.setReducedMotion(!!reducedMotion);
+        if (reduceTransparency !== undefined) Appearance.setReduceTransparency(!!reduceTransparency);
+        if (increaseContrast !== undefined) Appearance.setIncreaseContrast(!!increaseContrast);
         if (scale && scale !== "") {
             var s = parseFloat(scale);
-            if (!isNaN(s) && s > 0) {
-                Appearance.setFontScale(s);
-            }
+            if (!isNaN(s) && s > 0) Appearance.setFontScale(s);
         }
     }
 
-    // Function to grab scene screenshot
     function captureScreenshot(path, closeWhenDone) {
         screenshotPath = path;
         autoCloseAfterScreenshot = closeWhenDone;
@@ -47,140 +45,88 @@ ApplicationWindow {
 
     Timer {
         id: captureTimer
-        interval: 100
+        interval: 200
         repeat: false
         onTriggered: {
             if (window.screenshotPath !== "") {
                 window.contentItem.grabToImage(function(result) {
                     result.saveToFile(window.screenshotPath);
-                    console.log("Screenshot saved to " + window.screenshotPath);
-                    if (window.autoCloseAfterScreenshot) {
-                        Qt.quit();
-                    }
+                    if (window.autoCloseAfterScreenshot) Qt.quit();
                 });
             }
         }
+    }
+
+    readonly property bool isFullBleedCalibration: {
+        var cur = navList.model.get(navList.currentIndex);
+        return cur && cur.sceneId === "glass_calibration";
     }
 
     ColumnLayout {
         anchors.fill: parent
         spacing: 0
 
-        // Toolbar / Header
-        Rectangle {
+        // Toolbar / Header (hidden in pixel calibration scene so coordinates start cleanly at 0,0)
+        C.Toolbar {
             Layout.fillWidth: true
-            height: 52
-            color: Theme.surface
-            border.color: Theme.separator
-            border.width: Geometry.separatorThickness
-
-            RowLayout {
-                anchors.fill: parent
-                anchors.leftMargin: Spacing.md
-                anchors.rightMargin: Spacing.md
-                spacing: Spacing.sm
-
-                Icon {
-                    name: "settings"
-                    size: 20
-                    color: Theme.accent
+            visible: !window.isFullBleedCalibration
+            leadingItems: [
+                Icon { name: "settings"; size: 18; color: Theme.accent },
+                Text { text: "Conjunction Design"; font: Typography.windowTitle; color: Theme.textPrimary }
+            ]
+            trailingItems: [
+                C.Button {
+                    sizeClass: "pill"
+                    text: Appearance.isDark ? "Dark" : "Light"
+                    iconName: Appearance.isDark ? "moon" : "sun"
+                    onClicked: Appearance.toggleTheme()
+                },
+                C.Button {
+                    sizeClass: "pill"
+                    text: Appearance.shouldReduceTransparency ? "Opaque" : "Glass"
+                    isDefault: Appearance.shouldReduceTransparency
+                    onClicked: Appearance.setReduceTransparency(!Appearance.reduceTransparency)
+                },
+                C.Button {
+                    sizeClass: "pill"
+                    text: Appearance.shouldIncreaseContrast ? "Contrast+" : "Contrast"
+                    isDefault: Appearance.shouldIncreaseContrast
+                    onClicked: Appearance.setIncreaseContrast(!Appearance.increaseContrast)
+                },
+                C.Button {
+                    sizeClass: "pill"
+                    text: Appearance.reducedMotion ? "Motion: Off" : "Motion: On"
+                    isDestructive: Appearance.reducedMotion
+                    onClicked: Appearance.setReducedMotion(!Appearance.reducedMotion)
+                },
+                C.Button {
+                    sizeClass: "pill"
+                    text: Appearance.isRTL ? "RTL" : "LTR"
+                    onClicked: Appearance.toggleRTL()
                 }
-
-                Text {
-                    text: "Conjunction Design"
-                    font: Typography.windowTitle
-                    color: Theme.textPrimary
-                }
-
-                Item { Layout.fillWidth: true }
-
-                // Theme Toggle
-                Rectangle {
-                    width: 100
-                    height: Geometry.controlHeightSmall
-                    radius: Geometry.radiusSmall
-                    color: Theme.surfaceSecondary
-                    border.color: Theme.separator
-                    border.width: Geometry.separatorThickness
-
-                    Text {
-                        anchors.centerIn: parent
-                        text: Appearance.isDark ? "Dark" : "Light"
-                        font: Typography.caption
-                        color: Theme.textPrimary
-                    }
-
-                    TapHandler {
-                        onTapped: Appearance.toggleTheme()
-                    }
-                }
-
-                // Reduced Motion Toggle
-                Rectangle {
-                    width: 110
-                    height: Geometry.controlHeightSmall
-                    radius: Geometry.radiusSmall
-                    color: Appearance.reducedMotion ? Theme.destructive : Theme.surfaceSecondary
-                    border.color: Theme.separator
-                    border.width: Geometry.separatorThickness
-
-                    Text {
-                        anchors.centerIn: parent
-                        text: Appearance.reducedMotion ? "Motion: Off" : "Motion: On"
-                        font: Typography.caption
-                        color: Appearance.reducedMotion ? Theme.destructiveText : Theme.textPrimary
-                    }
-
-                    TapHandler {
-                        onTapped: Appearance.setReducedMotion(!Appearance.reducedMotion)
-                    }
-                }
-
-                // RTL Toggle
-                Rectangle {
-                    width: 70
-                    height: Geometry.controlHeightSmall
-                    radius: Geometry.radiusSmall
-                    color: Appearance.isRTL ? Theme.accent : Theme.surfaceSecondary
-                    border.color: Theme.separator
-                    border.width: Geometry.separatorThickness
-
-                    Text {
-                        anchors.centerIn: parent
-                        text: Appearance.isRTL ? "RTL" : "LTR"
-                        font: Typography.caption
-                        color: Appearance.isRTL ? Theme.accentText : Theme.textPrimary
-                    }
-
-                    TapHandler {
-                        onTapped: Appearance.toggleRTL()
-                    }
-                }
-            }
+            ]
         }
 
-        // Body: Sidebar + Main Scene View
         RowLayout {
             Layout.fillWidth: true
             Layout.fillHeight: true
             spacing: 0
 
-            // Navigation Sidebar
-            Rectangle {
-                Layout.preferredWidth: 180
+            C.Sidebar {
+                Layout.preferredWidth: 216
                 Layout.fillHeight: true
-                color: Theme.surfaceSecondary
-                border.color: Theme.separator
-                border.width: Geometry.separatorThickness
+                visible: !window.isFullBleedCalibration
 
                 ListView {
                     id: navList
-                    anchors.fill: parent
-                    anchors.margins: Spacing.xs
-                    spacing: Spacing.xxs
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    spacing: 2
                     clip: true
 
                     model: ListModel {
+                        ListElement { name: "Liquid Glass"; sceneId: "liquid_glass"; iconName: "desktop" }
+                        ListElement { name: "Glass Calibration"; sceneId: "glass_calibration"; iconName: "sliders" }
                         ListElement { name: "Desktop Ref"; sceneId: "desktop_reference"; iconName: "settings" }
                         ListElement { name: "Buttons"; sceneId: "controls_buttons"; iconName: "check" }
                         ListElement { name: "Toggles"; sceneId: "controls_toggles"; iconName: "settings" }
@@ -207,43 +153,17 @@ ApplicationWindow {
                         ListElement { name: "Benchmark"; sceneId: "benchmark"; iconName: "settings" }
                     }
 
-                    delegate: Rectangle {
-                        id: navItem
+                    delegate: C.SidebarRow {
                         width: navList.width
-                        height: Geometry.controlHeightMedium
-                        radius: Geometry.radiusSmall
-                        property bool isCurrent: navList.currentIndex === index
-                        color: isCurrent ? Theme.selection : (hoverHandler.hovered ? Theme.surface : "transparent")
-
-                        HoverHandler { id: hoverHandler }
-
-                        TapHandler {
-                            onTapped: navList.currentIndex = index
-                        }
-
-                        RowLayout {
-                            anchors.fill: parent
-                            anchors.leftMargin: Spacing.sm
-                            anchors.rightMargin: Spacing.sm
-                            spacing: Spacing.sm
-
-                            Icon {
-                                name: iconName
-                                size: 16
-                                color: navItem.isCurrent ? Theme.accent : Theme.textSecondary
-                            }
-
-                            Text {
-                                text: name
-                                font: Typography.controlLabel
-                                color: navItem.isCurrent ? Theme.selectionText : Theme.textPrimary
-                            }
-                        }
+                        title: name
+                        iconName: iconName
+                        selected: navList.currentIndex === index
+                        focusedSelection: selected
+                        onRowClicked: navList.currentIndex = index
                     }
                 }
             }
 
-            // Main Scene Container
             Rectangle {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
@@ -252,10 +172,12 @@ ApplicationWindow {
                 Loader {
                     id: sceneLoader
                     anchors.fill: parent
-                    anchors.margins: Spacing.md
+                    anchors.margins: window.isFullBleedCalibration ? 0 : Spacing.lg
 
                     source: {
                         var id = navList.model.get(navList.currentIndex).sceneId;
+                        if (id === "liquid_glass") return "scenes/LiquidGlassScene.qml";
+                        if (id === "glass_calibration") return "scenes/GlassCalibrationScene.qml";
                         if (id === "desktop_reference") return "scenes/DesktopReferenceScene.qml";
                         if (id === "controls_buttons") return "scenes/ButtonsScene.qml";
                         if (id === "controls_toggles") return "scenes/TogglesScene.qml";
@@ -280,7 +202,7 @@ ApplicationWindow {
                         if (id === "motion") return "scenes/MotionScene.qml";
                         if (id === "icons") return "scenes/IconsScene.qml";
                         if (id === "benchmark") return "deterministic/DeterministicScene.qml";
-                        return "scenes/DesktopReferenceScene.qml";
+                        return "scenes/LiquidGlassScene.qml";
                     }
                 }
             }
@@ -297,8 +219,6 @@ ApplicationWindow {
     }
 
     Component.onCompleted: {
-        if (initialScene !== "") {
-            selectScene(initialScene);
-        }
+        if (initialScene !== "") selectScene(initialScene);
     }
 }

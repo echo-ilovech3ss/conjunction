@@ -2,8 +2,12 @@ module Conjunction.Shell
 ShellWindow 1.0 ShellWindow.qml
 TopBar 1.0 TopBar.qml
 Dock 1.0 Dock.qml
+TrafficLights 1.0 TrafficLights.qml
 Spotlight 1.0 Spotlight.qml
+AppLauncher 1.0 AppLauncher.qml
+AppSwitcherHUD 1.0 AppSwitcherHUD.qml
+QuickNoteOverlay 1.0 QuickNoteOverlay.qml
+OverviewOverlay 1.0 OverviewOverlay.qml
 ControlCenter 1.0 ControlCenter.qml
 NotificationBanner 1.0 NotificationBanner.qml
 NotificationCenter 1.0 NotificationCenter.qml
-

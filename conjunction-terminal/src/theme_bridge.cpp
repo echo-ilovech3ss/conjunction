@@ -3,6 +3,7 @@
 #include <QDBusConnection>
 #include <QDBusInterface>
 #include <QDBusReply>
+#include <QDBusVariant>
 #include <QSettings>
 #include <QDir>
 #include <QFile>
@@ -44,16 +45,16 @@ void ThemeBridge::initDBus()
                          QStringLiteral("org.conjunction.Settings"),
                          bus);
     if (iface.isValid()) {
-        QDBusReply<QVariant> reply = iface.call(QStringLiteral("get"), QStringLiteral("appearance.mode"));
+        QDBusReply<QDBusVariant> reply = iface.call(QStringLiteral("GetSetting"), QStringLiteral("appearance.mode"));
         if (reply.isValid()) {
-            QString mode = reply.value().toString();
-            if (!m_forced) {
+            QString mode = reply.value().variant().toString();
+            if (!m_forced && !mode.isEmpty()) {
                 m_isDark = (mode == QStringLiteral("dark"));
             }
         }
-        QDBusReply<QVariant> accentReply = iface.call(QStringLiteral("get"), QStringLiteral("appearance.accent"));
-        if (accentReply.isValid() && !accentReply.value().toString().isEmpty()) {
-            m_accent = accentReply.value().toString();
+        QDBusReply<QDBusVariant> accentReply = iface.call(QStringLiteral("GetSetting"), QStringLiteral("appearance.accent"));
+        if (accentReply.isValid() && !accentReply.value().variant().toString().isEmpty()) {
+            m_accent = accentReply.value().variant().toString();
         }
     }
 }
@@ -63,11 +64,11 @@ void ThemeBridge::loadFromConfigFile()
     QString configPath = QDir::homePath() + QStringLiteral("/.config/conjunction/settings.ini");
     if (QFile::exists(configPath)) {
         QSettings settings(configPath, QSettings::IniFormat);
-        QString mode = settings.value(QStringLiteral("appearance/mode"), QStringLiteral("light")).toString();
+        QString mode = settings.value(QStringLiteral("Appearance/mode"), QStringLiteral("light")).toString();
         if (!m_forced) {
             m_isDark = (mode == QStringLiteral("dark"));
         }
-        m_accent = settings.value(QStringLiteral("appearance/accent"), QStringLiteral("blue")).toString();
+        m_accent = settings.value(QStringLiteral("Appearance/accent"), QStringLiteral("blue")).toString();
     }
 }
 
@@ -107,41 +108,41 @@ void ThemeBridge::onSettingChanged(const QString &key, const QVariant &value)
 
 QColor ThemeBridge::backgroundColor() const
 {
-    return m_isDark ? QColor(0x1A, 0x1B, 0x20) : QColor(0xF4, 0xF5, 0xF8);
+    return m_isDark ? QColor(0x1E, 0x1E, 0x1E) : QColor(0xEC, 0xEC, 0xEC);
 }
 
 QColor ThemeBridge::surfaceColor() const
 {
-    return m_isDark ? QColor(0x24, 0x26, 0x2E) : QColor(0xFF, 0xFF, 0xFF);
+    return m_isDark ? QColor(0x32, 0x32, 0x32) : QColor(0xFF, 0xFF, 0xFF);
 }
 
 QColor ThemeBridge::surfaceElevatedColor() const
 {
-    return m_isDark ? QColor(0x2D, 0x30, 0x3A) : QColor(0xFF, 0xFF, 0xFF);
+    return m_isDark ? QColor(0x2C, 0x2C, 0x2E) : QColor(0xF4, 0xF4, 0xF4);
 }
 
 QColor ThemeBridge::textPrimaryColor() const
 {
-    return m_isDark ? QColor(0xF5, 0xF6, 0xF8) : QColor(0x15, 0x16, 0x1A);
+    return m_isDark ? QColor(0xFF, 0xFF, 0xFF, 216) : QColor(0x00, 0x00, 0x00, 216);
 }
 
 QColor ThemeBridge::textSecondaryColor() const
 {
-    return m_isDark ? QColor(0x9E, 0xA2, 0xAD) : QColor(0x5A, 0x5D, 0x66);
+    return m_isDark ? QColor(0xFF, 0xFF, 0xFF, 140) : QColor(0x00, 0x00, 0x00, 127);
 }
 
 QColor ThemeBridge::separatorColor() const
 {
-    return m_isDark ? QColor(0x37, 0x3A, 0x44) : QColor(0xD3, 0xD6, 0xDC);
+    return m_isDark ? QColor(0xFF, 0xFF, 0xFF, 25) : QColor(0x00, 0x00, 0x00, 25);
 }
 
 QColor ThemeBridge::accentColor() const
 {
-    if (m_accent == QStringLiteral("teal")) return m_isDark ? QColor(0x1A, 0x99, 0x88) : QColor(0x0D, 0x7D, 0x6C);
-    if (m_accent == QStringLiteral("amber")) return m_isDark ? QColor(0xD9, 0x77, 0x06) : QColor(0xB4, 0x53, 0x09);
-    if (m_accent == QStringLiteral("violet")) return m_isDark ? QColor(0x8B, 0x5C, 0xF6) : QColor(0x6D, 0x28, 0xD9);
-    if (m_accent == QStringLiteral("graphite")) return m_isDark ? QColor(0x9C, 0xA3, 0xAF) : QColor(0x4B, 0x55, 0x63);
-    return m_isDark ? QColor(0x25, 0x63, 0xEB) : QColor(0x1D, 0x4E, 0xD8);
+    if (m_accent == QStringLiteral("teal")) return m_isDark ? QColor(0x00, 0xD2, 0xE0) : QColor(0x00, 0xC3, 0xD0);
+    if (m_accent == QStringLiteral("amber")) return m_isDark ? QColor(0xFF, 0x92, 0x30) : QColor(0xFF, 0x8D, 0x28);
+    if (m_accent == QStringLiteral("violet")) return m_isDark ? QColor(0x6D, 0x7C, 0xFF) : QColor(0x61, 0x55, 0xF5);
+    if (m_accent == QStringLiteral("graphite")) return m_isDark ? QColor(0x98, 0x98, 0x9D) : QColor(0x8E, 0x8E, 0x93);
+    return m_isDark ? QColor(0x00, 0x91, 0xFF) : QColor(0x00, 0x88, 0xFF);
 }
 
 QString ThemeBridge::windowStyleSheet() const

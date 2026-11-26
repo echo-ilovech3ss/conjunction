@@ -23,46 +23,65 @@ T.Popup {
     implicitWidth: 420
     implicitHeight: sheetLayout.implicitHeight + Spacing.lg * 2
 
-
     dim: true
     T.Overlay.modal: Rectangle {
-        color: "#40000000"
+        color: Qt.rgba(0, 0, 0, 0.28) // SPEC §3.1 scrim 0 -> 0.28
     }
 
+    // SPEC §3.1 Sheet Open 335 ms slide / Reduced Motion 180 ms fade; Close 333 ms
     enter: Transition {
-        NumberAnimation {
-            property: "y"
-            from: -control.height
-            to: 0
-            duration: Motion.duration(Motion.normal)
-            easing.type: Motion.easingDecelerate
+        ParallelAnimation {
+            NumberAnimation {
+                property: "opacity"
+                from: 0.0
+                to: 1.0
+                duration: Motion.duration(Motion.sheetOpen)
+                easing.type: Easing.OutCubic
+            }
+            NumberAnimation {
+                property: "y"
+                from: Appearance.reducedMotion ? 0 : -control.height * 0.35
+                to: 0
+                duration: Motion.spatialDuration(Motion.sheetOpen)
+                easing.type: Motion.easingDecelerate
+            }
         }
     }
 
     exit: Transition {
-        NumberAnimation {
-            property: "y"
-            from: 0
-            to: -control.height
-            duration: Motion.duration(Motion.fast)
-            easing.type: Motion.easingAccelerate
+        ParallelAnimation {
+            NumberAnimation {
+                property: "opacity"
+                from: 1.0
+                to: 0.0
+                duration: Motion.duration(Motion.sheetClose)
+                easing.type: Easing.OutCubic
+            }
+            NumberAnimation {
+                property: "y"
+                from: 0
+                to: Appearance.reducedMotion ? 0 : -control.height * 0.35
+                duration: Motion.spatialDuration(Motion.sheetClose)
+                easing.type: Motion.easingAccelerate
+            }
         }
     }
 
     background: Surface {
         elevation: "dialog"
-        radius: Geometry.radiusLarge
+        radius: Geometry.radiusSheet // 16 pt
     }
 
     contentItem: ColumnLayout {
         id: sheetLayout
         anchors.fill: parent
         anchors.margins: Spacing.lg
+        anchors.bottomMargin: Spacing.md // 12 pt bottom margin concentric w/ cr=14 pills (SPEC §2.1)
         spacing: Spacing.md
 
         Text {
             text: control.titleText
-            font: Typography.windowTitle
+            font: Typography.title2Bold
             color: Theme.textPrimary
             Layout.fillWidth: true
         }
@@ -88,6 +107,7 @@ T.Popup {
             Item { Layout.fillWidth: true }
 
             Button {
+                sizeClass: "pill" // 28 pt cr=14 (SPEC §2.1 & §2.3)
                 text: control.cancelButtonText
                 onClicked: {
                     control.cancelTriggered();
@@ -97,6 +117,7 @@ T.Popup {
 
             Button {
                 id: sheetDefBtn
+                sizeClass: "pill"
                 text: control.defaultButtonText
                 isDefault: true
                 focus: true
@@ -114,10 +135,7 @@ T.Popup {
         event.accepted = true;
     }
 
-    onOpened: {
-        sheetDefBtn.forceActiveFocus();
-    }
-
+    onOpened: sheetDefBtn.forceActiveFocus()
     onClosed: {
         if (invokerItem) invokerItem.forceActiveFocus();
     }

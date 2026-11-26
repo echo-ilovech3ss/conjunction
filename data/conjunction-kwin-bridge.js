@@ -1,7 +1,7 @@
-// Conjunction KWin Script: Bridge window events to Conjunction Shell via D-Bus
+// Conjunction KWin Script: Bridge window, minimized, desktop, and shortcut events to Conjunction Shell via D-Bus
 // Compatible with KWin 6 / Wayland
 
-function sendWindowActivated(win) {
+function sendWindowState(method, win) {
     if (!win) return;
     var appId = win.desktopFileName || win.resourceClass || win.appId || "";
     var title = win.caption || "";
@@ -13,24 +13,7 @@ function sendWindowActivated(win) {
         "org.conjunction.Shell",
         "/org/conjunction/Shell/WindowManager",
         "org.conjunction.Shell.WindowManager",
-        "WindowActivated",
-        id, title, appId, pid, isFs
-    );
-}
-
-function sendWindowAdded(win) {
-    if (!win) return;
-    var appId = win.desktopFileName || win.resourceClass || win.appId || "";
-    var title = win.caption || "";
-    var id = win.internalId ? win.internalId.toString() : "";
-    var pid = win.pid || 0;
-    var isFs = win.fullScreen || false;
-
-    callDBus(
-        "org.conjunction.Shell",
-        "/org/conjunction/Shell/WindowManager",
-        "org.conjunction.Shell.WindowManager",
-        "WindowAdded",
+        method,
         id, title, appId, pid, isFs
     );
 }
@@ -38,7 +21,6 @@ function sendWindowAdded(win) {
 function sendWindowRemoved(win) {
     if (!win) return;
     var id = win.internalId ? win.internalId.toString() : "";
-
     callDBus(
         "org.conjunction.Shell",
         "/org/conjunction/Shell/WindowManager",
@@ -48,18 +30,65 @@ function sendWindowRemoved(win) {
     );
 }
 
-// Connect KWin 6 workspace signals
-if (typeof workspace !== "undefined") {
-    workspace.windowAdded.connect(sendWindowAdded);
-    workspace.windowRemoved.connect(sendWindowRemoved);
-    workspace.windowActivated.connect(sendWindowActivated);
+function connectWindowSignals(win) {
+    if (!win) return;
+    win.captionChanged.connect(function () {
+        sendWindowState("WindowActivated", win);
+    });
+    win.fullScreenChanged.connect(function () {
+        sendWindowState("WindowActivated", win);
+    });
+    win.minimizedChanged.connect(function () {
+        var id = win.internalId ? win.internalId.toString() : "";
+        var title = win.caption || "";
+        var appId = win.desktopFileName || win.resourceClass || win.appId || "";
+        callDBus(
+            "org.conjunction.Shell",
+            "/org/conjunction/Shell/WindowManager",
+            "org.conjunction.Shell.WindowManager",
+            "WindowMinimizedChanged",
+            id, title, appId, Boolean(win.minimized)
+        );
+    });
+}
 
-    // Initial enumeration of all open windows
+if (typeof workspace !== "undefined") {
+    workspace.windowAdded.connect(function (win) {
+        connectWindowSignals(win);
+        sendWindowState("WindowAdded", win);
+    });
+    workspace.windowRemoved.connect(sendWindowRemoved);
+    workspace.windowActivated.connect(function (win) {
+        sendWindowState("WindowActivated", win);
+    });
+
     var allWins = workspace.windowList();
     for (var i = 0; i < allWins.length; ++i) {
-        sendWindowAdded(allWins[i]);
+        connectWindowSignals(allWins[i]);
+        sendWindowState("WindowAdded", allWins[i]);
     }
     if (workspace.activeWindow) {
-        sendWindowActivated(workspace.activeWindow);
+        sendWindowState("WindowActivated", workspace.activeWindow);
     }
+}
+
+if (typeof registerShortcut === "function") {
+    registerShortcut("ConjunctionQuickSearch", "Conjunction Quick Search", "Meta+Space", function () {
+        callDBus("org.conjunction.Shell", "/org/conjunction/Settings", "org.conjunction.Settings", "toggleSpotlight");
+    });
+    registerShortcut("ConjunctionMissionControl", "Conjunction Mission Control", "Ctrl+Up", function () {
+        callDBus("org.conjunction.Shell", "/org/conjunction/Settings", "org.conjunction.Settings", "toggleOverview");
+    });
+    registerShortcut("ConjunctionSpaceLeft", "Switch Space Left", "Ctrl+Left", function () {
+        if (workspace.desktops && workspace.currentDesktop) {
+            var idx = workspace.desktops.indexOf(workspace.currentDesktop);
+            if (idx > 0) workspace.currentDesktop = workspace.desktops[idx - 1];
+        }
+    });
+    registerShortcut("ConjunctionSpaceRight", "Switch Space Right", "Ctrl+Right", function () {
+        if (workspace.desktops && workspace.currentDesktop) {
+            var idx = workspace.desktops.indexOf(workspace.currentDesktop);
+            if (idx >= 0 && idx + 1 < workspace.desktops.length) workspace.currentDesktop = workspace.desktops[idx + 1];
+        }
+    });
 }

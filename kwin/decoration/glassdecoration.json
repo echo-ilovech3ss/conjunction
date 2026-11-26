@@ -1,0 +1,13 @@
+{
+    "KPlugin": {
+        "Description": "Conjunction Liquid Glass window decoration with continuous corners and traffic-light cluster",
+        "EnabledByDefault": true,
+        "Id": "org.conjunction.glass",
+        "Name": "Conjunction Glass",
+        "Version": "1.0"
+    },
+    "org.kde.kdecoration3": {
+        "blur": true,
+        "recommendedBorderSize": "None"
+    }
+}

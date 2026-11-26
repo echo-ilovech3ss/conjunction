@@ -7,6 +7,7 @@
 #include <QDBusConnection>
 #include <QDBusMessage>
 #include <QDBusInterface>
+#include <QDBusVariant>
 #include <QProcess>
 #include <QSet>
 #include <QDebug>
@@ -43,21 +44,25 @@ void SettingsManager::loadSettings()
     QString path = settingsFilePath();
     QSettings s(path, QSettings::IniFormat);
 
-    m_appearanceMode = s.value("Appearance/mode", "dark").toString();
-    m_appearanceAccent = s.value("Appearance/accent", "#0066CC").toString();
-    m_reducedMotion = s.value("Accessibility/reduced_motion", false).toBool();
+    m_appearanceMode = s.value("Appearance/mode", "light").toString();
+    m_appearanceAccent = s.value("Appearance/accent", "blue").toString();
+    m_reducedMotion = s.value("Accessibility/reducedMotion", s.value("Accessibility/reduced_motion", false)).toBool();
+    m_reduceTransparency = s.value("Accessibility/reduceTransparency", false).toBool();
+    m_increaseContrast = s.value("Accessibility/increaseContrast", false).toBool();
 
-    m_dockSize = s.value("Dock/size", 68).toInt();
+    m_dockSize = qBound(16, s.value("Dock/size", 54).toInt(), 128);
     m_dockMagnification = s.value("Dock/magnification", true).toBool();
-    m_dockMagnificationScale = s.value("Dock/magnification_scale", 1.35).toReal();
+    m_dockMagnificationScale = s.value("Dock/magnification_scale", 1.45).toReal();
+    m_dockMinimizeEffect = s.value("Dock/minimizeEffect", "genie").toString();
     m_dockDisplayPolicy = s.value("Dock/display_policy", "primary").toString();
+    m_hotCornerBottomRight = s.value("HotCorners/bottomRight", 14).toInt();
 
     m_displayScale = s.value("Displays/scale", 1.0).toReal();
     m_soundVolume = s.value("Sound/volume", 75).toInt();
     m_soundMuted = s.value("Sound/muted", false).toBool();
     m_wifiEnabled = s.value("Network/wifi_enabled", true).toBool();
     m_bluetoothEnabled = s.value("Bluetooth/enabled", true).toBool();
-    m_desktopWallpaper = s.value("Desktop/wallpaper", "default.jpg").toString();
+    m_desktopWallpaper = s.value("Desktop/wallpaper", "conjunction-light.svg").toString();
 
     loadShortcuts();
 }
@@ -74,13 +79,17 @@ void SettingsManager::writeSetting(const QString &key, const QVariant &value)
     else if (key == "dock.size") s.setValue("Dock/size", value.toInt());
     else if (key == "dock.magnification") s.setValue("Dock/magnification", value.toBool());
     else if (key == "dock.magnificationScale") s.setValue("Dock/magnification_scale", value.toReal());
+    else if (key == "dock.minimizeEffect") s.setValue("Dock/minimizeEffect", value.toString());
     else if (key == "dock.displayPolicy") s.setValue("Dock/display_policy", value.toString());
+    else if (key == "hotCorners.bottomRight") s.setValue("HotCorners/bottomRight", value.toInt());
     else if (key == "displays.scale") s.setValue("Displays/scale", value.toReal());
     else if (key == "sound.volume") s.setValue("Sound/volume", value.toInt());
     else if (key == "sound.muted") s.setValue("Sound/muted", value.toBool());
     else if (key == "network.wifi.enabled") s.setValue("Network/wifi_enabled", value.toBool());
     else if (key == "bluetooth.enabled") s.setValue("Bluetooth/enabled", value.toBool());
-    else if (key == "accessibility.reducedMotion") s.setValue("Accessibility/reduced_motion", value.toBool());
+    else if (key == "accessibility.reducedMotion") s.setValue("Accessibility/reducedMotion", value.toBool());
+    else if (key == "accessibility.reduceTransparency") s.setValue("Accessibility/reduceTransparency", value.toBool());
+    else if (key == "accessibility.increaseContrast") s.setValue("Accessibility/increaseContrast", value.toBool());
     else if (key == "desktop.wallpaper") s.setValue("Desktop/wallpaper", value.toString());
     s.sync();
 
@@ -92,7 +101,7 @@ void SettingsManager::writeSetting(const QString &key, const QVariant &value)
         QDBusConnection::sessionBus()
     );
     if (shellSettings.isValid()) {
-        shellSettings.call("SetSetting", key, value);
+        shellSettings.call(QStringLiteral("SetSetting"), key, QVariant::fromValue(QDBusVariant(value)));
     }
 }
 
@@ -170,6 +179,30 @@ void SettingsManager::onDBusSettingChanged(const QString &key, const QVariant &v
             m_reducedMotion = b;
             Q_EMIT reducedMotionChanged();
         }
+    } else if (key == "accessibility.reduceTransparency") {
+        bool b = value.toBool();
+        if (m_reduceTransparency != b) {
+            m_reduceTransparency = b;
+            Q_EMIT reduceTransparencyChanged();
+        }
+    } else if (key == "accessibility.increaseContrast") {
+        bool b = value.toBool();
+        if (m_increaseContrast != b) {
+            m_increaseContrast = b;
+            Q_EMIT increaseContrastChanged();
+        }
+    } else if (key == "dock.minimizeEffect") {
+        QString e = value.toString();
+        if (m_dockMinimizeEffect != e) {
+            m_dockMinimizeEffect = e;
+            Q_EMIT dockMinimizeEffectChanged();
+        }
+    } else if (key == "hotCorners.bottomRight") {
+        int code = value.toInt();
+        if (m_hotCornerBottomRight != code) {
+            m_hotCornerBottomRight = code;
+            Q_EMIT hotCornerBottomRightChanged();
+        }
     }
 }
 
@@ -205,10 +238,51 @@ void SettingsManager::setReducedMotion(bool enabled)
     }
 }
 
+bool SettingsManager::reduceTransparency() const { return m_reduceTransparency; }
+void SettingsManager::setReduceTransparency(bool enabled)
+{
+    if (m_reduceTransparency != enabled) {
+        m_reduceTransparency = enabled;
+        writeSetting("accessibility.reduceTransparency", enabled);
+        Q_EMIT reduceTransparencyChanged();
+    }
+}
+
+bool SettingsManager::increaseContrast() const { return m_increaseContrast; }
+void SettingsManager::setIncreaseContrast(bool enabled)
+{
+    if (m_increaseContrast != enabled) {
+        m_increaseContrast = enabled;
+        writeSetting("accessibility.increaseContrast", enabled);
+        Q_EMIT increaseContrastChanged();
+    }
+}
+
+QString SettingsManager::dockMinimizeEffect() const { return m_dockMinimizeEffect; }
+void SettingsManager::setDockMinimizeEffect(const QString &effect)
+{
+    QString e = (effect == "scale") ? QStringLiteral("scale") : QStringLiteral("genie");
+    if (m_dockMinimizeEffect != e) {
+        m_dockMinimizeEffect = e;
+        writeSetting("dock.minimizeEffect", e);
+        Q_EMIT dockMinimizeEffectChanged();
+    }
+}
+
+int SettingsManager::hotCornerBottomRight() const { return m_hotCornerBottomRight; }
+void SettingsManager::setHotCornerBottomRight(int actionCode)
+{
+    if (m_hotCornerBottomRight != actionCode) {
+        m_hotCornerBottomRight = actionCode;
+        writeSetting("hotCorners.bottomRight", actionCode);
+        Q_EMIT hotCornerBottomRightChanged();
+    }
+}
+
 int SettingsManager::dockSize() const { return m_dockSize; }
 void SettingsManager::setDockSize(int size)
 {
-    size = qBound(36, size, 96);
+    size = qBound(16, size, 128);
     if (m_dockSize != size) {
         m_dockSize = size;
         writeSetting("dock.size", size);
@@ -314,8 +388,35 @@ void SettingsManager::setActivePage(const QString &page)
 {
     if (m_activePage != page) {
         m_activePage = page;
+        if (m_pageHistoryIdx < m_pageHistory.size() - 1) {
+            m_pageHistory = m_pageHistory.mid(0, m_pageHistoryIdx + 1);
+        }
+        m_pageHistory.append(page);
+        m_pageHistoryIdx = m_pageHistory.size() - 1;
         Q_EMIT activePageChanged();
+        Q_EMIT navigationHistoryChanged();
     }
+}
+
+bool SettingsManager::canGoBack() const { return m_pageHistoryIdx > 0; }
+bool SettingsManager::canGoForward() const { return m_pageHistoryIdx + 1 < m_pageHistory.size(); }
+
+void SettingsManager::goBack()
+{
+    if (!canGoBack()) return;
+    m_pageHistoryIdx--;
+    m_activePage = m_pageHistory.at(m_pageHistoryIdx);
+    Q_EMIT activePageChanged();
+    Q_EMIT navigationHistoryChanged();
+}
+
+void SettingsManager::goForward()
+{
+    if (!canGoForward()) return;
+    m_pageHistoryIdx++;
+    m_activePage = m_pageHistory.at(m_pageHistoryIdx);
+    Q_EMIT activePageChanged();
+    Q_EMIT navigationHistoryChanged();
 }
 
 QString SettingsManager::highlightedSetting() const { return m_highlightedSetting; }
@@ -696,9 +797,13 @@ void SettingsManager::performSearch(const QString &query)
         {"network.wifi.enabled", "network", "Wi-Fi", "Wi-Fi", "Enable or disable wireless networking", "network-wireless", "wifi wireless network internet ssid hotspot"},
         {"bluetooth.enabled", "bluetooth", "Bluetooth Adapter", "Bluetooth", "Enable or disable Bluetooth wireless adapter", "bluetooth", "bluetooth wireless pair devices mouse keyboard"},
         {"desktop.wallpaper", "dock", "Wallpaper", "Desktop Background", "Wallpaper image and desktop style", "preferences-desktop-wallpaper", "wallpaper background desktop picture"},
-        {"accessibility.reducedMotion", "appearance", "Accessibility", "Reduced Motion", "Minimize animations and visual effects", "preferences-desktop-theme", "motion animation reduce transition accessibility"},
+        {"accessibility.reducedMotion", "appearance", "Accessibility", "Reduced Motion", "Crossfade windows instead of spring & Genie transitions", "preferences-desktop-theme", "motion animation reduce transition accessibility"},
+        {"accessibility.reduceTransparency", "appearance", "Accessibility", "Reduce Transparency", "Use opaque backgrounds instead of blurred glass", "preferences-desktop-theme", "transparency glass opaque reduce accessibility"},
+        {"accessibility.increaseContrast", "appearance", "Accessibility", "Increase Contrast", "Boost separator and hairline stroke contrast", "preferences-desktop-theme", "contrast hairline borders accessibility"},
+        {"dock.minimizeEffect", "dock", "Dock", "Minimize Effect", "Choose Genie or Scale window minimize effect", "preferences-desktop", "genie scale minimize dock animation"},
+        {"hotCorners.bottomRight", "dock", "Dock", "Hot Corners", "Configure screen corner triggers such as Quick Note", "preferences-desktop", "hot corner quick note overview trigger"},
         {"default-apps.browser", "default-apps", "Default Applications", "Default Web Browser", "Default application for web links and internet addresses", "preferences-desktop-default-applications", "browser web internet default url http https"},
-        {"default-apps.files", "default-apps", "Default Applications", "Default File Manager", "Default application for opening folders and directories", "preferences-desktop-default-applications", "files folder file manager finder default directory"},
+        {"default-apps.files", "default-apps", "Default Applications", "Default File Manager", "Default application for opening folders and directories", "preferences-desktop-default-applications", "files folder file manager explorer default directory"},
         {"default-apps.terminal", "default-apps", "Default Applications", "Default Terminal", "Default terminal emulator for command-line tools", "preferences-desktop-default-applications", "terminal console shell cli default emulator"},
         {"shortcuts.spotlight", "shortcuts", "Shortcuts", "Spotlight Search Shortcut", "Global keyboard shortcut to toggle Spotlight launcher", "preferences-desktop-keyboard", "shortcut key spotlight search launcher hotkey"},
         {"shortcuts.notifications", "shortcuts", "Shortcuts", "Notification Center Shortcut", "Global keyboard shortcut to toggle Notification Center", "preferences-desktop-keyboard", "shortcut key notification center drawer hotkey"},

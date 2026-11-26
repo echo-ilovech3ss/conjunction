@@ -1,240 +1,191 @@
 import QtQuick
-import QtQuick.Controls
 import QtQuick.Layouts
 import Conjunction.Design
-import Conjunction.Controls as Controls
 
-Rectangle {
+// SPEC §4.3 Notification Center: 344 pt top-right drawer with 24 pt widget cards + stacked notifications
+Item {
     id: root
-    width: 380
-    anchors.top: parent.top
-    anchors.topMargin: 30
-    anchors.bottom: parent.bottom
-    anchors.bottomMargin: 12
-    anchors.right: parent.right
-    anchors.rightMargin: ShellState.notificationCenterVisible ? 12 : -width - 20
-    radius: 16
-    z: 950
-    clip: true
+    property Item backdropItem: null
 
-    color: Theme.isDark ? "#F01E1F25" : "#F0F8FAFC"
-    border.color: Theme.separator
-    border.width: 1
-
-    Behavior on anchors.rightMargin {
-        NumberAnimation {
-            duration: ShellState.reducedMotion ? 50 : 250
-            easing.type: Easing.OutCubic
-        }
-    }
+    width: 344
+    height: ncColumn.implicitHeight + 16
 
     ColumnLayout {
-        anchors.fill: parent
-        anchors.margins: 16
+        id: ncColumn
+        anchors.top: parent.top
+        anchors.left: parent.left
+        anchors.right: parent.right
         spacing: 12
 
-        // Header
+        // 1. Stacked Widget Row (185 pt height matching SPEC §4.3)
         RowLayout {
             Layout.fillWidth: true
+            Layout.preferredHeight: 164
+            spacing: 12
 
+            // Clock / Calendar Widget Card
+            GlassSurface {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                variant: "clear"
+                cornerRadius: 24
+                shadowPreset: "popover"
+                backdropItem: root.backdropItem
+
+                ColumnLayout {
+                    anchors.fill: parent
+                    anchors.margins: 16
+                    spacing: 4
+                    RowLayout {
+                        spacing: 6
+                        Icon { name: "sun"; size: 16; color: Theme.systemOrange }
+                        Text { text: "TODAY"; color: Theme.systemOrange; font: Typography.caption2 }
+                    }
+                    Text {
+                        text: Qt.formatDate(new Date(), "dddd")
+                        color: Theme.secondaryLabelColor
+                        font: Typography.callout
+                    }
+                    Text {
+                        text: Qt.formatDate(new Date(), "d")
+                        color: Theme.labelColor
+                        font: Typography.makeSpecFont(36, Font.DemiBold, -0.01, false, true)
+                    }
+                    Item { Layout.fillHeight: true }
+                    Text {
+                        text: Qt.formatDate(new Date(), "MMMM yyyy")
+                        color: Theme.secondaryLabelColor
+                        font: Typography.subheadline
+                    }
+                }
+            }
+
+            // System & Battery Widget Card
+            GlassSurface {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                variant: "clear"
+                cornerRadius: 24
+                shadowPreset: "popover"
+                backdropItem: root.backdropItem
+
+                ColumnLayout {
+                    anchors.fill: parent
+                    anchors.margins: 16
+                    spacing: 6
+                    RowLayout {
+                        spacing: 6
+                        Icon { name: "battery"; size: 16; color: Theme.systemGreen }
+                        Text { text: "SYSTEM"; color: Theme.systemGreen; font: Typography.caption2 }
+                    }
+                    Text {
+                        text: "100%"
+                        color: Theme.labelColor
+                        font: Typography.makeSpecFont(30, Font.DemiBold, -0.01, false, true)
+                    }
+                    Item { Layout.fillHeight: true }
+                    RowLayout {
+                        spacing: 6
+                        Icon { name: "wifi"; size: 14; color: Theme.systemBlue }
+                        Text { text: ShellState.wifiEnabled ? ShellState.wifiSsid : "Offline"; color: Theme.secondaryLabelColor; font: Typography.subheadline; elide: Text.ElideRight; Layout.fillWidth: true }
+                    }
+                }
+            }
+        }
+
+        // 2. Notification Stack Header
+        RowLayout {
+            Layout.fillWidth: true
+            Layout.leftMargin: 6
+            Layout.rightMargin: 6
             Text {
                 text: "Notifications"
-                font: Typography.title
-                color: Theme.textPrimary
+                color: Theme.labelColor
+                font: Typography.headline
                 Layout.fillWidth: true
             }
-
-            Controls.Button {
-                text: "Clear All"
-                sizeClass: "small"
+            GlassSurface {
                 visible: ShellState.notificationHistory.length > 0
-                onClicked: ShellState.clearNotificationHistory()
+                Layout.preferredWidth: 56; Layout.preferredHeight: 22
+                variant: "clear"
+                cornerRadius: 11
+                shadowPreset: "none"
+                backdropItem: root.backdropItem
+                Text { anchors.centerIn: parent; text: "Clear"; color: Theme.labelColor; font: Typography.caption2 }
+                MouseArea { anchors.fill: parent; onClicked: ShellState.clearNotificationHistory() }
             }
+        }
 
-            Rectangle {
-                width: 24
-                height: 24
-                radius: 12
-                color: closeHover.hovered ? (Theme.isDark ? "#33FFFFFF" : "#20000000") : "transparent"
+        // 3. Stacked Notifications Cards (Clear Glass cr=24)
+        Repeater {
+            model: ShellState.notificationHistory
+            delegate: GlassSurface {
+                Layout.fillWidth: true
+                Layout.preferredHeight: cardContent.implicitHeight + 24
+                variant: "clear"
+                cornerRadius: 22
+                shadowPreset: "popover"
+                backdropItem: root.backdropItem
 
-                Text {
-                    anchors.centerIn: parent
-                    text: "?"
-                    font.pixelSize: 12
-                    color: Theme.textSecondary
-                }
-
-                HoverHandler { id: closeHover }
-                TapHandler {
-                    onTapped: ShellState.toggleNotificationCenter()
+                RowLayout {
+                    id: cardContent
+                    anchors.fill: parent
+                    anchors.margins: 12
+                    spacing: 10
+                    Rectangle {
+                        width: 38; height: 38; radius: 10
+                        color: Theme.systemBlue
+                        Icon { anchors.centerIn: parent; name: "bell"; size: 20; color: "#FFFFFF" }
+                    }
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: 2
+                        RowLayout {
+                            Text { text: modelData.appName || "Notification"; color: Theme.secondaryLabelColor; font: Typography.subheadline; Layout.fillWidth: true }
+                            Text { text: "now"; color: Theme.tertiaryLabelColor; font: Typography.caption1 }
+                        }
+                        Text { text: modelData.summary || ""; color: Theme.labelColor; font: Typography.headline; elide: Text.ElideRight; Layout.fillWidth: true }
+                        Text { text: modelData.body || ""; color: Theme.secondaryLabelColor; font: Typography.callout; wrapMode: Text.WordWrap; maximumLineCount: 2; Layout.fillWidth: true }
+                    }
+                    Item {
+                        Layout.preferredWidth: 22; Layout.preferredHeight: 22
+                        Icon { anchors.centerIn: parent; name: "close"; size: 14; color: Theme.secondaryLabelColor }
+                        MouseArea { anchors.fill: parent; onClicked: ShellState.dismissNotification(modelData.id) }
+                    }
                 }
             }
         }
 
-        // Focus / Do Not Disturb quick card
-        Rectangle {
-            Layout.fillWidth: true
-            height: 48
-            radius: 10
-            color: Theme.isDark ? "#1AFFFFFF" : "#0D000000"
-
-            RowLayout {
-                anchors.fill: parent
-                anchors.leftMargin: 12
-                anchors.rightMargin: 12
-
-                Text {
-                    text: "??"
-                    font.pixelSize: 16
-                }
-
-                ColumnLayout {
-                    spacing: 2
-                    Layout.fillWidth: true
-
-                    Text {
-                        text: "Do Not Disturb"
-                        font: Typography.body
-                        color: Theme.textPrimary
-                    }
-                    Text {
-                        text: ShellState.doNotDisturb ? "Banners muted" : "Normal alerts"
-                        font: Typography.caption
-                        color: Theme.textSecondary
-                    }
-                }
-
-                Controls.Switch {
-                    checked: ShellState.doNotDisturb
-                    onToggled: ShellState.toggleDoNotDisturb()
-                }
-            }
-        }
-
-        // Empty state
-        Item {
-            Layout.fillWidth: true
-            Layout.fillHeight: true
+        // Empty State when no pending notifications
+        GlassSurface {
             visible: ShellState.notificationHistory.length === 0
-
-            ColumnLayout {
+            Layout.fillWidth: true
+            Layout.preferredHeight: 84
+            variant: "clear"
+            cornerRadius: 22
+            shadowPreset: "pill"
+            backdropItem: root.backdropItem
+            RowLayout {
                 anchors.centerIn: parent
                 spacing: 8
-
-                Text {
-                    text: "??"
-                    font.pixelSize: 32
-                    Layout.alignment: Qt.AlignHCenter
-                    opacity: 0.6
-                }
-
-                Text {
-                    text: "No New Notifications"
-                    font: Typography.body
-                    color: Theme.textSecondary
-                    Layout.alignment: Qt.AlignHCenter
-                }
+                Icon { name: ShellState.doNotDisturb ? "bell-off" : "bell"; size: 18; color: Theme.secondaryLabelColor }
+                Text { text: ShellState.doNotDisturb ? "Focus On — Notifications Paused" : "No New Notifications"; color: Theme.secondaryLabelColor; font: Typography.callout }
             }
         }
 
-        // History list
-        ListView {
-            id: historyList
+        // Footer Centered "Edit Widgets" Pill
+        Item {
             Layout.fillWidth: true
-            Layout.fillHeight: true
-            clip: true
-            visible: ShellState.notificationHistory.length > 0
-            model: ShellState.notificationHistory
-            spacing: 8
-
-            delegate: Rectangle {
-                id: itemCard
-                width: historyList.width
-                implicitHeight: itemLayout.implicitHeight + 20
-                radius: 10
-                color: Theme.isDark ? "#22FFFFFF" : "#10000000"
-                border.color: Theme.separator
-                border.width: 1
-
-                ColumnLayout {
-                    id: itemLayout
-                    anchors.fill: parent
-                    anchors.margins: 10
-                    spacing: 4
-
-                    RowLayout {
-                        Layout.fillWidth: true
-
-                        Image {
-                            Layout.preferredWidth: 16
-                            Layout.preferredHeight: 16
-                            sourceSize: Qt.size(16, 16)
-                            source: modelData.appIcon && modelData.appIcon.length > 0
-                                    ? "image://icon/" + modelData.appIcon
-                                    : "image://icon/dialog-information"
-                            fillMode: Image.PreserveAspectFit
-                        }
-
-                        Text {
-                            text: modelData.appName || "Notification"
-                            font: Typography.caption
-                            color: Theme.textSecondary
-                            Layout.fillWidth: true
-                        }
-
-                        Text {
-                            text: {
-                                var elapsed = (Date.now() - modelData.timestamp) / 1000;
-                                if (elapsed < 60) return "Just now";
-                                if (elapsed < 3600) return Math.floor(elapsed / 60) + "m ago";
-                                return Math.floor(elapsed / 3600) + "h ago";
-                            }
-                            font: Typography.caption
-                            color: Theme.textSecondary
-                        }
-
-                        Rectangle {
-                            width: 16
-                            height: 16
-                            radius: 8
-                            color: delHover.hovered ? (Theme.isDark ? "#33FFFFFF" : "#22000000") : "transparent"
-
-                            Text {
-                                anchors.centerIn: parent
-                                text: "?"
-                                font.pixelSize: 9
-                                color: Theme.textSecondary
-                            }
-
-                            HoverHandler { id: delHover }
-                            TapHandler {
-                                onTapped: ShellState.dismissNotification(modelData.id)
-                            }
-                        }
-                    }
-
-                    Text {
-                        text: modelData.summary || ""
-                        font: Typography.headline
-                        color: Theme.textPrimary
-                        Layout.fillWidth: true
-                    }
-
-                    Text {
-                        text: modelData.body || ""
-                        font: Typography.body
-                        color: Theme.textPrimary
-                        wrapMode: Text.WordWrap
-                        maximumLineCount: 3
-                        elide: Text.ElideRight
-                        Layout.fillWidth: true
-                        visible: modelData.body && modelData.body.length > 0
-                    }
-                }
-
-                TapHandler {
-                    onTapped: ShellState.invokeNotificationAction(modelData.id, "default")
-                }
+            Layout.preferredHeight: 32
+            GlassSurface {
+                anchors.centerIn: parent
+                width: 112; height: 28
+                variant: "clear"
+                cornerRadius: 14
+                shadowPreset: "pill"
+                backdropItem: root.backdropItem
+                Text { anchors.centerIn: parent; text: "Edit Widgets"; color: Theme.labelColor; font: Typography.callout }
+                MouseArea { anchors.fill: parent; onClicked: ShellState.OpenSetting("notifications") }
             }
         }
     }

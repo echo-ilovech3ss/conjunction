@@ -8,5 +8,9 @@ singleton Motion 1.0 Motion.qml
 singleton FocusModel 1.0 FocusModel.qml
 singleton Icons 1.0 Icons.qml
 FocusRing 1.0 FocusRing.qml
+SquircleRect 1.0 SquircleRect.qml
 Surface 1.0 Surface.qml
+GlassSurface 1.0 GlassSurface.qml
+GlassMorphContainer 1.0 GlassMorphContainer.qml
+ScrollPocket 1.0 ScrollPocket.qml
 Icon 1.0 Icon.qml

@@ -14,15 +14,17 @@ Surface {
         spacing: Spacing.md
 
         Text {
-            text: "Accessibility & Assistive Technology Semantics"
+            text: "Accessibility: Contrast, Transparency & Motion"
             font: Typography.windowTitle
             color: Theme.textPrimary
         }
 
         Text {
-            text: "All Conjunction controls expose standard Accessible roles (Button, CheckBox, RadioButton, Slider, EditableText, ListItem, Dialog) to the accessibility bridge."
+            text: "Supports Reduce Transparency (#EDEDED/#282828 solid chrome), Increase Contrast (65% dividers, 1pt borders, pure label primaries), Reduced Motion (180ms crossfades), and Font Scaling."
             font: Typography.secondaryBody
             color: Theme.textSecondary
+            wrapMode: Text.WordWrap
+            Layout.fillWidth: true
         }
 
         Rectangle {
@@ -33,27 +35,33 @@ Surface {
 
         RowLayout {
             spacing: Spacing.md
-
-            Button {
-                text: "Font Scale 100%"
-                onClicked: Appearance.setFontScale(1.0)
+            CheckBox {
+                text: "Reduce Transparency"
+                checked: Appearance.reduceTransparency
+                onToggled: Appearance.setReduceTransparency(checked)
             }
-            Button {
-                text: "Font Scale 125%"
-                onClicked: Appearance.setFontScale(1.25)
+            CheckBox {
+                text: "Increase Contrast"
+                checked: Appearance.increaseContrast
+                onToggled: Appearance.setIncreaseContrast(checked)
             }
-            Button {
-                text: "Font Scale 150%"
-                onClicked: Appearance.setFontScale(1.5)
-            }
-            Button {
-                text: "Font Scale 200%"
-                onClicked: Appearance.setFontScale(2.0)
+            CheckBox {
+                text: "Reduced Motion"
+                checked: Appearance.reducedMotion
+                onToggled: Appearance.setReducedMotion(checked)
             }
         }
 
+        RowLayout {
+            spacing: Spacing.md
+            Button { text: "Font Scale 100%"; onClicked: Appearance.setFontScale(1.0) }
+            Button { text: "Font Scale 125%"; onClicked: Appearance.setFontScale(1.25) }
+            Button { text: "Font Scale 150%"; onClicked: Appearance.setFontScale(1.5) }
+            Button { text: "Font Scale 200%"; onClicked: Appearance.setFontScale(2.0) }
+        }
+
         Text {
-            text: "Active Scale: " + Math.round(Appearance.fontScale * 100) + "%"
+            text: "Active Scale: " + Math.round(Appearance.fontScale * 100) + "% | Optical Cap-Scale: " + (Appearance.useOpticalCapScaling ? "ON (0.9685x)" : "OFF")
             font: Typography.sectionHeading
             color: Theme.accent
         }

@@ -1,4 +1,0 @@
-enable conjunction-live-init.service
-enable conjunction-setup.service
-enable NetworkManager.service
-enable sddm.service

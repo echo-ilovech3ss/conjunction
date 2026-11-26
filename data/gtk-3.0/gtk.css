@@ -1,0 +1,16 @@
+/* Conjunction GTK 3/4 Color Token Overrides mapped to SPEC §2.8 */
+@define-color accent_bg_color #007AFF;
+@define-color accent_fg_color #FFFFFF;
+@define-color accent_color #0088FF;
+@define-color window_bg_color #ECECEC;
+@define-color window_fg_color rgba(0, 0, 0, 0.847);
+@define-color view_bg_color #FFFFFF;
+@define-color view_fg_color rgba(0, 0, 0, 0.847);
+@define-color headerbar_bg_color #ECECEC;
+@define-color headerbar_fg_color rgba(0, 0, 0, 0.847);
+@define-color headerbar_border_color rgba(0, 0, 0, 0.098);
+@define-color popover_bg_color #F4F4F4;
+@define-color popover_fg_color rgba(0, 0, 0, 0.847);
+@define-color card_bg_color #FFFFFF;
+@define-color borders rgba(0, 0, 0, 0.098);
+@define-color destructive_bg_color #FF383C;

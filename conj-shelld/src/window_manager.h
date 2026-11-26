@@ -13,6 +13,7 @@ struct ShellWindowEntry {
     uint pid = 0;
     bool isFullscreen = false;
     bool active = false;
+    bool minimized = false;
 };
 
 class WindowManager : public QObject, protected QDBusContext {
@@ -39,6 +40,7 @@ public Q_SLOTS:
     Q_SCRIPTABLE void WindowRemoved(const QString &internalId);
     Q_SCRIPTABLE void WindowActivated(const QString &internalId, const QString &title, const QString &appId, uint pid, bool isFullscreen);
     Q_SCRIPTABLE void WindowChanged(const QString &internalId, const QString &title, bool isFullscreen);
+    Q_SCRIPTABLE void WindowMinimizedChanged(const QString &internalId, const QString &title, const QString &appId, bool minimized);
 
 Q_SIGNALS:
     void windowListChanged();

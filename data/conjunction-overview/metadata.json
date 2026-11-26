@@ -1,7 +1,7 @@
 {
     "KPlugin": {
         "Name": "Conjunction Mission Control",
-        "Description": "macOS-style Mission Control and Exposé window overview for Conjunction",
+        "Description": "Conjunction Mission Control and Expose window overview",
         "Id": "conjunction-overview",
         "Version": "1.0",
         "Author": "Conjunction Project",

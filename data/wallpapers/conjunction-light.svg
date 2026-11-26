@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080" width="1920" height="1080">
+  <defs>
+    <linearGradient id="skyLight" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#3E9BE3"/>
+      <stop offset="48%" stop-color="#87CAF2"/>
+      <stop offset="86%" stop-color="#F5D7BC"/>
+      <stop offset="100%" stop-color="#E59876"/>
+    </linearGradient>
+    <linearGradient id="ridge1" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.34"/>
+      <stop offset="100%" stop-color="#D4ECFA" stop-opacity="0.14"/>
+    </linearGradient>
+    <linearGradient id="ridge2" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#2D7EC4" stop-opacity="0.28"/>
+      <stop offset="100%" stop-color="#60A8DE" stop-opacity="0.16"/>
+    </linearGradient>
+  </defs>
+  <rect width="1920" height="1080" fill="url(#skyLight)"/>
+  <path d="M 0 670 C 520 470, 1080 780, 1920 520 L 1920 1080 L 0 1080 Z" fill="url(#ridge1)"/>
+  <path d="M 0 840 C 660 690, 1360 930, 1920 730 L 1920 1080 L 0 1080 Z" fill="url(#ridge2)"/>
+</svg>

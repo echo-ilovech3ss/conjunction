@@ -26,6 +26,7 @@ QVariant SidebarModel::data(const QModelIndex &index, int role) const
     case IconNameRole: return item.iconName;
     case SectionRole: return item.section;
     case IsTrashRole: return item.isTrash;
+    case IsMountRole: return item.isMount;
     default: return QVariant();
     }
 }
@@ -38,6 +39,7 @@ QHash<int, QByteArray> SidebarModel::roleNames() const
     roles[IconNameRole] = "iconName";
     roles[SectionRole] = "section";
     roles[IsTrashRole] = "isTrash";
+    roles[IsMountRole] = "isMount";
     return roles;
 }
 
@@ -111,14 +113,20 @@ void SidebarModel::populate()
     m_items.append({QStringLiteral("Trash"), trashPath, QStringLiteral("user-trash"), QStringLiteral("Favorites"), true});
 
     // Locations section
-    m_items.append({QStringLiteral("Macintosh HD"), QStringLiteral("/"), QStringLiteral("drive-harddisk"), QStringLiteral("Locations"), false});
+    m_items.append({QStringLiteral("Conjunction"), QStringLiteral("/"), QStringLiteral("drive-harddisk"), QStringLiteral("Locations"), false, false});
 
-    // Removable media if mounted
-    QString mediaRun = QStringLiteral("/run/media/") + qgetenv("USER");
-    if (QDir(mediaRun).exists()) {
-        QFileInfoList mounts = QDir(mediaRun).entryInfoList(QDir::Dirs | QDir::NoDotAndDotDot);
+    // Removable media and mounted .cdmg images
+    QStringList mountRoots = {
+        QStringLiteral("/run/media/") + qgetenv("USER"),
+        QStringLiteral("/media"),
+        QStringLiteral("/mnt")
+    };
+    for (const QString &mr : mountRoots) {
+        if (!QDir(mr).exists()) continue;
+        const QFileInfoList mounts = QDir(mr).entryInfoList(QDir::Dirs | QDir::NoDotAndDotDot);
         for (const QFileInfo &m : mounts) {
-            m_items.append({m.fileName(), m.absoluteFilePath(), QStringLiteral("media-removable"), QStringLiteral("Locations"), false});
+            if (mr == QStringLiteral("/mnt") && !m.fileName().startsWith(QStringLiteral("conj-"))) continue;
+            m_items.append({m.fileName(), m.absoluteFilePath(), QStringLiteral("media-removable"), QStringLiteral("Locations"), false, true});
         }
     }
 }

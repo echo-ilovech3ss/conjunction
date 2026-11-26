@@ -24,16 +24,16 @@ T.TextArea {
     Accessible.name: placeholderText || "Text Area"
     Accessible.focusable: true
 
-    background: Rectangle {
+    background: SquircleRect {
         id: bg
-        radius: Geometry.radiusSmall
-        color: control.enabled ? Theme.surface : Theme.surfaceSecondary
-        border.color: control.activeFocus ? Theme.accent : Theme.separator
-        border.width: Geometry.separatorThickness
+        radius: Geometry.radiusTextField
+        color: control.enabled ? Theme.controlBackgroundColor : Theme.controlFill
+        borderColor: Appearance.shouldIncreaseContrast ? Theme.highContrastBorderColor : (control.activeFocus ? Theme.accent : Theme.separator)
+        borderWidth: Geometry.separatorThickness
 
         FocusRing {
-            active: control.activeFocus && FocusModel.keyboardNavigationActive
             target: bg
+            isTextInput: true
         }
     }
 }

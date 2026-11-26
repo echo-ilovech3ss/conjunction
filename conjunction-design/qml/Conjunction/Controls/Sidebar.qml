@@ -2,16 +2,15 @@ import QtQuick
 import QtQuick.Layouts
 import Conjunction.Design
 
-Rectangle {
+Item {
     id: root
 
     property int currentIndex: 0
+    property Item backdropItem: null
     default property alias data: contentCol.data
 
-    implicitWidth: 200
-    color: Theme.surfaceSecondary
-    border.color: Theme.separator
-    border.width: Geometry.separatorThickness
+    implicitWidth: 216
+    implicitHeight: 400
 
     activeFocusOnTab: true
     focusPolicy: Qt.StrongFocus
@@ -19,21 +18,40 @@ Rectangle {
     Accessible.role: Accessible.List
     Accessible.name: "Sidebar Navigation"
 
-    Flickable {
+    GlassSurface {
         anchors.fill: parent
-        anchors.margins: Spacing.xs
-        contentHeight: contentCol.implicitHeight
+        variant: "regular"
+        cornerRadius: 0
+        backdropItem: root.backdropItem
+        shadowPreset: "none"
+        rimIntensityScale: 0.4
+    }
+
+    Flickable {
+        id: sidebarFlick
+        anchors.fill: parent
+        anchors.margins: Spacing.inset // 10 pt inset matching cr=10 pills
+        contentHeight: Math.max(height, contentCol.implicitHeight)
         clip: true
 
         ColumnLayout {
             id: contentCol
             width: parent.width
-            spacing: Spacing.xxs
+            height: Math.max(sidebarFlick.height, implicitHeight)
+            spacing: 2
         }
     }
 
+    Rectangle {
+        anchors.top: parent.top
+        anchors.bottom: parent.bottom
+        anchors.right: parent.right
+        width: Geometry.separatorThickness
+        color: Theme.separatorColor
+    }
+
     FocusRing {
-        active: root.activeFocus && FocusModel.keyboardNavigationActive
         target: root
+        isTextInput: false
     }
 }

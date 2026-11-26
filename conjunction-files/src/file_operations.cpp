@@ -477,3 +477,41 @@ QVariantMap FileOperations::getFileInfo(const QString &filePath)
 
     return map;
 }
+
+bool FileOperations::ejectVolume(const QString &mountPoint)
+{
+    if (mountPoint.isEmpty() || mountPoint == QStringLiteral("/")) return false;
+    QString conjOpen = QStandardPaths::findExecutable(QStringLiteral("conj-open"));
+    int rc = 1;
+    if (!conjOpen.isEmpty()) {
+        rc = QProcess::execute(conjOpen, QStringList() << QStringLiteral("--eject") << mountPoint);
+    } else {
+        rc = QProcess::execute(QStringLiteral("umount"), QStringList() << mountPoint);
+    }
+    const bool ok = (rc == 0);
+    emit operationFinished(ok, ok ? QStringLiteral("Volume ejected") : QStringLiteral("Failed to eject volume"));
+    return ok;
+}
+
+bool FileOperations::installAppBundle(const QString &bundlePath, const QString &destApplicationsDir)
+{
+    QFileInfo src(bundlePath);
+    if (!src.exists() || !src.isDir() || !src.fileName().endsWith(QStringLiteral(".app"))) {
+        return false;
+    }
+    QDir().mkpath(destApplicationsDir);
+    const QString target = QDir(destApplicationsDir).filePath(src.fileName());
+    QProcess cp;
+    cp.start(QStringLiteral("cp"), QStringList() << QStringLiteral("-a") << src.absoluteFilePath() << target);
+    cp.waitForFinished();
+    const bool ok = (cp.exitCode() == 0);
+    if (ok) {
+        QString conjAppctl = QStandardPaths::findExecutable(QStringLiteral("conj-appctl"));
+        if (!conjAppctl.isEmpty()) {
+            QProcess::startDetached(conjAppctl, QStringList() << QStringLiteral("rescan"));
+        }
+        emit directoryChanged(destApplicationsDir);
+    }
+    emit operationFinished(ok, ok ? QStringLiteral("Application installed") : QStringLiteral("Application copy failed"));
+    return ok;
+}

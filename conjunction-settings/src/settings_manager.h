@@ -13,10 +13,16 @@ class SettingsManager : public QObject {
     Q_PROPERTY(QString appearanceMode READ appearanceMode WRITE setAppearanceMode NOTIFY appearanceModeChanged)
     Q_PROPERTY(QString appearanceAccent READ appearanceAccent WRITE setAppearanceAccent NOTIFY appearanceAccentChanged)
     Q_PROPERTY(bool reducedMotion READ reducedMotion WRITE setReducedMotion NOTIFY reducedMotionChanged)
+    Q_PROPERTY(bool reduceTransparency READ reduceTransparency WRITE setReduceTransparency NOTIFY reduceTransparencyChanged)
+    Q_PROPERTY(bool increaseContrast READ increaseContrast WRITE setIncreaseContrast NOTIFY increaseContrastChanged)
     Q_PROPERTY(int dockSize READ dockSize WRITE setDockSize NOTIFY dockSizeChanged)
     Q_PROPERTY(bool dockMagnification READ dockMagnification WRITE setDockMagnification NOTIFY dockMagnificationChanged)
     Q_PROPERTY(qreal dockMagnificationScale READ dockMagnificationScale WRITE setDockMagnificationScale NOTIFY dockMagnificationScaleChanged)
+    Q_PROPERTY(QString dockMinimizeEffect READ dockMinimizeEffect WRITE setDockMinimizeEffect NOTIFY dockMinimizeEffectChanged)
     Q_PROPERTY(QString dockDisplayPolicy READ dockDisplayPolicy WRITE setDockDisplayPolicy NOTIFY dockDisplayPolicyChanged)
+    Q_PROPERTY(int hotCornerBottomRight READ hotCornerBottomRight WRITE setHotCornerBottomRight NOTIFY hotCornerBottomRightChanged)
+    Q_PROPERTY(bool canGoBack READ canGoBack NOTIFY navigationHistoryChanged)
+    Q_PROPERTY(bool canGoForward READ canGoForward NOTIFY navigationHistoryChanged)
     Q_PROPERTY(qreal displayScale READ displayScale WRITE setDisplayScale NOTIFY displayScaleChanged)
     Q_PROPERTY(int soundVolume READ soundVolume WRITE setSoundVolume NOTIFY soundVolumeChanged)
     Q_PROPERTY(bool soundMuted READ soundMuted WRITE setSoundMuted NOTIFY soundMutedChanged)
@@ -45,6 +51,23 @@ public:
 
     bool reducedMotion() const;
     void setReducedMotion(bool enabled);
+
+    bool reduceTransparency() const;
+    Q_INVOKABLE void setReduceTransparency(bool enabled);
+
+    bool increaseContrast() const;
+    Q_INVOKABLE void setIncreaseContrast(bool enabled);
+
+    QString dockMinimizeEffect() const;
+    Q_INVOKABLE void setDockMinimizeEffect(const QString &effect);
+
+    int hotCornerBottomRight() const;
+    Q_INVOKABLE void setHotCornerBottomRight(int actionCode);
+
+    bool canGoBack() const;
+    bool canGoForward() const;
+    Q_INVOKABLE void goBack();
+    Q_INVOKABLE void goForward();
 
     int dockSize() const;
     void setDockSize(int size);
@@ -104,6 +127,11 @@ Q_SIGNALS:
     void appearanceModeChanged();
     void appearanceAccentChanged();
     void reducedMotionChanged();
+    void reduceTransparencyChanged();
+    void increaseContrastChanged();
+    void dockMinimizeEffectChanged();
+    void hotCornerBottomRightChanged();
+    void navigationHistoryChanged();
     void defaultAppsChanged();
     void shortcutsChanged();
     void dockSizeChanged();
@@ -130,20 +158,26 @@ private:
     void writeSetting(const QString &key, const QVariant &value);
     void performSearch(const QString &query);
 
-    QString m_appearanceMode = "dark";
-    QString m_appearanceAccent = "#0066CC";
-    int m_dockSize = 68;
+    QString m_appearanceMode = "light";
+    QString m_appearanceAccent = "blue";
+    int m_dockSize = 54;
     bool m_dockMagnification = true;
-    qreal m_dockMagnificationScale = 1.35;
+    qreal m_dockMagnificationScale = 1.45;
+    QString m_dockMinimizeEffect = "genie";
     QString m_dockDisplayPolicy = "primary";
+    int m_hotCornerBottomRight = 14;
     qreal m_displayScale = 1.0;
     int m_soundVolume = 75;
     bool m_soundMuted = false;
     bool m_wifiEnabled = true;
     bool m_bluetoothEnabled = true;
-    QString m_desktopWallpaper = "default.jpg";
+    QString m_desktopWallpaper = "conjunction-light.svg";
     bool m_reducedMotion = false;
+    bool m_reduceTransparency = false;
+    bool m_increaseContrast = false;
     QString m_activePage = "about";
+    QStringList m_pageHistory = {"about"};
+    int m_pageHistoryIdx = 0;
     QString m_highlightedSetting;
     QString m_searchQuery;
     QVariantList m_searchResults;

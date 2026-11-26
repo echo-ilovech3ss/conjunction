@@ -76,7 +76,7 @@ int main(int argc, char *argv[])
     parser.addVersionOption();
 
     QCommandLineOption pathOption("path", "Initial folder path to open", "directory", QDir::homePath());
-    QCommandLineOption viewOption("view", "View mode: icon, list, or column", "mode", "icon");
+    QCommandLineOption viewOption("view", "View mode: icon, list, column, or gallery", "mode", "icon");
     QCommandLineOption quicklookOption("quicklook", "Open Quick Look preview on target file", "file");
     QCommandLineOption getInfoOption("get-info", "Open Get Info dialog on target file", "file");
     QCommandLineOption screenshotOption("screenshot", "Capture window to PNG file and exit", "file");
@@ -124,12 +124,20 @@ int main(int argc, char *argv[])
 
     // Search paths for QML modules (Conjunction.Design and Conjunction.Controls)
     QString appDir = QCoreApplication::applicationDirPath();
-    engine.addImportPath(appDir + "/../share/conjunction/qml");
+    auto addCompiledImportPath = [&](const QString &p) {
+        if (QFile::exists(p + "/Conjunction/Design/shaders/liquid_glass.frag.qsb")) {
+            engine.addImportPath(p);
+        }
+    };
+    addCompiledImportPath(appDir + "/../share/conjunction/qml");
+    addCompiledImportPath("/usr/share/conjunction/qml");
+    addCompiledImportPath("/tmp/build-design/qml");
     engine.addImportPath(appDir + "/../../conjunction-design/qml");
-    engine.addImportPath("/usr/share/conjunction/qml");
+    engine.addImportPath("/work/conjunction-design/qml");
+    engine.addImportPath("/usr/lib64/qt6/qml");
     engine.addImportPath("/usr/lib/qt6/qml");
 
-    bool isDark = true;
+    bool isDark = false;
     if (parser.isSet(lightOption)) isDark = false;
     else if (parser.isSet(darkOption)) isDark = true;
 
@@ -144,18 +152,10 @@ int main(int argc, char *argv[])
     engine.rootContext()->setContextProperty("cliGetInfoTarget", parser.value(getInfoOption));
 
     QString qmlFile = appDir + "/../share/conjunction/files/FilesWindow.qml";
-    if (!QFile::exists(qmlFile)) {
-        qmlFile = "/usr/share/conjunction/files/FilesWindow.qml";
-    }
-    if (!QFile::exists(qmlFile)) {
-        qmlFile = appDir + "/../qml/FilesWindow.qml";
-    }
-    if (!QFile::exists(qmlFile)) {
-        qmlFile = QDir::currentPath() + "/conjunction-files/qml/FilesWindow.qml";
-    }
-    if (!QFile::exists(qmlFile)) {
-        qmlFile = "/mnt/c/Users/Way4U/Coding-projects/conjunction/conjunction-files/qml/FilesWindow.qml";
-    }
+    if (!QFile::exists(qmlFile)) qmlFile = "/usr/share/conjunction/files/FilesWindow.qml";
+    if (!QFile::exists(qmlFile)) qmlFile = appDir + "/../qml/FilesWindow.qml";
+    if (!QFile::exists(qmlFile)) qmlFile = QDir::currentPath() + "/conjunction-files/qml/FilesWindow.qml";
+    if (!QFile::exists(qmlFile)) qmlFile = "/work/conjunction-files/qml/FilesWindow.qml";
 
     qInfo() << "[conjunction-files] Loading Files QML:" << qmlFile;
     engine.load(QUrl::fromLocalFile(qmlFile));

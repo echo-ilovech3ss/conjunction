@@ -1,0 +1,6 @@
+# bootc-image-builder configuration for Conjunction OS installable media.
+# Leaves partitioning, timezone, locale, and initial user creation interactive
+# in Anaconda while bootc-image-builder injects the container payload directive.
+
+[customizations.installer.kickstart]
+contents = ""

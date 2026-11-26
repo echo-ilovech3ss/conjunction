@@ -1,139 +1,58 @@
 import QtQuick
-import QtQuick.Controls
 import QtQuick.Layouts
 import Conjunction.Design
-import Conjunction.Controls as Controls
 
+// SPEC §4.3 Top-right 344 pt slide-in Clear Glass Notification Toast Banner
 Item {
     id: root
-    width: 360
-    anchors.top: parent.top
-    anchors.topMargin: 38
-    anchors.right: parent.right
-    anchors.rightMargin: 16
-    z: 999
-    visible: ShellState.activeBanners.length > 0
+    property Item backdropItem: null
+
+    width: 344
+    height: bannerCol.implicitHeight
 
     Column {
-        width: parent.width
-        spacing: 10
+        id: bannerCol
+        width: 344
+        spacing: 8
 
         Repeater {
             model: ShellState.activeBanners
+            delegate: GlassSurface {
+                width: 344
+                height: innerRow.implicitHeight + 24
+                variant: "clear"
+                cornerRadius: 22
+                shadowPreset: "popover"
+                backdropItem: root.backdropItem
 
-            delegate: Rectangle {
-                id: bannerCard
-                width: 360
-                implicitHeight: cardLayout.implicitHeight + 20
-                radius: 12
-                color: Theme.isDark ? "#EB222329" : "#EBF8FAFC"
-                border.color: Theme.isDark ? "#33FFFFFF" : "#20000000"
-                border.width: 1
-
-                Behavior on opacity {
-                    NumberAnimation { duration: ShellState.reducedMotion ? 50 : 200 }
-                }
-
-                ColumnLayout {
-                    id: cardLayout
+                RowLayout {
+                    id: innerRow
                     anchors.fill: parent
                     anchors.margins: 12
-                    spacing: 6
+                    spacing: 10
 
-                    // App Name & Close row
-                    RowLayout {
-                        Layout.fillWidth: true
-                        spacing: 8
-
-                        Image {
-                            Layout.preferredWidth: 18
-                            Layout.preferredHeight: 18
-                            sourceSize: Qt.size(18, 18)
-                            source: modelData.appIcon && modelData.appIcon.length > 0
-                                    ? "image://icon/" + modelData.appIcon
-                                    : "image://icon/dialog-information"
-                            fillMode: Image.PreserveAspectFit
-                        }
-
-                        Text {
-                            text: modelData.appName || "Notification"
-                            font: Typography.caption
-                            color: Theme.textSecondary
-                            elide: Text.ElideRight
-                            Layout.fillWidth: true
-                        }
-
-                        // Dismiss button
-                        Rectangle {
-                            width: 18
-                            height: 18
-                            radius: 9
-                            color: closeHover.hovered ? (Theme.isDark ? "#33FFFFFF" : "#22000000") : "transparent"
-
-                            Text {
-                                anchors.centerIn: parent
-                                text: "?"
-                                font.pixelSize: 10
-                                color: Theme.textSecondary
-                            }
-
-                            HoverHandler { id: closeHover }
-                            TapHandler {
-                                onTapped: ShellState.dismissNotification(modelData.id)
-                            }
-                        }
+                    Rectangle {
+                        width: 40; height: 40; radius: 11
+                        color: Theme.systemBlue
+                        Icon { anchors.centerIn: parent; name: "bell"; size: 22; color: "#FFFFFF" }
                     }
 
-                    // Summary / Title
-                    Text {
-                        text: modelData.summary || ""
-                        font: Typography.headline
-                        color: Theme.textPrimary
-                        wrapMode: Text.WordWrap
+                    ColumnLayout {
                         Layout.fillWidth: true
-                    }
-
-                    // Body
-                    Text {
-                        text: modelData.body || ""
-                        font: Typography.body
-                        color: Theme.textPrimary
-                        wrapMode: Text.WordWrap
-                        maximumLineCount: 3
-                        elide: Text.ElideRight
-                        Layout.fillWidth: true
-                        visible: modelData.body && modelData.body.length > 0
-                    }
-
-                    // Action buttons
-                    RowLayout {
-                        Layout.fillWidth: true
-                        spacing: 8
-                        visible: modelData.actions && modelData.actions.length > 1
-
-                        Repeater {
-                            model: {
-                                var res = [];
-                                if (modelData.actions) {
-                                    for (var i = 0; i + 1 < modelData.actions.length; i += 2) {
-                                        res.push({ key: modelData.actions[i], label: modelData.actions[i + 1] });
-                                    }
-                                }
-                                return res;
-                            }
-
-                            delegate: Controls.Button {
-                                text: modelData.label
-                                sizeClass: "small"
-                                onClicked: ShellState.invokeNotificationAction(bannerCard.modelData.id, modelData.key)
-                            }
+                        spacing: 2
+                        RowLayout {
+                            Text { text: modelData.appName || "System"; color: Theme.secondaryLabelColor; font: Typography.subheadline; Layout.fillWidth: true }
+                            Text { text: "now"; color: Theme.tertiaryLabelColor; font: Typography.caption1 }
                         }
+                        Text { text: modelData.summary || ""; color: Theme.labelColor; font: Typography.headline; elide: Text.ElideRight; Layout.fillWidth: true }
+                        Text { text: modelData.body || ""; color: Theme.secondaryLabelColor; font: Typography.callout; wrapMode: Text.WordWrap; maximumLineCount: 2; Layout.fillWidth: true }
                     }
-                }
 
-                // Click body to trigger default action
-                TapHandler {
-                    onTapped: ShellState.invokeNotificationAction(modelData.id, "default")
+                    Item {
+                        Layout.preferredWidth: 20; Layout.preferredHeight: 20
+                        Icon { anchors.centerIn: parent; name: "close"; size: 14; color: Theme.secondaryLabelColor }
+                        MouseArea { anchors.fill: parent; onClicked: ShellState.dismissNotification(modelData.id) }
+                    }
                 }
             }
         }

@@ -1,13 +1,18 @@
 import QtQuick
 import QtQuick.Templates as T
-import QtQuick.Layouts
 import Conjunction.Design
 
 T.RadioButton {
     id: control
 
-    implicitWidth: Math.max(Geometry.minTargetSize, indicatorCircle.width + Spacing.sm + labelText.implicitWidth)
-    implicitHeight: Math.max(Geometry.minTargetSize, Geometry.controlHeightSmall)
+    // SPEC §2.3 Radio: mini 14, small 16, regular 18 (20 fitting), large 20
+    property string sizeClass: "regular"
+    readonly property int boxSize: Geometry.checkBoxSize(sizeClass)
+
+    onPressed: FocusModel.markPointerNavigation()
+
+    implicitWidth: Math.max(boxSize, indicatorCircle.width + (text !== "" ? Spacing.sm + labelText.implicitWidth : 0))
+    implicitHeight: Math.max(boxSize + 2, labelText.implicitHeight)
 
     activeFocusOnTab: true
     focusPolicy: Qt.StrongFocus
@@ -19,45 +24,46 @@ T.RadioButton {
 
     indicator: Rectangle {
         id: indicatorCircle
-        width: 16
-        height: 16
-        y: Math.round((control.height - height) / 2)
-        radius: 8
-        border.width: Geometry.separatorThickness
+        width: control.boxSize
+        height: control.boxSize
+        y: Math.round((control.height - height) * 0.5)
+        radius: width * 0.5
+        border.width: Appearance.shouldIncreaseContrast ? 1.0 : Geometry.separatorThickness
 
         color: {
-            if (!control.enabled) return Theme.surfaceSecondary;
-            if (control.down) return Theme.surfaceSecondary;
-            return Theme.surface;
+            if (!control.enabled) return Theme.controlFill;
+            if (control.checked) return Theme.accent;
+            if (control.down) return Theme.controlFillPressed;
+            return Theme.controlBackgroundColor;
         }
 
         border.color: {
+            if (Appearance.shouldIncreaseContrast) return Theme.highContrastBorderColor;
             if (!control.enabled) return Theme.separator;
-            if (control.checked) return Theme.accent;
-            if (control.hovered) return Theme.accent;
+            if (control.checked || control.hovered) return Theme.accent;
             return Theme.separator;
         }
 
         Rectangle {
             id: innerDot
             visible: control.checked
-            width: 6
-            height: 6
-            radius: 3
+            width: Math.max(6, Math.round(control.boxSize * 0.38))
+            height: width
+            radius: width * 0.5
             anchors.centerIn: parent
-            color: control.enabled ? Theme.accent : Theme.textDisabled
+            color: control.enabled ? "#FFFFFF" : Theme.textDisabled
         }
 
         FocusRing {
-            active: control.activeFocus && FocusModel.keyboardNavigationActive
             target: indicatorCircle
+            isTextInput: false
         }
     }
 
     contentItem: Text {
         id: labelText
         text: control.text
-        font: Typography.body
+        font: (control.sizeClass === "small") ? Typography.subheadline : Typography.body
         color: control.enabled ? Theme.textPrimary : Theme.textDisabled
         verticalAlignment: Text.AlignVCenter
         leftPadding: control.indicator.width + Spacing.sm

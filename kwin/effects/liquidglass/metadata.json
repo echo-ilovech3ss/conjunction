@@ -1,0 +1,13 @@
+{
+    "KPlugin": {
+        "Category": "Appearance",
+        "Description": "Conjunction Liquid Glass compositor backdrop effect implementing SPEC Section 1 shader pipeline",
+        "EnabledByDefault": true,
+        "Id": "conjunctionglass",
+        "Name": "Conjunction Liquid Glass"
+    },
+    "org.kde.kwin.effect": {
+        "exclusiveGroup": "blur",
+        "enabledByDefault": true
+    }
+}

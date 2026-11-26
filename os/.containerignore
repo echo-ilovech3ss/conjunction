@@ -1,0 +1,16 @@
+.git/
+target/
+out/
+pkgcache/
+.conjunction/
+.snapshots/
+__pycache__/
+*.pyc
+.pytest_cache/
+*.iso
+*.qcow2
+*.raw
+*.ppm
+*.log
+docs/design/macos-reference/
+tests/

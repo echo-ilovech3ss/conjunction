@@ -1,258 +1,301 @@
 import QtQuick
 import QtQuick.Layouts
 import Conjunction.Design
-import Conjunction.Controls as Controls
+import Conjunction.Controls as C
 
+// SPEC §4.5 Quick Search: 680x54 capsule -> expands 680x430 (20 pt radius)
 Item {
     id: root
-    anchors.fill: parent
-    visible: ShellState.spotlightVisible
-    z: 200
+    property Item backdropItem: null
 
-    property int selectedIndex: 0
+    readonly property bool hasResults: filteredResults.length > 0
+    property string activeFilter: "All"
+    property int currentIndex: 0
+    property bool previewExpanded: ShellState.quickLookVisible
 
-    onVisibleChanged: {
-        if (visible) {
-            searchInput.text = ShellState.searchQuery;
-            searchInput.forceActiveFocus();
-            selectedIndex = 0;
+    readonly property var filteredResults: {
+        var all = ShellState.searchResults || [];
+        if (activeFilter === "All") return all;
+        var out = [];
+        for (var i = 0; i < all.length; ++i) {
+            var cat = (all[i].category || "");
+            if (activeFilter === "Apps" && (cat === "Apps" || cat === "Applications")) out.push(all[i]);
+            else if (activeFilter === "Files" && cat === "Files") out.push(all[i]);
+            else if (activeFilter === "Settings" && cat.indexOf("Settings") >= 0) out.push(all[i]);
         }
+        return out;
     }
 
-    // Semi-transparent backdrop to focus attention on search
-    Rectangle {
+    onFilteredResultsChanged: {
+        if (currentIndex >= filteredResults.length) currentIndex = 0;
+        if (filteredResults.length > 0) previewExpanded = true;
+    }
+
+    width: 680
+    height: hasResults || ShellState.searchQuery !== "" ? 430 : 54
+    Behavior on height { NumberAnimation { duration: Motion.duration(Motion.quickSearchOpen); easing.type: Easing.OutCubic } }
+
+    GlassSurface {
         anchors.fill: parent
-        color: "#40000000"
-        opacity: root.visible ? 1.0 : 0.0
-        Behavior on opacity {
-            NumberAnimation { duration: 150 }
-        }
-        TapHandler {
-            onTapped: ShellState.spotlightVisible = false
-        }
-    }
-
-    // Floating Spotlight Dialog
-    Rectangle {
-        id: searchCard
-        width: 620
-        height: Math.min(520, headerRow.height + resultsList.contentHeight + 24)
-        anchors.horizontalCenter: parent.horizontalCenter
-        y: parent.height * 0.16
-        radius: 16
-
-        color: Theme.isDark ? "#E61F2026" : "#F2FFFFFF"
-        border.color: Theme.separator
-        border.width: 1
-
-        // Drop shadow illusion
-        Rectangle {
-            anchors.fill: parent
-            anchors.margins: -1
-            radius: 17
-            color: "transparent"
-            border.color: Theme.isDark ? "#33FFFFFF" : "#1A000000"
-            border.width: 1
-            z: -1
-        }
+        variant: "clear"
+        cornerRadius: 20
+        shadowPreset: "window"
+        backdropItem: root.backdropItem
 
         ColumnLayout {
             anchors.fill: parent
-            anchors.margins: 12
-            spacing: 8
+            spacing: 0
 
-            // Top Search Input Box
-            RowLayout {
-                id: headerRow
+            // Top Input Bar (54 pt)
+            Item {
                 Layout.fillWidth: true
-                Layout.preferredHeight: 44
-                spacing: 10
+                Layout.preferredHeight: 54
 
-                Icon {
-                    name: "search"
-                    size: 20
-                    color: Theme.accent
-                    Layout.leftMargin: 6
-                }
+                RowLayout {
+                    anchors.fill: parent
+                    anchors.leftMargin: 18
+                    anchors.rightMargin: 16
+                    spacing: 12
 
-                TextInput {
-                    id: searchInput
-                    Layout.fillWidth: true
-                    font: Typography.title
-                    color: Theme.textPrimary
-                    clip: true
-                    focus: true
-                    selectByMouse: true
+                    Icon { name: "search"; size: 22; color: Theme.secondaryLabelColor }
 
-                    Text {
-                        anchors.fill: parent
-                        text: "Search apps, settings, actions, and files..."
-                        font: searchInput.font
-                        color: Theme.textPlaceholder
-                        visible: !searchInput.text && !searchInput.inputMethodComposing
+                    TextInput {
+                        id: queryInput
+                        Layout.fillWidth: true
+                        text: ShellState.searchQuery
+                        color: Theme.labelColor
+                        selectionColor: Theme.selectedContentBackgroundColor
+                        font: Typography.makeSpecFont(20, Font.Normal, -0.002, false, false)
+                        clip: true
+                        focus: root.visible
+                        onTextChanged: {
+                            if (ShellState.searchQuery !== text) {
+                                ShellState.searchQuery = text;
+                                root.currentIndex = 0;
+                            }
+                        }
+
+                        Text {
+                            visible: queryInput.text === ""
+                            text: "Quick Search"
+                            color: Theme.tertiaryLabelColor
+                            font: parent.font
+                            anchors.verticalCenter: parent.verticalCenter
+                        }
+
+                        Keys.onUpPressed: root.currentIndex = Math.max(0, root.currentIndex - 1)
+                        Keys.onDownPressed: root.currentIndex = Math.min(root.filteredResults.length - 1, root.currentIndex + 1)
+                        Keys.onTabPressed: (ev) => {
+                            ev.accepted = true;
+                            root.previewExpanded = !root.previewExpanded;
+                            if (root.previewExpanded) ShellState.openQuickLook(root.currentIndex);
+                        }
+                        Keys.onReturnPressed: {
+                            if (root.filteredResults.length > 0) {
+                                var origIdx = (ShellState.searchResults || []).indexOf(root.filteredResults[root.currentIndex]);
+                                ShellState.activateSearchResult(origIdx >= 0 ? origIdx : root.currentIndex);
+                            }
+                        }
+                        Keys.onEscapePressed: ShellState.spotlightVisible = false
                     }
 
-                    onTextChanged: {
-                        ShellState.searchQuery = text;
-                        root.selectedIndex = 0;
-                    }
-
-                    Keys.onDownPressed: {
-                        if (root.selectedIndex < ShellState.searchResults.length - 1) {
-                            root.selectedIndex++;
+                    // Quick category filter pills (64x30 condensed pills)
+                    Row {
+                        visible: root.height > 80
+                        spacing: 4
+                        Repeater {
+                            model: ["All", "Apps", "Files", "Settings"]
+                            delegate: Item {
+                                width: 58; height: 28
+                                Rectangle {
+                                    anchors.fill: parent; radius: 14
+                                    color: root.activeFilter === modelData ? Theme.systemBlue
+                                        : (Appearance.isDark ? Qt.rgba(1,1,1,0.09) : Qt.rgba(0,0,0,0.06))
+                                }
+                                Text {
+                                    anchors.centerIn: parent
+                                    text: modelData
+                                    color: root.activeFilter === modelData ? "#FFFFFF" : Theme.labelColor
+                                    font: Typography.caption2
+                                }
+                                MouseArea { anchors.fill: parent; onClicked: root.activeFilter = modelData }
+                            }
                         }
                     }
-                    Keys.onUpPressed: {
-                        if (root.selectedIndex > 0) {
-                            root.selectedIndex--;
-                        }
-                    }
-                    Keys.onReturnPressed: {
-                        ShellState.activateSearchResult(root.selectedIndex);
-                    }
-                    Keys.onEscapePressed: {
-                        ShellState.spotlightVisible = false;
-                    }
                 }
 
-                // Clear button
                 Rectangle {
-                    width: 20
-                    height: 20
-                    radius: 10
-                    color: clearHover.hovered ? (Theme.isDark ? "#33FFFFFF" : "#20000000") : "transparent"
-                    visible: searchInput.text.length > 0
-                    Layout.rightMargin: 4
-
-                    Icon {
-                        anchors.centerIn: parent
-                        name: "close"
-                        size: 12
-                        color: Theme.textSecondary
-                    }
-                    HoverHandler { id: clearHover }
-                    TapHandler {
-                        onTapped: {
-                            searchInput.text = "";
-                            ShellState.searchQuery = "";
-                        }
-                    }
+                    visible: root.height > 80
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    anchors.bottom: parent.bottom
+                    height: 1
+                    color: Theme.separatorColor
                 }
             }
 
-            Rectangle {
-                Layout.fillWidth: true
-                Layout.preferredHeight: 1
-                color: Theme.separator
-            }
-
-            // Results List
-            ListView {
-                id: resultsList
+            // Expanded Two-Pane Body (Left Results + Right Quick Look Inspector)
+            RowLayout {
+                visible: root.height > 80
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                clip: true
-                model: ShellState.searchResults
-                spacing: 2
-                boundsBehavior: Flickable.StopAtBounds
+                spacing: 0
 
-                delegate: Rectangle {
-                    id: resultDelegate
-                    width: resultsList.width
-                    height: 48
-                    radius: 8
+                ListView {
+                    id: resultsList
+                    Layout.preferredWidth: root.previewExpanded ? 340 : root.width
+                    Layout.fillHeight: true
+                    clip: true
+                    topMargin: 8
+                    bottomMargin: 8
+                    leftMargin: 10
+                    rightMargin: 10
+                    spacing: 2
+                    model: root.filteredResults
+                    currentIndex: root.currentIndex
 
-                    property bool isSelected: root.selectedIndex === index
-                    color: isSelected ? (Theme.isDark ? "#2AFFFFFF" : "#1A0066CC") : (delegateHover.hovered ? (Theme.isDark ? "#1AFFFFFF" : "#0D000000") : "transparent")
+                    delegate: Item {
+                        width: resultsList.width - 20
+                        height: 44
 
-                    // Selection left accent bar
-                    Rectangle {
-                        width: 3
-                        height: 24
-                        radius: 1.5
-                        color: Theme.accent
-                        anchors.left: parent.left
-                        anchors.leftMargin: 4
-                        anchors.verticalCenter: parent.verticalCenter
-                        visible: resultDelegate.isSelected
-                    }
-
-                    RowLayout {
-                        anchors.fill: parent
-                        anchors.leftMargin: 16
-                        anchors.rightMargin: 14
-                        spacing: 12
-
-                        // Icon Container
+                        readonly property bool selected: index === root.currentIndex
                         Rectangle {
-                            width: 32
-                            height: 32
-                            radius: 7
-                            color: {
-                                if (modelData.category === "Applications") return "#3478F6";
-                                if (modelData.category === "Settings & Actions") return "#5856D6";
-                                return "#8E8E93";
-                            }
-                            Layout.alignment: Qt.AlignVCenter
+                            anchors.fill: parent
+                            radius: 10
+                            color: selected ? Theme.systemBlue : (rowHover.containsMouse ? Theme.controlFillHover : "transparent")
+                        }
 
+                        RowLayout {
+                            anchors.fill: parent
+                            anchors.leftMargin: 10
+                            anchors.rightMargin: 10
+                            spacing: 10
+
+                            Rectangle {
+                                width: 28; height: 28; radius: 7
+                                color: selected ? Qt.rgba(1,1,1,0.22) : (Appearance.isDark ? Qt.rgba(1,1,1,0.10) : Qt.rgba(0,0,0,0.06))
+                                Icon {
+                                    anchors.centerIn: parent
+                                    name: modelData.icon || "applications"
+                                    size: 17
+                                    color: selected ? "#FFFFFF" : Theme.systemBlue
+                                }
+                            }
+
+                            ColumnLayout {
+                                Layout.fillWidth: true
+                                spacing: 0
+                                Text {
+                                    text: modelData.title || ""
+                                    color: selected ? "#FFFFFF" : Theme.labelColor
+                                    font: Typography.headline
+                                    elide: Text.ElideRight
+                                    Layout.fillWidth: true
+                                }
+                                Text {
+                                    text: modelData.subtitle || ""
+                                    color: selected ? Qt.rgba(1,1,1,0.80) : Theme.secondaryLabelColor
+                                    font: Typography.caption1
+                                    elide: Text.ElideRight
+                                    Layout.fillWidth: true
+                                }
+                            }
+                        }
+
+                        MouseArea {
+                            id: rowHover
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            onEntered: root.currentIndex = index
+                            onClicked: {
+                                root.currentIndex = index;
+                                var origIdx = (ShellState.searchResults || []).indexOf(modelData);
+                                ShellState.activateSearchResult(origIdx >= 0 ? origIdx : index);
+                            }
+                        }
+                    }
+                }
+
+                Rectangle {
+                    visible: root.previewExpanded && root.filteredResults.length > 0
+                    Layout.preferredWidth: 1
+                    Layout.fillHeight: true
+                    color: Theme.separatorColor
+                }
+
+                // Quick Look / Preview Pane (SPEC §4.5)
+                Item {
+                    visible: root.previewExpanded && root.filteredResults.length > 0
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    readonly property var cur: root.filteredResults.length > 0 && root.currentIndex < root.filteredResults.length
+                        ? root.filteredResults[root.currentIndex] : null
+
+                    ColumnLayout {
+                        anchors.fill: parent
+                        anchors.margins: 20
+                        spacing: 10
+                        visible: parent.cur !== null
+
+                        Rectangle {
+                            Layout.alignment: Qt.AlignHCenter
+                            width: 72; height: 72; radius: 18
+                            color: Appearance.isDark ? Qt.rgba(1,1,1,0.10) : Qt.rgba(0,0,0,0.06)
                             Icon {
                                 anchors.centerIn: parent
-                                name: modelData.icon || "application-x-executable"
-                                size: 18
-                                color: "#FFFFFF"
+                                name: parent.parent.parent.cur ? (parent.parent.parent.cur.icon || "applications") : "applications"
+                                size: 38
+                                color: Theme.systemBlue
                             }
                         }
 
-                        // Title & Subtitle
-                        ColumnLayout {
+                        Text {
+                            Layout.alignment: Qt.AlignHCenter
+                            text: parent.parent.cur ? (parent.parent.cur.title || "") : ""
+                            color: Theme.labelColor
+                            font: Typography.title2Bold
+                            horizontalAlignment: Text.AlignHCenter
                             Layout.fillWidth: true
-                            spacing: 1
-                            Layout.alignment: Qt.AlignVCenter
-
-                            Text {
-                                text: modelData.title || ""
-                                font: Typography.controlLabel
-                                color: Theme.textPrimary
-                                elide: Text.ElideRight
-                                Layout.fillWidth: true
-                            }
-                            Text {
-                                text: modelData.subtitle || ""
-                                font: Typography.caption
-                                color: Theme.textSecondary
-                                elide: Text.ElideRight
-                                Layout.fillWidth: true
-                            }
+                            elide: Text.ElideRight
                         }
 
-                        // Category Pill Badge
+                        Text {
+                            Layout.alignment: Qt.AlignHCenter
+                            text: parent.parent.cur ? (parent.parent.cur.subtitle || "") : ""
+                            color: Theme.secondaryLabelColor
+                            font: Typography.callout
+                            horizontalAlignment: Text.AlignHCenter
+                            Layout.fillWidth: true
+                            elide: Text.ElideMiddle
+                        }
+
                         Rectangle {
-                            height: 20
-                            width: catText.implicitWidth + 12
-                            radius: 10
-                            color: Theme.isDark ? "#26FFFFFF" : "#1A000000"
-                            Layout.alignment: Qt.AlignVCenter
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: 1
+                            color: Theme.separatorColor
+                        }
 
-                            Text {
-                                id: catText
-                                anchors.centerIn: parent
-                                text: modelData.category || ""
-                                font: Typography.caption
-                                color: Theme.textSecondary
+                        Text {
+                            Layout.fillWidth: true
+                            Layout.fillHeight: true
+                            text: parent.parent.cur ? (parent.parent.cur.previewDetail || parent.parent.cur.subtitle || "") : ""
+                            color: Theme.secondaryLabelColor
+                            font: Typography.callout
+                            wrapMode: Text.WordWrap
+                        }
+
+                        RowLayout {
+                            Layout.fillWidth: true
+                            Item { Layout.fillWidth: true }
+                            C.Button {
+                                text: "Open"
+                                isDefault: true
+                                sizeClass: "regular"
+                                onClicked: {
+                                    var origIdx = (ShellState.searchResults || []).indexOf(root.filteredResults[root.currentIndex]);
+                                    ShellState.activateSearchResult(origIdx >= 0 ? origIdx : root.currentIndex);
+                                }
                             }
-                        }
-                    }
-
-                    HoverHandler {
-                        id: delegateHover
-                        onHoveredChanged: {
-                            if (hovered) root.selectedIndex = index;
-                        }
-                    }
-
-                    TapHandler {
-                        onTapped: {
-                            ShellState.activateSearchResult(index);
                         }
                     }
                 }

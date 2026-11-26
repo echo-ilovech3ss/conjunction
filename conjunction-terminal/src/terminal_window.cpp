@@ -155,7 +155,7 @@ void TerminalWindow::setupMenus()
         QMessageBox::about(this, QStringLiteral("About Conjunction Terminal"),
             QStringLiteral("<h3>Conjunction Terminal</h3>"
                            "<p>Version 1.0.0</p>"
-                           "<p>A modern, macOS-inspired desktop terminal for Conjunction OS.<br>"
+                           "<p>A modern Liquid Glass desktop terminal for Conjunction OS.<br>"
                            "Powered by KDE KonsolePart architecture.</p>"));
     });
 }

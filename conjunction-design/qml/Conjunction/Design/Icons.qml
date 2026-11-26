@@ -4,6 +4,102 @@ import QtQuick
 QtObject {
     id: root
 
+    // Material Symbols Rounded ligatures (SPEC §2.4 & §2.9)
+    readonly property var materialMap: ({
+        "check": "check",
+        "close": "close",
+        "settings": "settings",
+        "search": "search",
+        "warning": "warning",
+        "arrow-left": "arrow_back",
+        "arrow-right": "arrow_forward",
+        "chevron-left": "chevron_left",
+        "chevron-right": "chevron_right",
+        "chevron-down": "expand_more",
+        "chevron-up": "expand_less",
+        "refresh": "refresh",
+        "copy": "content_copy",
+        "wifi": "wifi",
+        "wifi-off": "wifi_off",
+        "bluetooth": "bluetooth",
+        "bluetooth-disabled": "bluetooth_disabled",
+        "volume": "volume_up",
+        "volume-mute": "volume_off",
+        "brightness": "brightness_6",
+        "sun": "light_mode",
+        "moon": "dark_mode",
+        "bell": "notifications",
+        "bell-off": "notifications_off",
+        "folder": "folder",
+        "folder-open": "folder_open",
+        "file": "description",
+        "image": "image",
+        "apps": "apps",
+        "grid": "grid_view",
+        "list": "view_list",
+        "column": "view_column",
+        "gallery": "view_carousel",
+        "eject": "eject",
+        "trash": "delete",
+        "trash-full": "delete_forever",
+        "plus": "add",
+        "minus": "remove",
+        "more": "more_horiz",
+        "info": "info",
+        "tag": "label",
+        "sidebar": "dock_to_right",
+        "terminal": "terminal",
+        "lock": "lock",
+        "shield": "shield",
+        "key": "key",
+        "keyboard": "keyboard",
+        "mouse": "mouse",
+        "trackpad": "touch_app",
+        "display": "desktop_windows",
+        "battery": "battery_full",
+        "network": "lan",
+        "vpn": "vpn_lock",
+        "user": "account_circle",
+        "printer": "print",
+        "sound": "graphic_eq",
+        "focus": "do_not_disturb_on",
+        "share": "ios_share",
+        "nearby": "sensors",
+        "mirror": "cast",
+        "stage": "space_dashboard",
+        "play": "play_arrow",
+        "pause": "pause",
+        "prev": "skip_previous",
+        "next": "skip_next",
+        "note": "sticky_note_2",
+        "rotate-left": "rotate_left",
+        "edit": "edit",
+        "desktop": "wallpaper",
+        "home": "home",
+        "download": "download",
+        "applications": "apps",
+        "drive": "hard_drive",
+        "sliders": "tune",
+        "spotlight": "search",
+        "screenshot": "screenshot_monitor"
+    })
+
+    // Phosphor SVG fallback icon names in data/icons/phosphor/ (SPEC §2.9)
+    readonly property var phosphorMap: ({
+        "eject": "eject",
+        "sidebar": "sidebar-simple",
+        "terminal": "terminal-window",
+        "window": "app-window",
+        "browsers": "browsers",
+        "command": "command",
+        "corners-out": "corners-out",
+        "squares-four": "squares-four",
+        "hard-drive": "hard-drive",
+        "sliders": "sliders",
+        "layout": "layout"
+    })
+
+    // Built-in SVG vector paths for zero-dependency fallback
     readonly property var pathMap: ({
         "check": "M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z",
         "close": "M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z",
@@ -15,6 +111,17 @@ QtObject {
         "refresh": "M17.65 6.35A7.958 7.958 0 0 0 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08A5.99 5.99 0 0 1 12 18c-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z",
         "copy": "M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"
     })
+
+    function getMaterialGlyph(name) {
+        return materialMap[name] || name;
+    }
+
+    function getPhosphorUrl(name, bold) {
+        var ph = phosphorMap[name];
+        if (!ph) return "";
+        var suffix = bold ? "-bold.svg" : ".svg";
+        return "/usr/share/conjunction/icons/phosphor/" + ph + suffix;
+    }
 
     function getPath(name) {
         return pathMap[name] || "";

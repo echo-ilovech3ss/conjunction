@@ -1,359 +1,387 @@
 import QtQuick
 import QtQuick.Layouts
 import Conjunction.Design
-import Conjunction.Controls as Controls
 
+// SPEC §4.3 Control Center: independent floating Clear Glass capsules on U=64 / gutter=12 pt grid.
+// Clean-room implementation with "Nearby Share" (no proprietary terms).
 Item {
     id: root
-    anchors.fill: parent
-    visible: ShellState.controlCenterVisible
-    z: 200
+    property Item backdropItem: null
 
-    // Dismiss when tapping outside the drawer
-    TapHandler {
-        onTapped: ShellState.controlCenterVisible = false
-    }
+    width: 304 // 292 content + 12 margins
+    height: ccColumn.implicitHeight + 8
 
-    focus: visible
-    Keys.onEscapePressed: ShellState.controlCenterVisible = false
-
-    Rectangle {
-        id: drawerCard
-        width: 330
-        height: 390
+    Column {
+        id: ccColumn
         anchors.top: parent.top
-        anchors.topMargin: 36
-        anchors.right: parent.right
-        anchors.rightMargin: 12
-        radius: 18
+        anchors.horizontalCenter: parent.horizontalCenter
+        width: 292
+        spacing: 12 // SPEC §4.3 uniform 12 pt gutter
 
-        color: Theme.isDark ? "#E61F2026" : "#F2F7FAFC"
-        border.color: Theme.separator
-        border.width: 1
-
-        // Drop shadow illusion
-        Rectangle {
-            anchors.fill: parent
-            anchors.margins: -1
-            radius: 19
-            color: "transparent"
-            border.color: Theme.isDark ? "#33FFFFFF" : "#1A000000"
-            border.width: 1
-            z: -1
-        }
-
-        // Prevent tap-through closing drawer
-        TapHandler {
-            // Eat click inside card
-        }
-
-        ColumnLayout {
-            anchors.fill: parent
-            anchors.margins: 14
+        // ---- Rows 1..3: Left 3x (2x1 = 140x64) + Right (2x2 Media 140x140 + 2x 1x1 64x64) ----
+        Row {
+            width: 292
             spacing: 12
 
-            // Title
-            Text {
-                text: "Control Center"
-                font: Typography.sectionHeading
-                color: Theme.textPrimary
-                Layout.leftMargin: 2
-            }
+            // Left Column: Wi-Fi, Bluetooth, Nearby Share
+            Column {
+                width: 140
+                spacing: 12
 
-            // Top Row: Wi-Fi & Bluetooth Pills
-            RowLayout {
-                Layout.fillWidth: true
-                spacing: 10
-
-                // Wi-Fi Tile
-                Rectangle {
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: 64
-                    radius: 12
-                    color: ShellState.wifiEnabled ? (Theme.isDark ? "#2A3478F6" : "#200066CC") : (Theme.isDark ? "#1AFFFFFF" : "#0D000000")
-                    border.color: ShellState.wifiEnabled ? Theme.accent : Theme.separator
-                    border.width: 1
+                // Wi-Fi 2x1 (140x64)
+                GlassSurface {
+                    width: 140; height: 64
+                    variant: "clear"
+                    cornerRadius: 26
+                    shadowPreset: "popover"
+                    backdropItem: root.backdropItem
 
                     RowLayout {
                         anchors.fill: parent
-                        anchors.margins: 10
+                        anchors.leftMargin: 12
+                        anchors.rightMargin: 12
                         spacing: 10
-
                         Rectangle {
-                            width: 32
-                            height: 32
-                            radius: 16
-                            color: ShellState.wifiEnabled ? Theme.accent : (Theme.isDark ? "#33FFFFFF" : "#20000000")
-                            Icon {
-                                anchors.centerIn: parent
-                                name: "network"
-                                size: 16
-                                color: ShellState.wifiEnabled ? "#FFFFFF" : Theme.textSecondary
-                            }
+                            width: 38; height: 38; radius: 19
+                            color: ShellState.wifiEnabled ? Theme.systemBlue : (Appearance.isDark ? Qt.rgba(1,1,1,0.12) : Qt.rgba(0,0,0,0.08))
+                            Icon { anchors.centerIn: parent; name: ShellState.wifiEnabled ? "wifi" : "wifi-off"; size: 19; color: ShellState.wifiEnabled ? "#FFFFFF" : Theme.labelColor }
                         }
-
-                        ColumnLayout {
+                        Column {
                             Layout.fillWidth: true
-                            spacing: 1
-                            Text {
-                                text: "Wi-Fi"
-                                font: Typography.controlLabel
-                                color: Theme.textPrimary
-                            }
-                            Text {
-                                text: ShellState.wifiSsid
-                                font: Typography.caption
-                                color: Theme.textSecondary
-                                elide: Text.ElideRight
-                                Layout.fillWidth: true
-                            }
+                            Text { text: "Wi-Fi"; color: Theme.labelColor; font: Typography.headline }
+                            Text { text: ShellState.wifiEnabled ? ShellState.wifiSsid : "Off"; color: Theme.secondaryLabelColor; font: Typography.subheadline; elide: Text.ElideRight; width: 68 }
                         }
                     }
-
-                    HoverHandler { id: wifiHover }
-                    TapHandler { onTapped: ShellState.toggleWifi() }
+                    MouseArea { anchors.fill: parent; onClicked: ShellState.toggleWifi() }
                 }
 
-                // Bluetooth Tile
-                Rectangle {
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: 64
-                    radius: 12
-                    color: ShellState.bluetoothEnabled ? (Theme.isDark ? "#2A3478F6" : "#200066CC") : (Theme.isDark ? "#1AFFFFFF" : "#0D000000")
-                    border.color: ShellState.bluetoothEnabled ? Theme.accent : Theme.separator
-                    border.width: 1
+                // Bluetooth 2x1 (140x64)
+                GlassSurface {
+                    width: 140; height: 64
+                    variant: "clear"
+                    cornerRadius: 26
+                    shadowPreset: "popover"
+                    backdropItem: root.backdropItem
 
                     RowLayout {
                         anchors.fill: parent
-                        anchors.margins: 10
+                        anchors.leftMargin: 12
+                        anchors.rightMargin: 12
                         spacing: 10
-
                         Rectangle {
-                            width: 32
-                            height: 32
-                            radius: 16
-                            color: ShellState.bluetoothEnabled ? Theme.accent : (Theme.isDark ? "#33FFFFFF" : "#20000000")
-                            Icon {
-                                anchors.centerIn: parent
-                                name: "bluetooth"
-                                size: 16
-                                color: ShellState.bluetoothEnabled ? "#FFFFFF" : Theme.textSecondary
-                            }
+                            width: 38; height: 38; radius: 19
+                            color: ShellState.bluetoothEnabled ? Theme.systemBlue : (Appearance.isDark ? Qt.rgba(1,1,1,0.12) : Qt.rgba(0,0,0,0.08))
+                            Icon { anchors.centerIn: parent; name: ShellState.bluetoothEnabled ? "bluetooth" : "bluetooth-disabled"; size: 19; color: ShellState.bluetoothEnabled ? "#FFFFFF" : Theme.labelColor }
                         }
-
-                        ColumnLayout {
+                        Column {
                             Layout.fillWidth: true
-                            spacing: 1
-                            Text {
-                                text: "Bluetooth"
-                                font: Typography.controlLabel
-                                color: Theme.textPrimary
-                            }
-                            Text {
-                                text: ShellState.bluetoothEnabled ? "On" : "Off"
-                                font: Typography.caption
-                                color: Theme.textSecondary
-                            }
+                            Text { text: "Bluetooth"; color: Theme.labelColor; font: Typography.headline }
+                            Text { text: ShellState.bluetoothEnabled ? "On" : "Off"; color: Theme.secondaryLabelColor; font: Typography.subheadline }
                         }
                     }
+                    MouseArea { anchors.fill: parent; onClicked: ShellState.toggleBluetooth() }
+                }
 
-                    HoverHandler { id: btHover }
-                    TapHandler { onTapped: ShellState.toggleBluetooth() }
+                // Nearby Share 2x1 (140x64)
+                GlassSurface {
+                    width: 140; height: 64
+                    variant: "clear"
+                    cornerRadius: 26
+                    shadowPreset: "popover"
+                    backdropItem: root.backdropItem
+
+                    RowLayout {
+                        anchors.fill: parent
+                        anchors.leftMargin: 12
+                        anchors.rightMargin: 12
+                        spacing: 10
+                        Rectangle {
+                            width: 38; height: 38; radius: 19
+                            color: ShellState.nearbyShareEnabled ? Theme.systemBlue : (Appearance.isDark ? Qt.rgba(1,1,1,0.12) : Qt.rgba(0,0,0,0.08))
+                            Icon { anchors.centerIn: parent; name: "nearby"; size: 19; color: ShellState.nearbyShareEnabled ? "#FFFFFF" : Theme.labelColor }
+                        }
+                        Column {
+                            Layout.fillWidth: true
+                            Text { text: "Nearby"; color: Theme.labelColor; font: Typography.headline }
+                            Text { text: ShellState.nearbyShareEnabled ? "Everyone" : "Off"; color: Theme.secondaryLabelColor; font: Typography.subheadline }
+                        }
+                    }
+                    MouseArea { anchors.fill: parent; onClicked: ShellState.toggleNearbyShare() }
                 }
             }
 
-            // Middle Row: Do Not Disturb & Dark Mode
-            RowLayout {
-                Layout.fillWidth: true
-                spacing: 10
+            // Right Column: 2x2 Media Player + Row of 2x 1x1 Quick Tiles
+            Column {
+                width: 140
+                spacing: 12
 
-                // Do Not Disturb Tile
-                Rectangle {
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: 48
-                    radius: 10
-                    color: ShellState.doNotDisturb ? (Theme.isDark ? "#2A5856D6" : "#205856D6") : (Theme.isDark ? "#1AFFFFFF" : "#0D000000")
-                    border.color: ShellState.doNotDisturb ? "#5856D6" : Theme.separator
-                    border.width: 1
+                // 2x2 Media Transport (140x140, cr=26)
+                GlassSurface {
+                    width: 140; height: 140
+                    variant: "clear"
+                    cornerRadius: 26
+                    shadowPreset: "popover"
+                    backdropItem: root.backdropItem
 
-                    RowLayout {
+                    ColumnLayout {
                         anchors.fill: parent
-                        anchors.margins: 8
+                        anchors.margins: 14
                         spacing: 8
-
-                        Icon {
-                            name: "info"
-                            size: 16
-                            color: ShellState.doNotDisturb ? "#5856D6" : Theme.textSecondary
+                        Rectangle {
+                            width: 40; height: 40; radius: 10
+                            color: Appearance.isDark ? Qt.rgba(1, 1, 1, 0.14) : Qt.rgba(0, 0, 0, 0.08)
+                            Icon { anchors.centerIn: parent; name: "sound"; size: 20; color: Theme.secondaryLabelColor }
                         }
                         Text {
-                            text: "Focus / DND"
-                            font: Typography.controlLabel
-                            color: Theme.textPrimary
+                            text: "Not Playing"
+                            color: Theme.labelColor
+                            font: Typography.headline
                             Layout.fillWidth: true
                         }
+                        Item { Layout.fillHeight: true }
+                        RowLayout {
+                            Layout.fillWidth: true
+                            Icon { name: "prev"; size: 22; color: Theme.secondaryLabelColor }
+                            Item { Layout.fillWidth: true }
+                            Icon { name: "play"; size: 26; color: Theme.labelColor }
+                            Item { Layout.fillWidth: true }
+                            Icon { name: "next"; size: 22; color: Theme.secondaryLabelColor }
+                        }
                     }
-                    TapHandler { onTapped: ShellState.toggleDoNotDisturb() }
                 }
 
-                // Dark Mode Tile
-                Rectangle {
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: 48
-                    radius: 10
-                    color: ShellState.isDark ? (Theme.isDark ? "#2AFFFFFF" : "#1A000000") : (Theme.isDark ? "#1AFFFFFF" : "#0D000000")
-                    border.color: Theme.separator
-                    border.width: 1
+                // 2x 1x1 Tiles (64x64 circular)
+                Row {
+                    width: 140
+                    spacing: 12
 
-                    RowLayout {
-                        anchors.fill: parent
-                        anchors.margins: 8
-                        spacing: 8
-
-                        Icon {
-                            name: ShellState.isDark ? "eye" : "close"
-                            size: 16
-                            color: Theme.accent
-                        }
-                        Text {
-                            text: ShellState.isDark ? "Dark Theme" : "Light Theme"
-                            font: Typography.controlLabel
-                            color: Theme.textPrimary
-                            Layout.fillWidth: true
-                        }
+                    GlassSurface {
+                        width: 64; height: 64
+                        variant: "clear"
+                        cornerRadius: 32
+                        shadowPreset: "popover"
+                        backdropItem: root.backdropItem
+                        tintColor: ShellState.stageManagerEnabled ? Qt.rgba(0, 0.533, 1.0, 0.45) : Qt.rgba(0, 0, 0, 0)
+                        Icon { anchors.centerIn: parent; name: "stage"; size: 24; color: Theme.labelColor }
+                        MouseArea { anchors.fill: parent; onClicked: ShellState.toggleStageManager() }
                     }
-                    TapHandler { onTapped: ShellState.toggleTheme() }
+
+                    GlassSurface {
+                        width: 64; height: 64
+                        variant: "clear"
+                        cornerRadius: 32
+                        shadowPreset: "popover"
+                        backdropItem: root.backdropItem
+                        Icon { anchors.centerIn: parent; name: "mirror"; size: 24; color: Theme.labelColor }
+                        MouseArea { anchors.fill: parent; onClicked: ShellState.toggleOverview() }
+                    }
                 }
             }
+        }
 
-            // Display Brightness Slider Module
-            Rectangle {
-                Layout.fillWidth: true
-                Layout.preferredHeight: 64
-                radius: 12
-                color: Theme.isDark ? "#1AFFFFFF" : "#0D000000"
-                border.color: Theme.separator
-                border.width: 1
+        // ---- Row 4: Dark Mode (1x1 White Circle when dark!) + Night Shift (1x1) + Focus (2x1 140x64) ----
+        Row {
+            width: 292
+            spacing: 12
 
-                ColumnLayout {
+            // Dark Mode 1x1 (64x64 circle; bright solid white highlight matching Dark Mode active state)
+            Item {
+                width: 64; height: 64
+                GlassSurface {
                     anchors.fill: parent
-                    anchors.margins: 10
-                    spacing: 4
+                    visible: !ShellState.isDark
+                    variant: "clear"
+                    cornerRadius: 32
+                    shadowPreset: "popover"
+                    backdropItem: root.backdropItem
+                }
+                Rectangle {
+                    anchors.fill: parent
+                    visible: ShellState.isDark
+                    radius: 32
+                    color: "#FFFFFF"
+                }
+                Icon {
+                    anchors.centerIn: parent
+                    name: ShellState.isDark ? "sun" : "moon"
+                    size: 24
+                    color: ShellState.isDark ? "#111111" : Theme.labelColor
+                }
+                MouseArea { anchors.fill: parent; onClicked: ShellState.toggleTheme() }
+            }
 
-                    RowLayout {
-                        Layout.fillWidth: true
-                        Text {
-                            text: "Display Brightness"
-                            font: Typography.caption
-                            color: Theme.textSecondary
-                        }
-                        Item { Layout.fillWidth: true }
-                        Text {
-                            text: ShellState.brightness + "%"
-                            font: Typography.caption
-                            color: Theme.textPrimary
-                        }
-                    }
+            // Night Shift / Reduced Transparency Quick 1x1 (64x64)
+            GlassSurface {
+                width: 64; height: 64
+                variant: "clear"
+                cornerRadius: 32
+                shadowPreset: "popover"
+                backdropItem: root.backdropItem
+                tintColor: ShellState.nightShiftEnabled ? Qt.rgba(1.0, 0.55, 0.16, 0.45) : Qt.rgba(0, 0, 0, 0)
+                Icon { anchors.centerIn: parent; name: "brightness"; size: 24; color: Theme.labelColor }
+                MouseArea { anchors.fill: parent; onClicked: ShellState.toggleNightShift() }
+            }
 
-                    // Interactive slider track
+            // Focus / Do Not Disturb 2x1 (140x64)
+            GlassSurface {
+                width: 140; height: 64
+                variant: "clear"
+                cornerRadius: 26
+                shadowPreset: "popover"
+                backdropItem: root.backdropItem
+                RowLayout {
+                    anchors.fill: parent
+                    anchors.leftMargin: 12
+                    anchors.rightMargin: 12
+                    spacing: 10
                     Rectangle {
-                        id: brightTrack
+                        width: 38; height: 38; radius: 19
+                        color: ShellState.doNotDisturb ? Theme.systemIndigo : (Appearance.isDark ? Qt.rgba(1,1,1,0.14) : Qt.rgba(0,0,0,0.08))
+                        Icon { anchors.centerIn: parent; name: "moon"; size: 19; color: ShellState.doNotDisturb ? "#FFFFFF" : Theme.labelColor }
+                    }
+                    Text {
+                        text: ShellState.doNotDisturb ? "DND On" : "Focus"
+                        color: Theme.labelColor
+                        font: Typography.headline
                         Layout.fillWidth: true
-                        Layout.preferredHeight: 18
-                        radius: 9
-                        color: Theme.isDark ? "#33FFFFFF" : "#20000000"
-                        clip: true
+                    }
+                }
+                MouseArea { anchors.fill: parent; onClicked: ShellState.toggleDoNotDisturb() }
+            }
+        }
 
+        // ---- Row 5: Display Brightness 4x1 (292x64, 6pt white track + 20x20 thumb) ----
+        GlassSurface {
+            width: 292; height: 64
+            variant: "clear"
+            cornerRadius: 26
+            shadowPreset: "popover"
+            backdropItem: root.backdropItem
+
+            ColumnLayout {
+                anchors.fill: parent
+                anchors.leftMargin: 16
+                anchors.rightMargin: 16
+                anchors.topMargin: 10
+                anchors.bottomMargin: 10
+                spacing: 4
+                Text { text: "Display"; color: Theme.labelColor; font: Typography.headline }
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 8
+                    Icon { name: "brightness"; size: 15; color: Theme.secondaryLabelColor }
+                    Item {
+                        id: dispTrack
+                        Layout.fillWidth: true
+                        height: 20
                         Rectangle {
-                            height: parent.height
-                            width: parent.width * (ShellState.brightness / 100.0)
-                            radius: 9
-                            color: Theme.accent
-                        }
-
-                        TapHandler {
-                            onTapped: function(event) {
-                                var ratio = Math.max(0.0, Math.min(1.0, event.position.x / brightTrack.width));
-                                ShellState.brightness = Math.round(ratio * 100);
+                            anchors.verticalCenter: parent.verticalCenter
+                            width: parent.width; height: 6; radius: 3
+                            color: Appearance.isDark ? Qt.rgba(1,1,1,0.20) : Qt.rgba(0,0,0,0.14)
+                            Rectangle {
+                                width: Math.max(6, (ShellState.brightness / 100.0) * parent.width)
+                                height: parent.height; radius: 3
+                                color: "#FFFFFF"
                             }
                         }
-                        DragHandler {
-                            target: null
-                            onActiveChanged: {
-                                if (active) {
-                                    var ratio = Math.max(0.0, Math.min(1.0, centroid.position.x / brightTrack.width));
-                                    ShellState.brightness = Math.round(ratio * 100);
+                        Rectangle {
+                            width: 20; height: 20; radius: 10
+                            color: "#FFFFFF"
+                            border.width: 0.75; border.color: Qt.rgba(0,0,0,0.18)
+                            anchors.verticalCenter: parent.verticalCenter
+                            x: Math.max(0, Math.min(parent.width - width, (ShellState.brightness / 100.0) * (parent.width - width)))
+                        }
+                        MouseArea {
+                            anchors.fill: parent
+                            onPressed: (m) => ShellState.brightness = Math.round(Math.max(0, Math.min(1, m.x / width)) * 100)
+                            onPositionChanged: (m) => { if (pressed) ShellState.brightness = Math.round(Math.max(0, Math.min(1, m.x / width)) * 100) }
+                        }
+                    }
+                    Icon { name: "sun"; size: 17; color: Theme.labelColor }
+                }
+            }
+        }
+
+        // ---- Row 6: Sound Volume 4x1 (292x64, 6pt white track + 20x20 thumb + trailing 36pt output btn) ----
+        GlassSurface {
+            width: 292; height: 64
+            variant: "clear"
+            cornerRadius: 26
+            shadowPreset: "popover"
+            backdropItem: root.backdropItem
+
+            RowLayout {
+                anchors.fill: parent
+                anchors.leftMargin: 16
+                anchors.rightMargin: 12
+                spacing: 10
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: 4
+                    Text { text: "Sound"; color: Theme.labelColor; font: Typography.headline }
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 8
+                        Icon { name: ShellState.volume === 0 ? "volume-mute" : "volume"; size: 15; color: Theme.secondaryLabelColor }
+                        Item {
+                            Layout.fillWidth: true
+                            height: 20
+                            Rectangle {
+                                anchors.verticalCenter: parent.verticalCenter
+                                width: parent.width; height: 6; radius: 3
+                                color: Appearance.isDark ? Qt.rgba(1,1,1,0.20) : Qt.rgba(0,0,0,0.14)
+                                Rectangle {
+                                    width: Math.max(6, (ShellState.volume / 100.0) * parent.width)
+                                    height: parent.height; radius: 3
+                                    color: "#FFFFFF"
                                 }
                             }
-                            onCentroidChanged: {
-                                var ratio = Math.max(0.0, Math.min(1.0, centroid.position.x / brightTrack.width));
-                                ShellState.brightness = Math.round(ratio * 100);
+                            Rectangle {
+                                width: 20; height: 20; radius: 10
+                                color: "#FFFFFF"
+                                border.width: 0.75; border.color: Qt.rgba(0,0,0,0.18)
+                                anchors.verticalCenter: parent.verticalCenter
+                                x: Math.max(0, Math.min(parent.width - width, (ShellState.volume / 100.0) * (parent.width - width)))
+                            }
+                            MouseArea {
+                                anchors.fill: parent
+                                onPressed: (m) => ShellState.volume = Math.round(Math.max(0, Math.min(1, m.x / width)) * 100)
+                                onPositionChanged: (m) => { if (pressed) ShellState.volume = Math.round(Math.max(0, Math.min(1, m.x / width)) * 100) }
                             }
                         }
+                        Icon { name: "volume"; size: 17; color: Theme.labelColor }
                     }
+                }
+                GlassSurface {
+                    Layout.preferredWidth: 36; Layout.preferredHeight: 36
+                    variant: "clear"
+                    cornerRadius: 18
+                    shadowPreset: "none"
+                    backdropItem: root.backdropItem
+                    Icon { anchors.centerIn: parent; name: "sound"; size: 18; color: Theme.labelColor }
+                    MouseArea { anchors.fill: parent; onClicked: ShellState.OpenSetting("sound") }
                 }
             }
+        }
 
-            // Sound Volume Slider Module
-            Rectangle {
-                Layout.fillWidth: true
-                Layout.preferredHeight: 64
-                radius: 12
-                color: Theme.isDark ? "#1AFFFFFF" : "#0D000000"
-                border.color: Theme.separator
-                border.width: 1
-
-                ColumnLayout {
-                    anchors.fill: parent
-                    anchors.margins: 10
-                    spacing: 4
-
-                    RowLayout {
-                        Layout.fillWidth: true
-                        Text {
-                            text: "Sound Output"
-                            font: Typography.caption
-                            color: Theme.textSecondary
-                        }
-                        Item { Layout.fillWidth: true }
-                        Text {
-                            text: ShellState.volume + "%"
-                            font: Typography.caption
-                            color: Theme.textPrimary
-                        }
-                    }
-
-                    // Interactive volume track
-                    Rectangle {
-                        id: volumeTrack
-                        Layout.fillWidth: true
-                        Layout.preferredHeight: 18
-                        radius: 9
-                        color: Theme.isDark ? "#33FFFFFF" : "#20000000"
-                        clip: true
-
-                        Rectangle {
-                            height: parent.height
-                            width: parent.width * (ShellState.volume / 100.0)
-                            radius: 9
-                            color: "#28CD41"
-                        }
-
-                        TapHandler {
-                            onTapped: function(event) {
-                                var ratio = Math.max(0.0, Math.min(1.0, event.position.x / volumeTrack.width));
-                                ShellState.volume = Math.round(ratio * 100);
-                            }
-                        }
-                        DragHandler {
-                            target: null
-                            onCentroidChanged: {
-                                var ratio = Math.max(0.0, Math.min(1.0, centroid.position.x / volumeTrack.width));
-                                ShellState.volume = Math.round(ratio * 100);
-                            }
-                        }
-                    }
+        // ---- Footer: Centered "Edit Controls" Pill (~110x28, cr=14) ----
+        Item {
+            width: 292
+            height: 32
+            GlassSurface {
+                anchors.centerIn: parent
+                width: 112; height: 28
+                variant: "clear"
+                cornerRadius: 14
+                shadowPreset: "pill"
+                backdropItem: root.backdropItem
+                Text {
+                    anchors.centerIn: parent
+                    text: "Edit Controls"
+                    color: Theme.labelColor
+                    font: Typography.callout
                 }
+                MouseArea { anchors.fill: parent; onClicked: ShellState.OpenSetting("controlcenter") }
             }
         }
     }

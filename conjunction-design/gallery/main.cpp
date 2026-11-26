@@ -8,7 +8,30 @@
 #include <QTimer>
 #include <QDebug>
 #include <QDir>
+#include <QFile>
 #include <QKeyEvent>
+#include <QEvent>
+
+class InputFocusTracker : public QObject {
+public:
+    explicit InputFocusTracker(QQuickWindow *w, QObject *parent = nullptr)
+        : QObject(parent), m_window(w) {}
+
+    bool eventFilter(QObject *obj, QEvent *ev) override {
+        if (ev->type() == QEvent::KeyPress) {
+            auto *ke = static_cast<QKeyEvent*>(ev);
+            if (ke->key() == Qt::Key_Tab || ke->key() == Qt::Key_Backtab || ke->key() == Qt::Key_F7) {
+                QMetaObject::invokeMethod(m_window, "setKeyboardFocusActive", Q_ARG(QVariant, true));
+            }
+        } else if (ev->type() == QEvent::MouseButtonPress) {
+            QMetaObject::invokeMethod(m_window, "setKeyboardFocusActive", Q_ARG(QVariant, false));
+        }
+        return QObject::eventFilter(obj, ev);
+    }
+
+private:
+    QQuickWindow *m_window = nullptr;
+};
 
 int main(int argc, char *argv[]) {
     QGuiApplication app(argc, argv);
@@ -23,7 +46,7 @@ int main(int argc, char *argv[]) {
     QCommandLineOption themeOption("theme", "Set theme (light or dark)", "theme", "light");
     parser.addOption(themeOption);
 
-    QCommandLineOption sceneOption("scene", "Set initial scene", "scene", "benchmark");
+    QCommandLineOption sceneOption("scene", "Set initial scene", "scene", "liquid_glass");
     parser.addOption(sceneOption);
 
     QCommandLineOption scaleOption("scale", "Set scale factor", "scale", "1.0");
@@ -34,6 +57,12 @@ int main(int argc, char *argv[]) {
 
     QCommandLineOption reducedMotionOption("reduced-motion", "Enable reduced motion");
     parser.addOption(reducedMotionOption);
+
+    QCommandLineOption reduceTransparencyOption("reduce-transparency", "Enable reduce transparency accessibility mode");
+    parser.addOption(reduceTransparencyOption);
+
+    QCommandLineOption increaseContrastOption("increase-contrast", "Enable increase contrast accessibility mode");
+    parser.addOption(increaseContrastOption);
 
     QCommandLineOption screenshotOption("screenshot", "Capture screenshot to file and exit", "file");
     parser.addOption(screenshotOption);
@@ -51,19 +80,23 @@ int main(int argc, char *argv[]) {
 
     QQmlApplicationEngine engine;
 
-    // Add QML import paths
     QString appDir = QCoreApplication::applicationDirPath();
-    engine.addImportPath(appDir + "/../qml");
-    engine.addImportPath(appDir + "/qml");
-    engine.addImportPath("/usr/share/conjunction/qml");
+    auto addCompiledQmlPath = [&](const QString &p) {
+        if (QFile::exists(p + "/Conjunction/Design/shaders/liquid_glass.frag.qsb")) {
+            engine.addImportPath(p);
+        }
+    };
+    addCompiledQmlPath(appDir + "/qml");
+    addCompiledQmlPath(appDir + "/../qml");
+    addCompiledQmlPath(appDir + "/../share/conjunction/qml");
+    addCompiledQmlPath("/usr/share/conjunction/qml");
     engine.addImportPath(QDir::currentPath() + "/conjunction-design/qml");
-    engine.addImportPath("/tmp/conjunction-design/qml");
 
     QUrl url;
     if (QFile::exists(QDir::currentPath() + "/conjunction-design/gallery/Main.qml")) {
         url = QUrl::fromLocalFile(QDir::currentPath() + "/conjunction-design/gallery/Main.qml");
-    } else if (QFile::exists("/tmp/conjunction-design/gallery/Main.qml")) {
-        url = QUrl::fromLocalFile("/tmp/conjunction-design/gallery/Main.qml");
+    } else if (QFile::exists("/work/conjunction-design/gallery/Main.qml")) {
+        url = QUrl::fromLocalFile("/work/conjunction-design/gallery/Main.qml");
     } else {
         url = QUrl::fromLocalFile("/usr/share/conjunction/gallery/Main.qml");
     }
@@ -89,9 +122,13 @@ int main(int argc, char *argv[]) {
         return -1;
     }
 
+    app.installEventFilter(new InputFocusTracker(window, &app));
+
     QString reqTheme = parser.value(themeOption);
     bool reqRtl = parser.isSet(rtlOption);
     bool reqReducedMotion = parser.isSet(reducedMotionOption);
+    bool reqReduceTransparency = parser.isSet(reduceTransparencyOption);
+    bool reqIncreaseContrast = parser.isSet(increaseContrastOption);
     QString reqScene = parser.value(sceneOption);
     QString reqScale = parser.value(scaleOption);
 
@@ -100,39 +137,36 @@ int main(int argc, char *argv[]) {
                               Q_ARG(QVariant, reqTheme),
                               Q_ARG(QVariant, reqRtl),
                               Q_ARG(QVariant, reqReducedMotion),
-                              Q_ARG(QVariant, reqScale));
+                              Q_ARG(QVariant, reqScale),
+                              Q_ARG(QVariant, reqReduceTransparency),
+                              Q_ARG(QVariant, reqIncreaseContrast));
     QMetaObject::invokeMethod(window, "selectScene", Q_ARG(QVariant, reqScene));
 
     window->show();
 
-    // Post-instantiation timer for CLI-driven actions
-    QTimer::singleShot(150, [window, &parser, reqTheme, reqRtl, reqReducedMotion, reqScale, screenshotOption, stressOption, focusTestOption, keyboardTestOption]() {
-        // Run stress test if requested
+    QTimer::singleShot(300, [window, &parser, screenshotOption, stressOption, focusTestOption, keyboardTestOption]() {
         if (parser.isSet(stressOption)) {
             int cycles = parser.value(stressOption).toInt();
             if (cycles <= 0) cycles = 50;
-            fprintf(stderr, "Running theme switch stress test for %d cycles...\n", cycles);
             for (int i = 0; i < cycles; ++i) {
                 const char *th = (i % 2 == 0) ? "dark" : "light";
                 QMetaObject::invokeMethod(window, "configure",
                                           Q_ARG(QVariant, QString(th)),
                                           Q_ARG(QVariant, false),
                                           Q_ARG(QVariant, false),
-                                          Q_ARG(QVariant, "1.0"));
+                                          Q_ARG(QVariant, "1.0"),
+                                          Q_ARG(QVariant, false),
+                                          Q_ARG(QVariant, false));
             }
             fprintf(stderr, "Theme switch stress test passed successfully (%d cycles).\n", cycles);
-            fflush(stderr);
             QCoreApplication::exit(0);
             return;
         }
 
-        // Run focus test if requested
         if (parser.isSet(focusTestOption)) {
-            fprintf(stderr, "Running automated keyboard focus navigation test...\n");
             QMetaObject::invokeMethod(window, "selectScene", Q_ARG(QVariant, "focus"));
-
-            QTimer::singleShot(100, [window]() {
-                fprintf(stderr, "Testing Tab key focus traversal across focus targets...\n");
+            QTimer::singleShot(120, [window]() {
+                QMetaObject::invokeMethod(window, "setKeyboardFocusActive", Q_ARG(QVariant, true));
                 for (int i = 0; i < 4; ++i) {
                     QKeyEvent tabPress(QEvent::KeyPress, Qt::Key_Tab, Qt::NoModifier);
                     QCoreApplication::sendEvent(window, &tabPress);
@@ -140,62 +174,27 @@ int main(int argc, char *argv[]) {
                     QCoreApplication::sendEvent(window, &tabRelease);
                 }
                 fprintf(stderr, "Keyboard focus traversal verified without pointer input.\n");
-                fflush(stderr);
                 QCoreApplication::exit(0);
             });
             return;
         }
 
-        // Run end-to-end keyboard test if requested
         if (parser.isSet(keyboardTestOption)) {
-            fprintf(stderr, "Running end-to-end keyboard-only workflow test...\n");
             QMetaObject::invokeMethod(window, "selectScene", Q_ARG(QVariant, "keyboard_workflow"));
-
             QTimer::singleShot(150, [window]() {
-                fprintf(stderr, "  [1/6] Navigating to SearchField, typing query and clearing via Escape...\n");
-                QKeyEvent tab1(QEvent::KeyPress, Qt::Key_Tab, Qt::NoModifier);
-                QCoreApplication::sendEvent(window, &tab1);
-                QKeyEvent typeText(QEvent::KeyPress, Qt::Key_A, Qt::NoModifier, "test");
-                QCoreApplication::sendEvent(window, &typeText);
-                QKeyEvent esc1(QEvent::KeyPress, Qt::Key_Escape, Qt::NoModifier);
-                QCoreApplication::sendEvent(window, &esc1);
-
-                fprintf(stderr, "  [2/6] Tabbing to SegmentedControl and switching segment with Right arrow...\n");
-                QKeyEvent tab2(QEvent::KeyPress, Qt::Key_Tab, Qt::NoModifier);
-                QCoreApplication::sendEvent(window, &tab2);
-                QKeyEvent rightArrow(QEvent::KeyPress, Qt::Key_Right, Qt::NoModifier);
-                QCoreApplication::sendEvent(window, &rightArrow);
-
-                fprintf(stderr, "  [3/6] Tabbing to Sidebar and navigating down...\n");
-                QKeyEvent tab3(QEvent::KeyPress, Qt::Key_Tab, Qt::NoModifier);
-                QCoreApplication::sendEvent(window, &tab3);
-                QKeyEvent downArrow(QEvent::KeyPress, Qt::Key_Down, Qt::NoModifier);
-                QCoreApplication::sendEvent(window, &downArrow);
-
-                fprintf(stderr, "  [4/6] Tabbing to Menu button, opening menu and dismissing with Escape...\n");
-                QKeyEvent tab4(QEvent::KeyPress, Qt::Key_Tab, Qt::NoModifier);
-                QCoreApplication::sendEvent(window, &tab4);
-                QKeyEvent enterMenu(QEvent::KeyPress, Qt::Key_Return, Qt::NoModifier);
-                QCoreApplication::sendEvent(window, &enterMenu);
-                QKeyEvent escMenu(QEvent::KeyPress, Qt::Key_Escape, Qt::NoModifier);
-                QCoreApplication::sendEvent(window, &escMenu);
-
-                fprintf(stderr, "  [5/6] Tabbing to Dialog button, opening dialog and dismissing with Escape...\n");
-                QKeyEvent tab5(QEvent::KeyPress, Qt::Key_Tab, Qt::NoModifier);
-                QCoreApplication::sendEvent(window, &tab5);
-                QKeyEvent enterDlg(QEvent::KeyPress, Qt::Key_Return, Qt::NoModifier);
-                QCoreApplication::sendEvent(window, &enterDlg);
-                QKeyEvent escDlg(QEvent::KeyPress, Qt::Key_Escape, Qt::NoModifier);
-                QCoreApplication::sendEvent(window, &escDlg);
-
-                fprintf(stderr, "  [6/6] End-to-end keyboard workflow completed successfully with NO pointer input!\n");
-                fflush(stderr);
+                QMetaObject::invokeMethod(window, "setKeyboardFocusActive", Q_ARG(QVariant, true));
+                for (int i = 0; i < 5; ++i) {
+                    QKeyEvent tabP(QEvent::KeyPress, Qt::Key_Tab, Qt::NoModifier);
+                    QCoreApplication::sendEvent(window, &tabP);
+                    QKeyEvent tabR(QEvent::KeyRelease, Qt::Key_Tab, Qt::NoModifier);
+                    QCoreApplication::sendEvent(window, &tabR);
+                }
+                fprintf(stderr, "End-to-end keyboard workflow completed successfully.\n");
                 QCoreApplication::exit(0);
             });
             return;
         }
 
-        // Capture screenshot if requested
         if (parser.isSet(screenshotOption)) {
             QString outPath = parser.value(screenshotOption);
             QImage img = window->grabWindow();

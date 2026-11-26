@@ -6,9 +6,16 @@ import Conjunction.Design
 T.ToolButton {
     id: control
 
+    // SPEC §2.3 Toolbar Icon Circle / Pill: regular 36 pt (cr=18), small 28 pt (cr=14)
+    property string sizeClass: "regular"
     property string iconName: ""
     property string tooltipText: ""
     property Action conjunctionAction: null
+    property bool pillGlass: true
+
+    readonly property int btnH: (sizeClass === "small" || sizeClass === "compact")
+        ? Geometry.toolbarButtonSmallSize
+        : Geometry.toolbarButtonSize
 
     onConjunctionActionChanged: {
         if (conjunctionAction) {
@@ -18,12 +25,13 @@ T.ToolButton {
             tooltipText = Qt.binding(function() { return conjunctionAction.text; });
         }
     }
+    onPressed: FocusModel.markPointerNavigation()
     onClicked: {
         if (conjunctionAction) conjunctionAction.trigger();
     }
 
-    implicitWidth: Math.max(Geometry.minTargetSize, contentLayout.implicitWidth + Spacing.sm * 2)
-    implicitHeight: Geometry.controlHeightMedium
+    implicitWidth: (text === "" && !pillGlass) ? btnH : Math.max(btnH, contentLayout.implicitWidth + Spacing.md)
+    implicitHeight: btnH
 
     activeFocusOnTab: true
     focusPolicy: Qt.StrongFocus
@@ -34,60 +42,67 @@ T.ToolButton {
 
     background: Rectangle {
         id: bg
-        radius: Geometry.radiusSmall
-        border.width: Geometry.separatorThickness
+        radius: height * 0.5
+        border.width: Appearance.shouldIncreaseContrast ? 1.0 : Geometry.hairlineThickness
 
         color: {
             if (!control.enabled) return "transparent";
-            if (control.down || control.checked) return Theme.selection;
-            if (control.hovered) return Theme.surfaceSecondary;
-            return "transparent";
+            if (control.down || control.checked) return Theme.isDark ? Qt.rgba(1, 1, 1, 0.22) : Qt.rgba(0, 0, 0, 0.12);
+            if (control.hovered) return Theme.controlFillHover;
+            return control.pillGlass ? Theme.controlFill : "transparent";
         }
 
         border.color: {
-            if (control.down || control.checked) return Theme.separator;
-            if (control.hovered) return Theme.separator;
+            if (Appearance.shouldIncreaseContrast) return Theme.highContrastBorderColor;
+            if (control.hovered || control.checked || control.pillGlass) return Theme.separator;
             return "transparent";
         }
 
         Behavior on color {
-            ColorAnimation { duration: Motion.duration(Motion.fast); easing.type: Motion.easingStandard }
+            ColorAnimation { duration: Motion.hoverSwap }
         }
 
         FocusRing {
-            active: control.activeFocus && FocusModel.keyboardNavigationActive
             target: bg
+            isTextInput: false
         }
     }
 
-    contentItem: RowLayout {
-        id: contentLayout
-        spacing: Spacing.xs
-        anchors.centerIn: parent
+    contentItem: Item {
+        implicitWidth: contentLayout.implicitWidth
+        implicitHeight: contentLayout.implicitHeight
 
-        Icon {
-            visible: control.iconName !== "" || (control.icon && control.icon.name !== "")
-            name: control.iconName !== "" ? control.iconName : (control.icon ? control.icon.name : "")
-            size: 16
-            color: {
-                if (!control.enabled) return Theme.textDisabled;
-                if (control.checked) return Theme.accent;
-                return Theme.textPrimary;
-            }
-        }
+        RowLayout {
+            id: contentLayout
+            spacing: Spacing.xs
+            anchors.centerIn: parent
 
-        Text {
-            visible: control.text !== ""
-            text: control.text
-            font: Typography.controlLabel
-            color: {
-                if (!control.enabled) return Theme.textDisabled;
-                if (control.checked) return Theme.accent;
-                return Theme.textPrimary;
+            Icon {
+                visible: control.iconName !== "" || (control.icon && control.icon.name !== "")
+                name: control.iconName !== "" ? control.iconName : (control.icon ? control.icon.name : "")
+                size: (control.sizeClass === "small" || control.sizeClass === "compact") ? 15 : 17
+                opsz: 24
+                fill: control.checked ? 1 : 0
+                color: {
+                    if (!control.enabled) return Theme.textDisabled;
+                    if (control.checked) return Theme.accent;
+                    return Theme.textPrimary;
+                }
             }
-            horizontalAlignment: Text.AlignHCenter
-            verticalAlignment: Text.AlignVCenter
-            elide: Text.ElideRight
+
+            Text {
+                visible: control.text !== ""
+                text: control.text
+                font: Typography.body
+                color: {
+                    if (!control.enabled) return Theme.textDisabled;
+                    if (control.checked) return Theme.accent;
+                    return Theme.textPrimary;
+                }
+                horizontalAlignment: Text.AlignHCenter
+                verticalAlignment: Text.AlignVCenter
+                elide: Text.ElideRight
+            }
         }
     }
 

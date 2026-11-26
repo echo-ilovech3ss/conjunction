@@ -21,31 +21,47 @@ T.Dialog {
     anchors.centerIn: parent
     closePolicy: T.Popup.CloseOnEscape
 
-
     background: Rectangle {
         color: "transparent"
     }
 
     dim: true
     T.Overlay.modal: Rectangle {
-        color: "#40000000"
+        color: Qt.rgba(0, 0, 0, 0.28)
+    }
+
+    enter: Transition {
+        ParallelAnimation {
+            NumberAnimation { property: "opacity"; from: 0.0; to: 1.0; duration: Motion.duration(Motion.popoverOpen) }
+            NumberAnimation { property: "scale"; from: Appearance.reducedMotion ? 1.0 : 0.94; to: 1.0; duration: Motion.spatialDuration(Motion.popoverOpen); easing.type: Easing.OutCubic }
+        }
+    }
+
+    exit: Transition {
+        ParallelAnimation {
+            NumberAnimation { property: "opacity"; from: 1.0; to: 0.0; duration: Motion.duration(Motion.popoverClose) }
+            NumberAnimation { property: "scale"; from: 1.0; to: Appearance.reducedMotion ? 1.0 : 0.94; duration: Motion.spatialDuration(Motion.popoverClose); easing.type: Easing.OutCubic }
+        }
     }
 
     contentItem: Surface {
         elevation: "dialog"
-        radius: Geometry.radiusLarge
+        radius: Geometry.radiusSheet // 16 pt
         implicitWidth: 380
-        implicitHeight: dialogLayout.implicitHeight + Spacing.lg * 2
+        implicitHeight: dialogLayout.implicitHeight + Spacing.lg + Spacing.md
 
         ColumnLayout {
             id: dialogLayout
             anchors.fill: parent
-            anchors.margins: Spacing.lg
+            anchors.topMargin: Spacing.lg
+            anchors.leftMargin: Spacing.lg
+            anchors.rightMargin: Spacing.lg
+            anchors.bottomMargin: Spacing.md
             spacing: Spacing.md
 
             Text {
                 text: control.titleText
-                font: Typography.windowTitle
+                font: Typography.title2Bold
                 color: Theme.textPrimary
                 Layout.fillWidth: true
             }
@@ -71,6 +87,7 @@ T.Dialog {
                 Item { Layout.fillWidth: true }
 
                 Button {
+                    sizeClass: "pill" // 28 pt cr=14
                     text: control.cancelButtonText
                     onClicked: {
                         control.cancelTriggered();
@@ -80,6 +97,7 @@ T.Dialog {
 
                 Button {
                     id: defBtn
+                    sizeClass: "pill"
                     text: control.defaultButtonText
                     isDefault: !control.isDestructive
                     isDestructive: control.isDestructive
@@ -99,10 +117,7 @@ T.Dialog {
         event.accepted = true;
     }
 
-    onOpened: {
-        defBtn.forceActiveFocus();
-    }
-
+    onOpened: defBtn.forceActiveFocus()
     onClosed: {
         if (invokerItem) invokerItem.forceActiveFocus();
     }

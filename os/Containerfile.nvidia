@@ -1,0 +1,37 @@
+# syntax=docker/dockerfile:1
+# Conjunction OS NVIDIA variant (x86_64 only)
+# Builds on top of the base Conjunction Fedora 45 Kinoite bootc image to add
+# proprietary NVIDIA drivers via RPM Fusion and required bootc kernel args.
+
+ARG BASE_IMAGE=ghcr.io/echo-ilovech3ss/conjunction:45-amd64
+FROM ${BASE_IMAGE}
+
+ARG TARGETARCH
+
+# Fail fast if invoked for non-x86_64 architectures.
+RUN if [ "$(uname -m)" != "x86_64" ]; then \
+      echo "ERROR: Containerfile.nvidia only supports x86_64 (got $(uname -m), TARGETARCH=${TARGETARCH:-unset})." >&2; \
+      exit 1; \
+    fi
+
+COPY os/nvidia/usr/lib/bootc/kargs.d/05-nvidia.toml /usr/lib/bootc/kargs.d/05-nvidia.toml
+
+RUN set -euo pipefail; \
+    KVER="$(ls -1 /usr/lib/modules | head -n 1)"; \
+    KDEV_VER="$(rpm -q --qf '%{VERSION}-%{RELEASE}.%{ARCH}' kernel-core)"; \
+    dnf5 install -y \
+      "kernel-devel-${KDEV_VER}" \
+      akmod-nvidia \
+      xorg-x11-drv-nvidia \
+      xorg-x11-drv-nvidia-cuda \
+    || dnf5 install -y \
+      kernel-devel-matched \
+      akmod-nvidia \
+      xorg-x11-drv-nvidia \
+      xorg-x11-drv-nvidia-cuda; \
+    akmods --force --kernels "${KVER}"; \
+    depmod -a "${KVER}"; \
+    dracut --no-hostonly --kver "${KVER}" --force "/usr/lib/modules/${KVER}/initramfs.img"; \
+    dnf5 clean all; \
+    rm -rf /var/cache/libdnf5 /var/cache/dnf /var/log/* /tmp/* /var/tmp/*; \
+    bootc container lint --fatal-warnings

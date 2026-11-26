@@ -11,6 +11,7 @@ struct SidebarItem {
     QString iconName;
     QString section; // "Favorites" or "Locations"
     bool isTrash = false;
+    bool isMount = false;
 };
 
 class SidebarModel : public QAbstractListModel {
@@ -23,7 +24,8 @@ public:
         PathRole,
         IconNameRole,
         SectionRole,
-        IsTrashRole
+        IsTrashRole,
+        IsMountRole
     };
 
     explicit SidebarModel(QObject *parent = nullptr);

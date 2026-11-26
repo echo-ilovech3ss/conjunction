@@ -1,114 +1,80 @@
 import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls as QQC2
-import Conjunction.Design 1.0
-import Conjunction.Controls 1.0
+import Conjunction.Design
+import Conjunction.Controls
 
-Rectangle {
+// SPEC §4.7 Files Unified 54 pt Glass Toolbar + ScrollPocket separation
+Item {
     id: root
-    height: 48
-    color: isDarkTheme ? "#202022" : "#ECECEC"
+    height: 54
+    property Item backdropItem: null
+    property int currentViewIndex: 0 // 0: Icon, 1: List, 2: Column, 3: Gallery
+    property bool inspectorOpen: false
+    property bool canEject: FilesModel.currentPath.indexOf("/mnt/conj-") === 0 || FilesModel.currentPath.indexOf("/run/media") === 0
 
-    property int currentViewIndex: 0 // 0: Icon, 1: List, 2: Column
     signal viewModeChanged(int mode)
     signal newFolderRequested()
     signal getInfoRequested()
-    signal actionRequested(string action)
+    signal ejectRequested()
+    signal toggleInspectorRequested()
+
+    GlassSurface {
+        anchors.fill: parent
+        variant: "regular"
+        cornerRadius: 0
+        shadowPreset: "none"
+        scrollPocketMode: "soft"
+        pocketAtTop: true
+        backdropItem: root.backdropItem
+    }
 
     Rectangle {
         anchors.bottom: parent.bottom
         anchors.left: parent.left
         anchors.right: parent.right
         height: 1
-        color: isDarkTheme ? "#2F2F32" : "#D4D4D4"
+        color: Theme.toolbarPocketHairline
     }
 
     RowLayout {
         anchors.fill: parent
-        anchors.leftMargin: 16
-        anchors.rightMargin: 16
-        spacing: 12
+        anchors.leftMargin: 14
+        anchors.rightMargin: 14
+        spacing: 10
 
         // Back / Forward navigation
         RowLayout {
-            spacing: 2
-
+            spacing: 4
             Button {
-                id: backBtn
                 iconName: "go-previous"
                 sizeClass: "compact"
                 enabled: FilesModel.canGoBack
                 onClicked: FilesModel.goBack()
-                implicitWidth: 28
-                implicitHeight: 28
+                implicitWidth: 28; implicitHeight: 28
             }
-
             Button {
-                id: fwdBtn
                 iconName: "go-next"
                 sizeClass: "compact"
                 enabled: FilesModel.canGoForward
                 onClicked: FilesModel.goForward()
-                implicitWidth: 28
-                implicitHeight: 28
+                implicitWidth: 28; implicitHeight: 28
             }
         }
 
-        // Breadcrumb Path Navigation Bar
-        QQC2.ScrollView {
+        // Current Folder Title + Inline Path Jump
+        Text {
             Layout.fillWidth: true
-            Layout.maximumHeight: 32
-            contentHeight: 32
-            clip: true
-            QQC2.ScrollBar.horizontal.policy: QQC2.ScrollBar.AlwaysOff
-
-            Row {
-                spacing: 4
-                anchors.verticalCenter: parent.verticalCenter
-
-                Repeater {
-                    model: FilesModel.pathComponents
-                    delegate: Row {
-                        spacing: 4
-                        anchors.verticalCenter: parent.verticalCenter
-
-                        Rectangle {
-                            height: 24
-                            width: segText.implicitWidth + 12
-                            radius: 4
-                            color: segMouse.containsMouse ? (isDarkTheme ? "#333336" : "#DDD") : "transparent"
-
-                            Text {
-                                id: segText
-                                anchors.centerIn: parent
-                                text: modelData.name
-                                font.pixelSize: 12
-                                font.weight: (index === FilesModel.pathComponents.length - 1) ? Font.DemiBold : Font.Normal
-                                color: isDarkTheme ? "#F0F0F0" : "#1D1D1F"
-                            }
-
-                            MouseArea {
-                                id: segMouse
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: FilesModel.setPath(modelData.path)
-                            }
-                        }
-
-                        Text {
-                            visible: index < FilesModel.pathComponents.length - 1
-                            text: "›"
-                            font.pixelSize: 14
-                            color: isDarkTheme ? "#666" : "#999"
-                            anchors.verticalCenter: parent.verticalCenter
-                        }
-                    }
-                }
+            text: {
+                var c = FilesModel.pathComponents;
+                return (c && c.length > 0) ? c[c.length - 1].name : "Files";
             }
+            color: Theme.labelColor
+            font: Typography.headlineBold
+            elide: Text.ElideRight
         }
 
-        // View Mode Switcher
+        // View Mode Switcher: Icon (Cmd+1), List (Cmd+2), Column (Cmd+3), Gallery (Cmd+4)
         SegmentedControl {
             id: viewSwitcher
             currentIndex: root.currentViewIndex
@@ -118,30 +84,41 @@ Rectangle {
                     root.viewModeChanged(currentIndex);
                 }
             }
-
             Segment { text: "Icons" }
             Segment { text: "List" }
             Segment { text: "Columns" }
+            Segment { text: "Gallery" }
         }
 
-        // Actions
+        ToolButton {
+            visible: root.canEject
+            iconName: "media-eject"
+            tooltipText: "Eject (Cmd+E)"
+            onClicked: root.ejectRequested()
+            implicitWidth: 30; implicitHeight: 28
+        }
+
         ToolButton {
             iconName: "folder-new"
             tooltipText: "New Folder"
             onClicked: root.newFolderRequested()
-            implicitWidth: 30
-            implicitHeight: 28
+            implicitWidth: 30; implicitHeight: 28
         }
 
         ToolButton {
             iconName: "document-properties"
-            tooltipText: "Get Info (Ctrl+I)"
+            tooltipText: "Get Info (Cmd+I)"
             onClicked: root.getInfoRequested()
-            implicitWidth: 30
-            implicitHeight: 28
+            implicitWidth: 30; implicitHeight: 28
         }
 
-        // In-folder search
+        ToolButton {
+            iconName: "view-preview"
+            tooltipText: "Toggle Preview Inspector"
+            onClicked: root.toggleInspectorRequested()
+            implicitWidth: 30; implicitHeight: 28
+        }
+
         SearchField {
             id: searchField
             placeholderText: "Search"

@@ -1,0 +1,282 @@
+# syntax=docker/dockerfile:1
+# Conjunction OS base image (Fedora 45 Kinoite bootc, multi-arch: linux/amd64 + linux/arm64)
+
+ARG BASE_IMAGE=quay.io/fedora/fedora-kinoite:45
+
+# ==============================================================================
+# Stage 1: Build Rust workspace, C++/Qt6/KF6 components, fonts, and themes
+# ==============================================================================
+FROM ${BASE_IMAGE} AS builder
+
+WORKDIR /src
+
+# Install toolchains, Qt6/KF6 development headers, and theme build helpers
+RUN set -euo pipefail; \
+    dnf5 install -y \
+      cargo rust \
+      cmake ninja-build gcc-c++ extra-cmake-modules \
+      qt6-qtbase-devel qt6-qtdeclarative-devel qt6-qtsvg-devel \
+      kf6-kio-devel kf6-kconfig-devel kf6-solid-devel \
+      kf6-networkmanager-qt-devel libkscreen-devel \
+      kf6-kparts-devel kf6-kxmlgui-devel kf6-kcoreaddons-devel \
+      sassc glib2-devel gtk-murrine-engine \
+      git unzip curl binutils; \
+    dnf5 clean all
+
+# Install pinned upstream fonts & MacTahoe themes into /out (with license files)
+RUN set -euo pipefail; \
+    mkdir -p \
+      /out/usr/share/fonts/inter \
+      /out/usr/share/fonts/material-symbols \
+      /out/usr/share/icons \
+      /out/usr/share/themes \
+      /out/usr/share/licenses/conjunction; \
+    # Inter & Inter Display v4.1 (OFL-1.1)
+    curl -fsSL -o /tmp/Inter-4.1.zip https://github.com/rsms/inter/releases/download/v4.1/Inter-4.1.zip; \
+    mkdir -p /tmp/inter-unpack; \
+    unzip -q /tmp/Inter-4.1.zip -d /tmp/inter-unpack; \
+    find /tmp/inter-unpack -type f \( -name 'InterVariable*.ttf' -o -path '*/extras/ttf/*.ttf' \) ! -path '*/hinted/*' \
+      -exec install -Dm644 -t /out/usr/share/fonts/inter {} +; \
+    if [ -z "$(ls -A /out/usr/share/fonts/inter)" ]; then \
+      find /tmp/inter-unpack -type f \( -name '*.ttf' -o -name '*.otf' \) \
+        -exec install -Dm644 -t /out/usr/share/fonts/inter {} +; \
+    fi; \
+    test -n "$(ls -A /out/usr/share/fonts/inter)"; \
+    LICENSE_INTER="$(find /tmp/inter-unpack -maxdepth 3 -type f \( -iname 'OFL*' -o -iname 'LICENSE*' \) | head -n 1)"; \
+    [ -n "${LICENSE_INTER}" ] && install -Dm644 "${LICENSE_INTER}" /out/usr/share/licenses/conjunction/Inter-OFL-1.1.txt; \
+    rm -rf /tmp/Inter-4.1.zip /tmp/inter-unpack; \
+    # Material Symbols Rounded variable font (Apache-2.0)
+    curl -fsSL -o "/out/usr/share/fonts/material-symbols/MaterialSymbolsRounded[FILL,GRAD,opsz,wght].ttf" \
+      "https://github.com/google/material-design-icons/raw/master/variablefont/MaterialSymbolsRounded%5BFILL%2CGRAD%2Copsz%2Cwght%5D.ttf"; \
+    curl -fsSL -o /out/usr/share/licenses/conjunction/MaterialSymbolsRounded-Apache-2.0.txt \
+      "https://raw.githubusercontent.com/google/material-design-icons/master/LICENSE"; \
+    # MacTahoe icon theme (GPL-3.0)
+    git clone --depth 1 https://github.com/vinceliuice/MacTahoe-icon-theme.git /tmp/MacTahoe-icon-theme; \
+    (cd /tmp/MacTahoe-icon-theme && bash ./install.sh -d /out/usr/share/icons); \
+    install -Dm644 /tmp/MacTahoe-icon-theme/COPYING /out/usr/share/licenses/conjunction/MacTahoe-icon-theme-GPL-3.0.txt; \
+    rm -rf /tmp/MacTahoe-icon-theme; \
+    # MacTahoe GTK theme (MIT in upstream COPYING)
+    git clone --depth 1 https://github.com/vinceliuice/MacTahoe-gtk-theme.git /tmp/MacTahoe-gtk-theme; \
+    (cd /tmp/MacTahoe-gtk-theme && \
+      sed -i 's/^  install_app/  true/' install.sh && \
+      sed -i 's/setterm /true /g' libs/lib-core.sh && \
+      USER=root TERM=xterm-256color bash ./install.sh -d /out/usr/share/themes -c light -c dark -o normal -t default </dev/null); \
+    install -Dm644 /tmp/MacTahoe-gtk-theme/COPYING /out/usr/share/licenses/conjunction/MacTahoe-gtk-theme-MIT.txt; \
+    rm -rf /tmp/MacTahoe-gtk-theme
+
+# Replace trademarked start-here / distributor-logo / safari / finder artwork in MacTahoe icons
+COPY assets /src/assets
+RUN set -euo pipefail; \
+    MARK="/src/assets/conjunction-mark.svg"; \
+    for theme_dir in /out/usr/share/icons/MacTahoe*; do \
+      [ -d "${theme_dir}" ] || continue; \
+      find "${theme_dir}" \( -type f -o -type l \) \( -name 'start-here*.svg' -o -name 'distributor-logo*.svg' \) | while read -r icon; do \
+        rm -f "${icon}"; \
+        cp "${MARK}" "${icon}"; \
+      done; \
+      # Replace Safari and Apple-branded Finder/file-manager icons with non-trademark icons
+      GENERIC_NET="$(find "${theme_dir}" -path '*/apps/scalable/applications-internet.svg' -o -path '*/categories/scalable/applications-internet.svg' | head -n 1 || true)"; \
+      GENERIC_FOLDER="$(find "${theme_dir}" -path '*/places/scalable/folder-blue.svg' -o -path '*/places/scalable/folder.svg' | head -n 1 || true)"; \
+      find "${theme_dir}" \( -type f -o -type l \) -name 'safari*.svg' | while read -r sicon; do \
+        if [ -n "${GENERIC_NET}" ] && [ -e "${GENERIC_NET}" ]; then \
+          rm -f "${sicon}"; \
+          cp -L "${GENERIC_NET}" "${sicon}"; \
+        fi; \
+      done; \
+      find "${theme_dir}" \( -type f -o -type l \) \( -name 'system-file-manager*.svg' -o -name 'user-home*.svg' -o -name 'tapple.svg' \) | while read -r ficon; do \
+        if [ "$(basename "${ficon}")" = "tapple.svg" ]; then \
+          rm -f "${ficon}"; \
+          cp "${MARK}" "${ficon}"; \
+        elif [ "$(basename "${ficon}")" = "system-file-manager.svg" ] && [ -n "${GENERIC_FOLDER}" ] && [ -e "${GENERIC_FOLDER}" ]; then \
+          rm -f "${ficon}"; \
+          cp -L "${GENERIC_FOLDER}" "${ficon}"; \
+        fi; \
+      done; \
+    done
+
+# Build all Rust workspace binaries (including bundle daemon, CLI, opener, packer, and sysd)
+COPY Cargo.toml Cargo.lock ./
+COPY conjunction-core ./conjunction-core
+COPY application ./application
+COPY app_sync ./app_sync
+COPY cj ./cj
+COPY conj-bundle ./conj-bundle
+COPY conj-appd ./conj-appd
+COPY conj-appctl ./conj-appctl
+COPY conj-open ./conj-open
+COPY conj-sysd ./conj-sysd
+RUN set -euo pipefail; \
+    cargo build --release --locked; \
+    mkdir -p /out/usr/bin; \
+    for bin in cj application app_sync conj-bundle conj-appd conj-appctl conj-open conj-sysd; do \
+      install -Dm755 "target/release/${bin}" "/out/usr/bin/${bin}"; \
+      strip "/out/usr/bin/${bin}" || true; \
+    done
+
+# Build all C++/Qt6/KF6 components and Dolphin KF6 plugin
+COPY conjunction-design ./conjunction-design
+COPY conj-shelld ./conj-shelld
+COPY conj-notificationd ./conj-notificationd
+COPY conjunction-files ./conjunction-files
+COPY conjunction-settings ./conjunction-settings
+COPY conjunction-terminal ./conjunction-terminal
+COPY data/dolphin-plugin ./data/dolphin-plugin
+
+RUN set -euo pipefail; \
+    for proj in conjunction-design conj-shelld conjunction-files conjunction-settings conjunction-terminal data/dolphin-plugin; do \
+      cmake -S "/src/${proj}" -B "/tmp/build-${proj//\//-}" -G Ninja \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_INSTALL_PREFIX=/usr; \
+      cmake --build "/tmp/build-${proj//\//-}"; \
+      DESTDIR=/out cmake --install "/tmp/build-${proj//\//-}"; \
+      rm -rf "/tmp/build-${proj//\//-}"; \
+    done; \
+    # conj-notificationd does not declare an install() rule in CMakeLists.txt
+    cmake -S /src/conj-notificationd -B /tmp/build-conj-notificationd -G Ninja \
+      -DCMAKE_BUILD_TYPE=Release \
+      -DCMAKE_INSTALL_PREFIX=/usr; \
+    cmake --build /tmp/build-conj-notificationd; \
+    install -Dm755 /tmp/build-conj-notificationd/conj-notificationd /out/usr/bin/conj-notificationd; \
+    rm -rf /tmp/build-conj-notificationd; \
+    # Complete QML module layout & reference_app alias expected by C++ loaders
+    mkdir -p /out/usr/share/conjunction/qml /out/usr/lib64/qt6/qml/QtQuick/Controls; \
+    cp -a /src/conjunction-design/qml/QtQuick /out/usr/share/conjunction/qml/; \
+    ln -sfn reference_app /out/usr/share/conjunction/reference; \
+    ln -sfn /usr/share/conjunction/qml/Conjunction /out/usr/lib64/qt6/qml/Conjunction; \
+    ln -sfn /usr/share/conjunction/qml/QtQuick/Controls/Conjunction /out/usr/lib64/qt6/qml/QtQuick/Controls/Conjunction; \
+    find /out/usr/bin -maxdepth 1 -type f -exec strip {} + 2>/dev/null || true
+
+# ==============================================================================
+# Stage 2: Final bootc OS image
+# ==============================================================================
+FROM ${BASE_IMAGE}
+
+ARG TARGETARCH
+
+LABEL org.opencontainers.image.title="Conjunction OS" \
+      org.opencontainers.image.description="Conjunction desktop environment on Fedora 45 Kinoite bootc" \
+      org.opencontainers.image.source="https://github.com/echo-ilovech3ss/conjunction" \
+      containers.bootc="1"
+
+# Copy compiled Rust & C++/KF6 binaries, QML modules, plugins, fonts, themes, and licenses
+COPY --from=builder /out/ /
+
+# Install Python Wine bundle runner helpers referenced in docs/APP_BUNDLES.md
+COPY engine.py cli.py /usr/lib/conjunction/
+
+# Install Conjunction session, desktop entries, MIME types, Polkit, D-Bus, KWin, and Terminal.app
+COPY data/conjunction.desktop /usr/share/wayland-sessions/conjunction.desktop
+COPY data/conjunction-session /usr/bin/conjunction-session
+COPY data/conjunction-session-init /usr/bin/conjunction-session-init
+COPY data/conjunction-files.desktop /usr/share/applications/conjunction-files.desktop
+COPY data/conjunction-settings.desktop /usr/share/applications/conjunction-settings.desktop
+COPY data/conjunction-terminal.desktop /usr/share/applications/conjunction-terminal.desktop
+COPY data/applications/conjunction-cdmg.desktop /usr/share/applications/conjunction-cdmg.desktop
+COPY data/applications/conjunction-open.desktop /usr/share/applications/conjunction-open.desktop
+COPY data/mime/packages/conjunction-bundles.xml /usr/share/mime/packages/conjunction-bundles.xml
+COPY data/kio/servicemenus/conjunction-app.desktop /usr/share/kio/servicemenus/conjunction-app.desktop
+COPY data/polkit-1/rules.d/50-conjunction-cdmg.rules /etc/polkit-1/rules.d/50-conjunction-cdmg.rules
+COPY data/org.conjunction.packages.policy /usr/share/polkit-1/actions/org.conjunction.packages.policy
+COPY data/org.conjunction.Notifications.service /usr/share/dbus-1/services/org.conjunction.Notifications.service
+COPY data/org.freedesktop.impl.portal.desktop.plasmanotify.service /usr/share/dbus-1/services/org.freedesktop.impl.portal.desktop.plasmanotify.service
+COPY data/environment.d/60-conjunction-apps.conf /usr/lib/environment.d/60-conjunction-apps.conf
+COPY data/plasma-env/conjunction-apps.sh /etc/xdg/plasma-workspace/env/conjunction-apps.sh
+COPY data/tmpfiles.d/conjunction-apps.conf /usr/lib/tmpfiles.d/conjunction-apps.conf
+COPY data/systemd/user/ /usr/lib/systemd/user/
+COPY data/conjunction-kwin-bridge.js /usr/share/kwin/scripts/conjunction-kwin-bridge/contents/code/main.js
+COPY data/conjunction-overview/ /usr/share/kwin/effects/conjunction-overview/
+COPY data/Terminal.app/ /usr/share/conjunction/Applications/Terminal.app/
+COPY assets/ /usr/share/conjunction/assets/
+COPY os/ASSETS-LICENSES.md /usr/share/licenses/conjunction/ASSETS-LICENSES.md
+
+# Overlay Fedora bootc overrides last (os-release, conj-sysd.service, tmpfiles, theming, fonts)
+COPY os/files/ /
+
+# Configure Flathub, RPM Fusion, codecs/firmware/bundle tools, and arch-specific Windows compat
+RUN set -euo pipefail; \
+    mkdir -p /etc/flatpak/remotes.d; \
+    curl -fsSL -o /etc/flatpak/remotes.d/flathub.flatpakrepo https://dl.flathub.org/repo/flathub.flatpakrepo; \
+    FEDORA_VER="$(rpm -E %fedora)"; \
+    dnf5 install -y \
+      "https://mirrors.rpmfusion.org/free/fedora/rpmfusion-free-release-${FEDORA_VER}.noarch.rpm" \
+      "https://mirrors.rpmfusion.org/nonfree/fedora/rpmfusion-nonfree-release-${FEDORA_VER}.noarch.rpm"; \
+    dnf5 install -y --allowerasing \
+      distrobox \
+      btrfs-progs \
+      squashfs-tools \
+      squashfuse \
+      erofs-utils \
+      erofs-fuse \
+      fuse3 \
+      desktop-file-utils \
+      shared-mime-info \
+      openssl \
+      winetricks \
+      cabextract \
+      alsa-firmware \
+      alsa-sof-firmware \
+      jetbrains-mono-fonts-all \
+      fira-code-fonts \
+      ffmpeg \
+      libavcodec-freeworld \
+      mesa-va-drivers-freeworld \
+      gstreamer1-plugins-ugly \
+      gstreamer1-plugins-bad-freeworld; \
+    ARCH="$(uname -m)"; \
+    if [ "${ARCH}" = "x86_64" ]; then \
+      dnf5 copr enable -y bazzite-org/bazzite; \
+      dnf5 install -y wine wine-dxvk dxvk-native umu-launcher; \
+    elif [ "${ARCH}" = "aarch64" ]; then \
+      # Wine and umu-launcher are not packaged for Fedora aarch64; ship FEX-Emu + Box64
+      dnf5 install -y fex-emu fex-emu-rootfs-fedora fex-emu-thunks box64; \
+    else \
+      echo "Unsupported architecture: ${ARCH}" >&2; \
+      exit 1; \
+    fi; \
+    dnf5 clean all
+
+# Finalize rootfs symlinks, units, branding (icons/Plymouth/Anaconda), caches, initramfs, and bootc lint
+RUN set -euo pipefail; \
+    # Atomic writable /Applications backing directory
+    ln -sfn var/Applications /Applications; \
+    # Strip CRLF if present and fix permissions
+    sed -i 's/\r$//' /etc/xdg/plasma-workspace/env/conjunction-apps.sh; \
+    chmod 0755 \
+      /usr/bin/conjunction-session \
+      /usr/bin/conjunction-session-init \
+      /etc/xdg/plasma-workspace/env/conjunction-apps.sh \
+      /usr/share/kio/servicemenus/conjunction-app.desktop \
+      /usr/share/conjunction/Applications/Terminal.app/Contents/MacOS/conjunction-terminal; \
+    chmod 0644 /etc/polkit-1/rules.d/50-conjunction-cdmg.rules; \
+    # Enable system & user units (conj-appd runs in both Conjunction and Plasma sessions)
+    systemctl enable conj-sysd.service; \
+    systemctl --global enable conj-appd.service conj-notificationd.service conj-shelld.service; \
+    mkdir -p /usr/lib/systemd/user/graphical-session.target.wants; \
+    ln -sfn ../conj-appd.service /usr/lib/systemd/user/graphical-session.target.wants/conj-appd.service; \
+    # Install hicolor app icons & Conjunction brand pixmaps / Plymouth / Anaconda logos
+    for sz in 16 24 32 48 64 128 256 512; do \
+      install -Dm644 "/usr/share/conjunction/assets/icons/conjunction-${sz}.png" \
+        "/usr/share/icons/hicolor/${sz}x${sz}/apps/conjunction.png"; \
+    done; \
+    install -Dm644 /usr/share/conjunction/assets/conjunction-logo.svg /usr/share/icons/hicolor/scalable/apps/conjunction.svg; \
+    install -Dm644 /usr/share/conjunction/assets/conjunction.png /etc/favicon.png; \
+    install -Dm644 /usr/share/conjunction/assets/conjunction.png /usr/share/pixmaps/system-logo-white.png; \
+    install -Dm644 /usr/share/conjunction/assets/conjunction.png /usr/share/pixmaps/fedora-logo-sprite.png; \
+    install -Dm644 /usr/share/conjunction/assets/conjunction.png /usr/share/pixmaps/fedora-logo.png; \
+    install -Dm644 /usr/share/conjunction/assets/conjunction-installer.png /usr/share/pixmaps/fedora_logo_med.png; \
+    install -Dm644 /usr/share/conjunction/assets/icons/conjunction-48.png /usr/share/plymouth/themes/spinner/watermark.png; \
+    install -Dm644 /usr/share/conjunction/assets/icons/conjunction-128.png /usr/share/anaconda/pixmaps/sidebar-logo.png; \
+    install -Dm644 /usr/share/conjunction/assets/icons/conjunction-128.png /usr/share/anaconda/pixmaps/silverblue/sidebar-logo.png; \
+    # Refresh MIME, desktop, font, and icon caches
+    update-mime-database /usr/share/mime; \
+    update-desktop-database /usr/share/applications; \
+    fc-cache -f; \
+    for icon_dir in /usr/share/icons/hicolor /usr/share/icons/MacTahoe*; do \
+      [ -d "${icon_dir}" ] && gtk-update-icon-cache -f -t "${icon_dir}" || true; \
+    done; \
+    # Rebuild initramfs so updated /usr/lib/os-release and Plymouth watermark are embedded
+    KVER="$(ls -1 /usr/lib/modules | head -n 1)"; \
+    dracut --no-hostonly --kver "${KVER}" --force "/usr/lib/modules/${KVER}/initramfs.img"; \
+    # Clean caches/logs/tmp before bootc lint
+    rm -rf /var/cache/libdnf5 /var/cache/dnf /var/log/* /tmp/* /var/tmp/*; \
+    bootc container lint --fatal-warnings

@@ -1,34 +1,202 @@
-name: Conjunction OS CI
+name: Conjunction CI
 
 on:
   push:
-    branches: [ main, master ]
+    branches:
+      - main
   pull_request:
-    branches: [ main, master ]
+  workflow_dispatch:
+    inputs:
+      build_iso:
+        description: "Build installable anaconda-iso artifacts via bootc-image-builder"
+        required: false
+        type: boolean
+        default: true
 
 permissions:
   contents: read
+  packages: write
 
 jobs:
-  rust:
-    runs-on: ubuntu-latest
-
+  test:
+    name: Workspace tests & script checks
+    runs-on: ubuntu-24.04
     steps:
-      - name: Check out repository
-        uses: actions/checkout@v5
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-      - name: Install stable Rust
+      - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Test workspace
+      - name: Cache Cargo artifacts
+        uses: Swatinem/rust-cache@v2
+
+      - name: Run Rust workspace tests
         run: cargo test --workspace --locked
-
-  shell:
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v5
 
       - name: Check shell script syntax
         run: git ls-files -z '*.sh' | xargs -0 -r -n1 bash -n
+
+      - name: Run Python tests
+        run: |
+          python3 -m pip install --quiet pytest || sudo apt-get update && sudo apt-get install -y python3-pytest
+          python3 -m pytest -q
+
+  build-image:
+    name: Build bootc image (${{ matrix.arch }})
+    needs: test
+    # Manual ISO builds still run when tests fail, so a test regression doesn't block install media.
+    if: ${{ !cancelled() && (needs.test.result == 'success' || github.event_name == 'workflow_dispatch') }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            platform: linux/amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            platform: linux/arm64
+            runner: ubuntu-24.04-arm
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Free runner disk space for bootc build
+        run: |
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/lib/android /opt/hostedtoolcache || true
+          df -h /
+
+      - name: Ensure Podman is installed
+        run: |
+          if ! command -v podman >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y podman
+          fi
+          podman --version
+
+      - name: Normalize image repository name
+        id: meta
+        run: |
+          REPO_LOWER="$(printf '%s' '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')"
+          echo "image=ghcr.io/${REPO_LOWER}" >> "$GITHUB_OUTPUT"
+
+      - name: Build Conjunction OS OCI image (${{ matrix.platform }})
+        run: |
+          sudo podman build \
+            --platform "${{ matrix.platform }}" \
+            --ignorefile os/.containerignore \
+            -f os/Containerfile \
+            -t "${{ steps.meta.outputs.image }}:45-${{ matrix.arch }}" \
+            -t "localhost/conjunction:45-${{ matrix.arch }}" \
+            .
+
+      - name: Verify bootc lint & installed artifacts
+        run: |
+          sudo podman run --rm "localhost/conjunction:45-${{ matrix.arch }}" \
+            bootc container lint --fatal-warnings
+
+      - name: Log in to GHCR (main push only)
+        if: >-
+          github.event_name == 'push' &&
+          github.ref == 'refs/heads/main' &&
+          github.event.pull_request == null
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Copy auth to root Podman and push arch image (main push only)
+        if: >-
+          github.event_name == 'push' &&
+          github.ref == 'refs/heads/main' &&
+          github.event.pull_request == null
+        run: |
+          sudo mkdir -p /root/.docker /run/containers/0
+          if [ -f "$HOME/.docker/config.json" ]; then
+            sudo cp "$HOME/.docker/config.json" /root/.docker/config.json
+            sudo cp "$HOME/.docker/config.json" /run/containers/0/auth.json
+          fi
+          sudo podman push "${{ steps.meta.outputs.image }}:45-${{ matrix.arch }}"
+
+      - name: Build NVIDIA image on x86_64
+        if: matrix.arch == 'amd64'
+        run: |
+          sudo podman build \
+            --platform linux/amd64 \
+            --build-arg "BASE_IMAGE=localhost/conjunction:45-amd64" \
+            -f os/Containerfile.nvidia \
+            -t "${{ steps.meta.outputs.image }}:45-nvidia-amd64" \
+            -t "${{ steps.meta.outputs.image }}:nvidia" \
+            .
+
+      - name: Push NVIDIA image (main push only)
+        if: >-
+          matrix.arch == 'amd64' &&
+          github.event_name == 'push' &&
+          github.ref == 'refs/heads/main' &&
+          github.event.pull_request == null
+        run: |
+          sudo podman push "${{ steps.meta.outputs.image }}:45-nvidia-amd64"
+          sudo podman push "${{ steps.meta.outputs.image }}:nvidia"
+
+      - name: Build Anaconda installer ISO via bootc-image-builder (workflow_dispatch)
+        if: github.event_name == 'workflow_dispatch' && inputs.build_iso
+        run: |
+          mkdir -p out/iso-${{ matrix.arch }}
+          sudo podman pull quay.io/centos-bootc/bootc-image-builder:latest
+          sudo podman run --rm --privileged \
+            -v "$(pwd)/os/iso-config.toml:/config.toml:ro" \
+            -v "$(pwd)/out/iso-${{ matrix.arch }}:/output" \
+            -v /var/lib/containers/storage:/var/lib/containers/storage \
+            quay.io/centos-bootc/bootc-image-builder:latest \
+            build \
+            --type anaconda-iso \
+            --rootfs btrfs \
+            "localhost/conjunction:45-${{ matrix.arch }}"
+          mv "out/iso-${{ matrix.arch }}/bootiso/install.iso" "out/iso-${{ matrix.arch }}/conjunction-45-${{ matrix.arch }}.iso"
+          ls -lh "out/iso-${{ matrix.arch }}/conjunction-45-${{ matrix.arch }}.iso"
+
+      - name: Upload installer ISO artifact (workflow_dispatch)
+        if: github.event_name == 'workflow_dispatch' && inputs.build_iso
+        uses: actions/upload-artifact@v4
+        with:
+          name: conjunction-45-${{ matrix.arch }}-iso
+          path: out/iso-${{ matrix.arch }}/conjunction-45-${{ matrix.arch }}.iso
+          retention-days: 7
+
+  publish-manifest:
+    name: Publish multi-arch GHCR manifest
+    needs: build-image
+    if: >-
+      github.event_name == 'push' &&
+      github.ref == 'refs/heads/main' &&
+      github.event.pull_request == null
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Ensure Podman is installed
+        run: |
+          if ! command -v podman >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y podman
+          fi
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create and push multi-arch manifest lists
+        run: |
+          REPO_LOWER="$(printf '%s' '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')"
+          IMAGE="ghcr.io/${REPO_LOWER}"
+          SHORT_SHA="${GITHUB_SHA::7}"
+          podman manifest create "${IMAGE}:latest" \
+            "docker://${IMAGE}:45-amd64" \
+            "docker://${IMAGE}:45-arm64"
+          podman manifest push --all "${IMAGE}:latest" "docker://${IMAGE}:latest"
+          podman manifest push --all "${IMAGE}:latest" "docker://${IMAGE}:45"
+          podman manifest push --all "${IMAGE}:latest" "docker://${IMAGE}:sha-${SHORT_SHA}"

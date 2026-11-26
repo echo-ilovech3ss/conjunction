@@ -146,7 +146,7 @@ QVariantList FilesModel::pathComponents() const
     QString accumulated;
 
     QVariantMap rootMap;
-    rootMap["name"] = QStringLiteral("Macintosh HD");
+    rootMap["name"] = QStringLiteral("Conjunction");
     rootMap["path"] = QStringLiteral("/");
     list.append(rootMap);
 

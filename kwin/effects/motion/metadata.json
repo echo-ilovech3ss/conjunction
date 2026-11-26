@@ -1,0 +1,12 @@
+{
+    "KPlugin": {
+        "Category": "Window Management",
+        "Description": "Conjunction Motion System: underdamped spring open, ease-out close, Genie/Scale minimize, Reduced Motion crossfade, and Hot Corners",
+        "EnabledByDefault": true,
+        "Id": "conjunctionmotion",
+        "Name": "Conjunction Motion"
+    },
+    "org.kde.kwin.effect": {
+        "enabledByDefault": true
+    }
+}

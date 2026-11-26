@@ -1,0 +1,5 @@
+[Default Applications]
+inode/directory=conjunction-files.desktop
+application/x-cdmg=conjunction-cdmg.desktop
+application/x-conjunction-app=conjunction-open.desktop
+x-scheme-handler/conjunction-settings=conjunction-settings.desktop

@@ -1,49 +1,24 @@
-# Conjunction Distro Roadmap
+# Conjunction OS Roadmap
 
-Conjunction is an Arch-based Linux distribution focused on four things:
+## Phase 1: Fedora Atomic (`bootc`) Base & Packaging (Current)
 
-- macOS-like simplicity: clean live desktop, application launcher, top bar, dock, sane defaults.
-- Linux control: pacman/Flatpak access, Btrfs snapshots, normal filesystem layout, no locked-down appliance behavior.
-- Windows app compatibility: Wine/Proton prefixes managed through `cj`, not exposed to normal users.
-- Reliable installability: Hyper-V, QEMU, USB boot, UEFI, and BIOS must work before visual polish expands.
+- [x] Rebase OS image from Arch/`archiso`/Calamares onto multi-arch `quay.io/fedora/fedora-kinoite:45` (`bootc`).
+- [x] Multi-stage `os/Containerfile` building all Rust workspace binaries (`conj-appd`, `conj-open`, `conj-bundle`, `conj-appctl`, `conj-sysd`, `cj`, `application`, `app_sync`), C++/Qt6/KF6 components (`conj-shelld`, `conj-notificationd`, `conjunction-files`, `conjunction-settings`, `conjunction-terminal`, `conjunction-design`), and the Dolphin KF6 plugin.
+- [x] Dedicated `x86_64` NVIDIA image variant (`os/Containerfile.nvidia`) with `akmod-nvidia` and kernel arguments (`os/nvidia/usr/lib/bootc/kargs.d/05-nvidia.toml`).
+- [x] Declarative installable media (`anaconda-iso` with Btrfs rootfs) via `bootc-image-builder` and `os/iso-config.toml`.
+- [x] Typography (`Inter`, `Inter Display`, `JetBrains Mono`, `Material Symbols Rounded`) and `MacTahoe` icon/GTK themes with documented licensing and non-trademark icon overrides (`os/ASSETS-LICENSES.md`).
+- [x] Out-of-the-box Flathub, Distrobox, RPM Fusion codecs, firmware, Wine/DXVK/`umu-launcher` (`x86_64`), and FEX-Emu/Box64 (`aarch64`).
+- [x] Multi-arch GitHub Actions CI/CD building `linux/amd64` + `linux/arm64` images, pushing GHCR multi-arch manifests on `main`, and producing `workflow_dispatch` installer ISOs.
 
-## Phase 1: Bootable Installer Baseline
+## Phase 2: Application Bundles & Compatibility
 
-- Live ISO autologins as the `conjunction` user through SDDM.
-- X11 is the default live desktop session for better VM and Hyper-V compatibility.
-- Installer supports `/dev/sda`, `/dev/vda`, `/dev/nvme0n1`, and other partition naming schemes.
-- Installer auto-detects UEFI versus BIOS and defaults to the correct partitioning path.
-- Installed services must match installed packages. No service should be enabled unless its package is installed.
-- First-boot post-install tasks must be one-shot or clearly named recurring tuning services.
+- [x] `conjunction.app/2` directory bundles in `/Applications` (`-> /var/Applications`) and `~/Applications` with `inotify`-driven `conj-appd` XDG synchronization.
+- [x] `.cdmg` SquashFS/EROFS disk images with unprivileged `squashfuse`/`erofsfuse` and Polkit/udisks2 mounting.
+- [ ] Seamless `x86_64` Wine/Proton `.app` integration inside `aarch64` via automated FEX rootfs / Box64 Wine runner wiring.
+- [ ] First-boot Flatpak/Flathub pre-seeding and Store UI integration in `conjunction-settings`.
 
-## Phase 2: Product-Grade Install UX
+## Phase 3: Desktop Shell & KWin Experience
 
-- Replace the destructive shell installer with Calamares or a small TUI/GUI wrapper around proven Arch install primitives.
-- Add explicit install modes: erase disk, manual partitioning, VM-safe install.
-- Add preflight checks for network, disk size, UEFI, secure boot, and mirror availability.
-- Write install logs to `/var/log/conjunction-installer.log` and show exact failure reasons.
-
-## Phase 3: Conjunction Desktop Identity
-
-- Move KDE defaults into `/etc/skel` and system-level Plasma config where possible.
-- Provide an Applications folder launcher experience using KDE favorites/categories and Dolphin shortcuts.
-- Ship a small Conjunction welcome app for install, Windows app setup, updates, and docs.
-- Keep macOS inspiration as UX direction, not a clone. The name shown to users should be `Conjunction`.
-
-## Phase 4: Windows Compatibility Layer
-
-- Make `cj install path/to/app.exe` create one isolated prefix per app.
-- Prefer Wine-GE/Proton-GE when available, fallback to system Wine.
-- Add DXVK/VKD3D setup validation and clear errors when Vulkan is missing.
-- Add per-app launch profiles for GPU, audio, debug logs, and safe-mode launch.
-- Treat Adobe-class apps as stretch targets; start with smaller installers, then games, then productivity suites.
-
-## Phase 5: Release Discipline
-
-- Add automated ISO build verification in a Linux builder.
-- Smoke-test in QEMU and Hyper-V before considering an ISO usable.
-- Version ISOs as `conjunction-YYYYMMDD-x86_64.iso` until semantic releases exist.
-- Maintain a known-issues file for unsupported GPUs, secure boot, NVIDIA quirks, and Wine compatibility gaps.
-
-- [x] Migrate Python daemons to Rust for minimal memory footprint
-- [x] Fix UEFI boot partition missing packages
+- [ ] Complete `conj-shelld` top menu bar / dock / global menu DBus integration over KWin Wayland.
+- [ ] Polish `conjunction-overview` KWin Mission Control effect and Conjunction Plasma Look-and-Feel defaults.
+- [ ] Complete hardware bring-up validation across real UEFI `x86_64` (Intel/AMD/NVIDIA) and Apple Silicon / `aarch64` targets.

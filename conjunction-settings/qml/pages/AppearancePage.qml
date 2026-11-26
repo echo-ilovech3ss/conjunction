@@ -30,15 +30,15 @@ ScrollView {
             Layout.leftMargin: 4
         }
 
-        // Appearance Mode Section
+        // Appearance Mode Hero Card (SPEC §4.8 Light / Dark switcher + Preview)
         Rectangle {
             id: modeCard
             Layout.fillWidth: true
-            radius: 12
-            color: Theme.isDark ? "#14FFFFFF" : "#08000000"
-            border.color: (SettingsManager.highlightedSetting === "appearance.mode") ? Theme.accent : Theme.separator
+            radius: Geometry.radiusCard
+            color: Theme.isDark ? Qt.rgba(1,1,1,0.06) : "#FFFFFF"
+            border.color: (SettingsManager.highlightedSetting === "appearance.mode") ? Theme.systemBlue : Theme.separatorColor
             border.width: (SettingsManager.highlightedSetting === "appearance.mode") ? 2 : 1
-            implicitHeight: 90
+            implicitHeight: 96
 
             RowLayout {
                 anchors.fill: parent
@@ -48,162 +48,144 @@ ScrollView {
                 ColumnLayout {
                     Layout.fillWidth: true
                     spacing: 2
-                    Text {
-                        text: "Appearance Mode"
-                        font: Typography.headline
-                        color: Theme.textPrimary
-                    }
-                    Text {
-                        text: "Select Light or Dark desktop theme"
-                        font: Typography.caption
-                        color: Theme.textSecondary
-                    }
+                    Text { text: "Appearance"; font: Typography.headline; color: Theme.labelColor }
+                    Text { text: "Select Light or Dark appearance across desktop surfaces"; font: Typography.caption1; color: Theme.secondaryLabelColor }
                 }
 
                 RowLayout {
                     spacing: 12
 
-                    // Dark option card
                     Rectangle {
-                        width: 70
-                        height: 52
-                        radius: 8
-                        color: SettingsManager.appearanceMode === "dark" ? (Theme.isDark ? "#333478F6" : "#200066CC") : (Theme.isDark ? "#22FFFFFF" : "#15000000")
-                        border.color: SettingsManager.appearanceMode === "dark" ? Theme.accent : Theme.separator
-                        border.width: SettingsManager.appearanceMode === "dark" ? 2 : 1
-
+                        width: 72; height: 56; radius: 8
+                        color: SettingsManager.appearanceMode === "light" ? Theme.controlFillHover : "transparent"
+                        border.color: SettingsManager.appearanceMode === "light" ? Theme.systemBlue : Theme.separatorColor
+                        border.width: SettingsManager.appearanceMode === "light" ? 2 : 1
                         ColumnLayout {
-                            anchors.centerIn: parent
-                            spacing: 4
-                            Rectangle { width: 24; height: 16; radius: 3; color: "#1F2026"; Layout.alignment: Qt.AlignHCenter }
-                            Text { text: "Dark"; font: Typography.caption; color: Theme.textPrimary; Layout.alignment: Qt.AlignHCenter }
+                            anchors.centerIn: parent; spacing: 4
+                            Rectangle { width: 32; height: 20; radius: 4; color: "#ECECEC"; border.width: 1; border.color: "#CCCCCC"; Layout.alignment: Qt.AlignHCenter }
+                            Text { text: "Light"; font: Typography.caption1; color: Theme.labelColor; Layout.alignment: Qt.AlignHCenter }
                         }
-
-                        TapHandler {
-                            onTapped: SettingsManager.setAppearanceMode("dark")
-                        }
+                        TapHandler { onTapped: SettingsManager.setAppearanceMode("light") }
                     }
 
-                    // Light option card
                     Rectangle {
-                        width: 70
-                        height: 52
-                        radius: 8
-                        color: SettingsManager.appearanceMode === "light" ? (Theme.isDark ? "#333478F6" : "#200066CC") : (Theme.isDark ? "#22FFFFFF" : "#15000000")
-                        border.color: SettingsManager.appearanceMode === "light" ? Theme.accent : Theme.separator
-                        border.width: SettingsManager.appearanceMode === "light" ? 2 : 1
-
+                        width: 72; height: 56; radius: 8
+                        color: SettingsManager.appearanceMode === "dark" ? Theme.controlFillHover : "transparent"
+                        border.color: SettingsManager.appearanceMode === "dark" ? Theme.systemBlue : Theme.separatorColor
+                        border.width: SettingsManager.appearanceMode === "dark" ? 2 : 1
                         ColumnLayout {
-                            anchors.centerIn: parent
-                            spacing: 4
-                            Rectangle { width: 24; height: 16; radius: 3; color: "#FFFFFF"; border.color: "#CCCCCC"; border.width: 1; Layout.alignment: Qt.AlignHCenter }
-                            Text { text: "Light"; font: Typography.caption; color: Theme.textPrimary; Layout.alignment: Qt.AlignHCenter }
+                            anchors.centerIn: parent; spacing: 4
+                            Rectangle { width: 32; height: 20; radius: 4; color: "#1E1E1E"; border.width: 1; border.color: "#444444"; Layout.alignment: Qt.AlignHCenter }
+                            Text { text: "Dark"; font: Typography.caption1; color: Theme.labelColor; Layout.alignment: Qt.AlignHCenter }
                         }
-
-                        TapHandler {
-                            onTapped: SettingsManager.setAppearanceMode("light")
-                        }
+                        TapHandler { onTapped: SettingsManager.setAppearanceMode("dark") }
                     }
                 }
             }
         }
 
-        // Accent Color Section
+        // Accent Color Card
         Rectangle {
             id: accentCard
             Layout.fillWidth: true
-            radius: 12
-            color: Theme.isDark ? "#14FFFFFF" : "#08000000"
-            border.color: (SettingsManager.highlightedSetting === "appearance.accent") ? Theme.accent : Theme.separator
+            radius: Geometry.radiusCard
+            color: Theme.isDark ? Qt.rgba(1,1,1,0.06) : "#FFFFFF"
+            border.color: (SettingsManager.highlightedSetting === "appearance.accent") ? Theme.systemBlue : Theme.separatorColor
             border.width: (SettingsManager.highlightedSetting === "appearance.accent") ? 2 : 1
-            implicitHeight: 84
+            implicitHeight: 76
 
             RowLayout {
                 anchors.fill: parent
                 anchors.margins: 16
                 spacing: 16
-
                 ColumnLayout {
-                    Layout.fillWidth: true
-                    spacing: 2
-                    Text {
-                        text: "Accent Color"
-                        font: Typography.headline
-                        color: Theme.textPrimary
-                    }
-                    Text {
-                        text: "Choose system focus and control highlight tint"
-                        font: Typography.caption
-                        color: Theme.textSecondary
-                    }
+                    Layout.fillWidth: true; spacing: 2
+                    Text { text: "Accent Color"; font: Typography.headline; color: Theme.labelColor }
+                    Text { text: "System highlight and focus indicator tint"; font: Typography.caption1; color: Theme.secondaryLabelColor }
                 }
-
                 RowLayout {
-                    spacing: 10
-
-                    readonly property var colors: ["#0066CC", "#5856D6", "#34C759", "#FF9500", "#FF2D55"]
-
+                    spacing: 8
                     Repeater {
-                        model: accentCard.parent ? ["#0066CC", "#5856D6", "#34C759", "#FF9500", "#FF2D55"] : []
+                        model: [
+                            { "id": "blue",     "hex": "#007AFF" },
+                            { "id": "purple",   "hex": "#CB30E0" },
+                            { "id": "pink",     "hex": "#FF2D55" },
+                            { "id": "orange",   "hex": "#FF8D28" },
+                            { "id": "green",    "hex": "#34C759" },
+                            { "id": "graphite", "hex": "#8E8E93" }
+                        ]
                         delegate: Rectangle {
-                            width: 28
-                            height: 28
-                            radius: 14
-                            color: modelData
-                            border.color: SettingsManager.appearanceAccent === modelData ? (Theme.isDark ? "#FFFFFF" : "#000000") : "transparent"
-                            border.width: 2
-
+                            width: 24; height: 24; radius: 12
+                            color: modelData.hex
+                            border.width: SettingsManager.appearanceAccent === modelData.id ? 2 : 0
+                            border.color: Theme.labelColor
                             Rectangle {
-                                anchors.centerIn: parent
-                                width: 8
-                                height: 8
-                                radius: 4
-                                color: "#FFFFFF"
-                                visible: SettingsManager.appearanceAccent === modelData
+                                visible: SettingsManager.appearanceAccent === modelData.id
+                                anchors.centerIn: parent; width: 7; height: 7; radius: 3.5; color: "#FFFFFF"
                             }
-
-                            TapHandler {
-                                onTapped: SettingsManager.setAppearanceAccent(modelData)
-                            }
+                            TapHandler { onTapped: SettingsManager.setAppearanceAccent(modelData.id) }
                         }
                     }
                 }
             }
         }
 
-        // Accessibility & Motion Section
+        // Accessibility Display Group (SPEC §1.5 + §3.3: Reduce Transparency, Increase Contrast, Reduced Motion)
         Rectangle {
-            id: motionCard
             Layout.fillWidth: true
-            radius: 12
-            color: Theme.isDark ? "#14FFFFFF" : "#08000000"
-            border.color: (SettingsManager.highlightedSetting === "accessibility.reducedMotion") ? Theme.accent : Theme.separator
-            border.width: (SettingsManager.highlightedSetting === "accessibility.reducedMotion") ? 2 : 1
-            implicitHeight: 74
+            radius: Geometry.radiusCard
+            color: Theme.isDark ? Qt.rgba(1,1,1,0.06) : "#FFFFFF"
+            border.color: Theme.separatorColor
+            border.width: 1
+            implicitHeight: accCol.implicitHeight + 24
 
-            RowLayout {
+            ColumnLayout {
+                id: accCol
                 anchors.fill: parent
-                anchors.margins: 16
-                spacing: 16
+                anchors.margins: 14
+                spacing: 12
 
-                ColumnLayout {
+                RowLayout {
                     Layout.fillWidth: true
-                    spacing: 2
-                    Text {
-                        text: "Reduced Motion"
-                        font: Typography.headline
-                        color: Theme.textPrimary
+                    ColumnLayout {
+                        Layout.fillWidth: true; spacing: 2
+                        Text { text: "Reduce Transparency"; font: Typography.headline; color: Theme.labelColor }
+                        Text { text: "Replace translucent glass surfaces with opaque fills"; font: Typography.caption1; color: Theme.secondaryLabelColor }
                     }
-                    Text {
-                        text: "Minimize animations and transitions across the desktop and apps"
-                        font: Typography.caption
-                        color: Theme.textSecondary
+                    Controls.Switch {
+                        checked: SettingsManager.reduceTransparency
+                        onToggled: SettingsManager.setReduceTransparency(checked)
                     }
                 }
 
-                Controls.Switch {
-                    checked: SettingsManager.reducedMotion
-                    onToggled: SettingsManager.setReducedMotion(checked)
+                Rectangle { Layout.fillWidth: true; height: 1; color: Theme.separatorColor }
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    ColumnLayout {
+                        Layout.fillWidth: true; spacing: 2
+                        Text { text: "Increase Contrast"; font: Typography.headline; color: Theme.labelColor }
+                        Text { text: "Strengthen borders, separators, and label legibility"; font: Typography.caption1; color: Theme.secondaryLabelColor }
+                    }
+                    Controls.Switch {
+                        checked: SettingsManager.increaseContrast
+                        onToggled: SettingsManager.setIncreaseContrast(checked)
+                    }
+                }
+
+                Rectangle { Layout.fillWidth: true; height: 1; color: Theme.separatorColor }
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    ColumnLayout {
+                        Layout.fillWidth: true; spacing: 2
+                        Text { text: "Reduced Motion"; font: Typography.headline; color: Theme.labelColor }
+                        Text { text: "Crossfade windows instead of spring & Genie transitions"; font: Typography.caption1; color: Theme.secondaryLabelColor }
+                    }
+                    Controls.Switch {
+                        checked: SettingsManager.reducedMotion
+                        onToggled: SettingsManager.setReducedMotion(checked)
+                    }
                 }
             }
         }

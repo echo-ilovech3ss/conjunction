@@ -13,11 +13,15 @@ Rectangle {
 
     Layout.fillWidth: true
     Layout.fillHeight: true
+    implicitWidth: segRow.implicitWidth + Spacing.md * 1.5
 
-    radius: Geometry.radiusSmall - 1
-    color: selected ? Theme.surface : (hoverHandler.hovered ? Theme.surface : "transparent")
-    border.color: selected ? Theme.separator : "transparent"
-    border.width: selected ? Geometry.separatorThickness : 0
+    // Concentric (h - 4) / 2 thumb radius (SPEC §2.1)
+    radius: height * 0.5
+    color: selected
+        ? (Theme.isDark ? Qt.rgba(1, 1, 1, 0.16) : Theme.surface)
+        : (hoverHandler.hovered ? Theme.controlFill : "transparent")
+    border.color: selected && Appearance.shouldIncreaseContrast ? Theme.highContrastBorderColor : "transparent"
+    border.width: selected && Appearance.shouldIncreaseContrast ? 1.0 : 0
 
     Accessible.role: Accessible.PageTab
     Accessible.name: text || iconName
@@ -27,23 +31,23 @@ Rectangle {
 
     TapHandler {
         onTapped: {
+            FocusModel.markPointerNavigation();
             if (segment.enabled) {
                 var parentCtrl = segment.parent ? segment.parent.parent : null;
                 if (parentCtrl && parentCtrl.selectIndex) {
-                    var idx = -1;
                     for (var i = 0; i < segment.parent.children.length; ++i) {
                         if (segment.parent.children[i] === segment) {
-                            idx = i;
+                            parentCtrl.selectIndex(i);
                             break;
                         }
                     }
-                    if (idx !== -1) parentCtrl.selectIndex(idx);
                 }
             }
         }
     }
 
     RowLayout {
+        id: segRow
         anchors.centerIn: parent
         spacing: Spacing.xs
 
@@ -51,13 +55,14 @@ Rectangle {
             visible: segment.iconName !== ""
             name: segment.iconName
             size: 14
-            color: segment.selected ? Theme.accent : (segment.enabled ? Theme.textPrimary : Theme.textDisabled)
+            fill: segment.selected ? 1 : 0
+            color: segment.selected ? Theme.textPrimary : (segment.enabled ? Theme.textSecondary : Theme.textDisabled)
         }
 
         Text {
             visible: segment.text !== ""
             text: segment.text
-            font: Typography.controlLabel
+            font: Typography.body
             color: segment.selected ? Theme.textPrimary : (segment.enabled ? Theme.textSecondary : Theme.textDisabled)
         }
     }

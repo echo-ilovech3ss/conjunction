@@ -24,6 +24,8 @@ public:
     Q_INVOKABLE bool moveItems(const QStringList &sources, const QString &destDir);
     Q_INVOKABLE bool removeApplication(const QString &appPathOrId, bool removeData);
     Q_INVOKABLE QVariantMap getFileInfo(const QString &filePath);
+    Q_INVOKABLE bool ejectVolume(const QString &mountPoint);
+    Q_INVOKABLE bool installAppBundle(const QString &bundlePath, const QString &destApplicationsDir);
 
 signals:
     void operationFinished(bool success, const QString &message);

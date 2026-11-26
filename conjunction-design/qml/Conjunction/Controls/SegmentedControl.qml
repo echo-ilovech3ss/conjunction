@@ -5,18 +5,23 @@ import Conjunction.Design
 Rectangle {
     id: root
 
+    // SPEC §2.1 & §2.3: regular 24pt (toolbar 25pt), small 21pt, mini 16pt (18pt), large 40pt
+    property string sizeClass: "regular"
+    property bool inToolbar: false
     property int currentIndex: 0
     property alias segments: segmentLayout.children
     default property alias data: segmentLayout.data
 
     signal segmentSelected(int index)
 
-    implicitHeight: Geometry.controlHeightMedium
+    readonly property int targetHeight: Geometry.segmentedHeight(sizeClass, inToolbar)
+
+    implicitHeight: targetHeight
     implicitWidth: segmentLayout.implicitWidth + Spacing.xxs * 2
 
-    radius: Geometry.radiusSmall
-    color: Theme.surfaceSecondary
-    border.color: Theme.separator
+    radius: targetHeight * 0.5
+    color: Theme.controlFill
+    border.color: Appearance.shouldIncreaseContrast ? Theme.highContrastBorderColor : Theme.separator
     border.width: Geometry.separatorThickness
 
     activeFocusOnTab: true
@@ -28,22 +33,24 @@ Rectangle {
     RowLayout {
         id: segmentLayout
         anchors.fill: parent
-        anchors.margins: Spacing.xxs
+        anchors.margins: Spacing.xxs // 2 pt internal inset
         spacing: Spacing.xxs
     }
 
     FocusRing {
-        active: root.activeFocus && FocusModel.keyboardNavigationActive
         target: root
+        isTextInput: false
     }
 
     Keys.onLeftPressed: function(event) {
+        FocusModel.markKeyboardNavigation();
         if (currentIndex > 0) {
             selectIndex(currentIndex - 1);
             event.accepted = true;
         }
     }
     Keys.onRightPressed: function(event) {
+        FocusModel.markKeyboardNavigation();
         if (currentIndex < segmentLayout.children.length - 1) {
             selectIndex(currentIndex + 1);
             event.accepted = true;
@@ -63,7 +70,5 @@ Rectangle {
         }
     }
 
-    Component.onCompleted: {
-        selectIndex(currentIndex);
-    }
+    Component.onCompleted: selectIndex(currentIndex)
 }

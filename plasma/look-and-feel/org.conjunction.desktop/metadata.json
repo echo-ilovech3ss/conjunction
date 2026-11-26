@@ -1,0 +1,15 @@
+{
+    "KPlugin": {
+        "Authors": [
+            {
+                "Name": "Conjunction Authors"
+            }
+        ],
+        "Category": "",
+        "Description": "Conjunction Liquid Glass desktop look-and-feel",
+        "Id": "org.conjunction.desktop",
+        "License": "MIT",
+        "Name": "Conjunction"
+    },
+    "KPackageStructure": "Plasma/LookAndFeel"
+}

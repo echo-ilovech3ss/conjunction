@@ -21,11 +21,12 @@ T.MenuItem {
         }
     }
     onTriggered: {
+        FocusModel.markPointerNavigation();
         if (conjunctionAction) conjunctionAction.trigger();
     }
 
-    implicitWidth: 180
-    implicitHeight: Geometry.controlHeightSmall
+    implicitWidth: 200
+    implicitHeight: 24
 
     activeFocusOnTab: true
 
@@ -33,8 +34,9 @@ T.MenuItem {
     Accessible.name: text
     Accessible.focusable: true
 
+    // Concentric radius: menu cr=12 - 4pt padding = 8pt (SPEC §2.1)
     background: Rectangle {
-        radius: Geometry.radiusSmall - 1
+        radius: Geometry.radiusMenuItem
         color: {
             if (!control.enabled) return "transparent";
             if (control.highlighted || control.down) {
@@ -64,7 +66,7 @@ T.MenuItem {
         Text {
             Layout.fillWidth: true
             text: control.text
-            font: Typography.controlLabel
+            font: Typography.body
             color: {
                 if (!control.enabled) return Theme.textDisabled;
                 if (control.highlighted) return control.isDestructive ? "#FFFFFF" : Theme.selectionText;
@@ -77,7 +79,7 @@ T.MenuItem {
         Text {
             visible: control.shortcutText !== ""
             text: control.shortcutText
-            font: Typography.caption
+            font: Typography.subheadline
             color: control.highlighted ? (control.isDestructive ? "#FFFFFF" : Theme.selectionText) : Theme.textSecondary
             verticalAlignment: Text.AlignVCenter
         }

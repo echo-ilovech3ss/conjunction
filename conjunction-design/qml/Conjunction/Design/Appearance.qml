@@ -7,28 +7,30 @@ QtObject {
     // Appearance mode: light, dark, system
     property string mode: "light"
 
-    // Effective theme derived from mode or system preference: light or dark
     readonly property string effectiveTheme: {
         if (mode === "dark") return "dark";
         if (mode === "light") return "light";
-        // Default fallback
         return "light";
     }
 
     readonly property bool isDark: effectiveTheme === "dark"
 
-    // Accent palette: blue, teal, amber, violet, graphite
+    // Accent palette: blue (default #007AFF), teal, amber, violet, graphite, purple, pink, orange, green
     property string accent: "blue"
 
-    // Reduced motion accessibility preference
+    // Accessibility state (SPEC §1.5, §2.8, §3.3)
     property bool reducedMotion: false
+    property bool reduceTransparency: false
+    property bool increaseContrast: false
+    readonly property bool shouldReduceTransparency: reduceTransparency
+    readonly property bool shouldIncreaseContrast: increaseContrast
 
-    // Font scaling factor (1.0 = standard 100%)
+    // Font scaling factor & Optical Cap-Height Scaling (SPEC §2.4 Option A = 0.9685x Inter)
     property real fontScale: 1.0
+    property bool useOpticalCapScaling: true
 
     // Layout direction (Qt.LeftToRight or Qt.RightToLeft)
     property int layoutDirection: Qt.LeftToRight
-
     readonly property bool isRTL: layoutDirection === Qt.RightToLeft
 
     function setMode(newMode) {
@@ -38,11 +40,7 @@ QtObject {
     }
 
     function toggleTheme() {
-        if (effectiveTheme === "light") {
-            setMode("dark");
-        } else {
-            setMode("light");
-        }
+        setMode(effectiveTheme === "light" ? "dark" : "light");
     }
 
     function setAccent(newAccent) {
@@ -50,7 +48,15 @@ QtObject {
     }
 
     function setReducedMotion(enabled) {
-        reducedMotion = enabled;
+        reducedMotion = !!enabled;
+    }
+
+    function setReduceTransparency(enabled) {
+        reduceTransparency = !!enabled;
+    }
+
+    function setIncreaseContrast(enabled) {
+        increaseContrast = !!enabled;
     }
 
     function setFontScale(scale) {
@@ -62,10 +68,6 @@ QtObject {
     }
 
     function toggleRTL() {
-        if (layoutDirection === Qt.LeftToRight) {
-            layoutDirection = Qt.RightToLeft;
-        } else {
-            layoutDirection = Qt.LeftToRight;
-        }
+        layoutDirection = (layoutDirection === Qt.LeftToRight) ? Qt.RightToLeft : Qt.LeftToRight;
     }
 }

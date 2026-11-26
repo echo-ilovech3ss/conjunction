@@ -1,25 +1,26 @@
 import QtQuick
 import QtQuick.Templates as T
-import QtQuick.Layouts
 import Conjunction.Design
 
 T.TextField {
     id: control
 
+    // SPEC §2.3 SearchField height: mini 16, small 19, regular 24, large 28, extraLarge 36
+    property string sizeClass: "regular"
     signal searchSubmitted(string query)
 
     implicitWidth: 220
-    implicitHeight: Geometry.controlHeightMedium
+    implicitHeight: Geometry.textFieldHeight(sizeClass)
 
-    placeholderText: "Search..."
-    font: Typography.body
+    placeholderText: "Search"
+    font: (sizeClass === "mini") ? Typography.miniControl : ((sizeClass === "small") ? Typography.subheadline : ((sizeClass === "extraLarge") ? Typography.title3 : Typography.body))
     color: enabled ? Theme.textPrimary : Theme.textDisabled
     selectionColor: Theme.selection
     selectedTextColor: Theme.selectionText
     placeholderTextColor: Theme.textSecondary
     verticalAlignment: Text.AlignVCenter
 
-    leftPadding: 28 + Spacing.xs
+    leftPadding: (sizeClass === "extraLarge") ? 36 : 28
     rightPadding: control.text !== "" ? 28 : Spacing.sm
 
     Accessible.role: Accessible.EditableText
@@ -28,26 +29,26 @@ T.TextField {
 
     background: Rectangle {
         id: bg
-        radius: Geometry.radiusPill
-        color: control.enabled ? Theme.surface : Theme.surfaceSecondary
-        border.color: control.activeFocus ? Theme.accent : Theme.separator
+        radius: height * 0.5
+        color: control.enabled ? Theme.controlFill : Theme.surfaceSecondary
+        border.color: Appearance.shouldIncreaseContrast ? Theme.highContrastBorderColor : (control.activeFocus ? Theme.accent : Theme.separator)
         border.width: Geometry.separatorThickness
 
         Icon {
             name: "search"
-            size: 16
+            size: (control.sizeClass === "extraLarge") ? 18 : 14
             color: Theme.textSecondary
             anchors.left: parent.left
-            anchors.leftMargin: Spacing.sm
+            anchors.leftMargin: (control.sizeClass === "extraLarge") ? 12 : Spacing.sm
             anchors.verticalCenter: parent.verticalCenter
         }
 
         Rectangle {
             id: clearBtn
             visible: control.text !== ""
-            width: 18
-            height: 18
-            radius: 9
+            width: 16
+            height: 16
+            radius: 8
             color: clearHover.hovered ? Theme.separator : "transparent"
             anchors.right: parent.right
             anchors.rightMargin: Spacing.xs
@@ -55,7 +56,7 @@ T.TextField {
 
             Icon {
                 name: "close"
-                size: 12
+                size: 11
                 color: Theme.textSecondary
                 anchors.centerIn: parent
             }
@@ -70,8 +71,8 @@ T.TextField {
         }
 
         FocusRing {
-            active: control.activeFocus && FocusModel.keyboardNavigationActive
             target: bg
+            isTextInput: true
         }
     }
 

@@ -10,14 +10,20 @@ Rectangle {
     property string badgeText: ""
     property bool selected: false
     property bool enabled: true
+    property bool focusedSelection: false
 
     signal rowClicked()
 
+    // SPEC §4.7: 30 pt height, cr = 10 pt inside 10 pt inset
     Layout.fillWidth: true
-    implicitHeight: Geometry.controlHeightMedium
-    radius: Geometry.radiusSmall
+    implicitHeight: 30
+    radius: Geometry.radiusSidebarPill
 
-    color: selected ? Theme.selection : (hoverHandler.hovered ? Theme.surface : "transparent")
+    color: selected
+        ? (focusedSelection ? Theme.selectedContentBackgroundColor : (Theme.isDark ? Qt.rgba(1, 1, 1, 0.12) : Qt.rgba(0, 0, 0, 0.08)))
+        : (hoverHandler.hovered ? Theme.controlFill : "transparent")
+    border.color: (selected && Appearance.shouldIncreaseContrast) ? Theme.highContrastBorderColor : "transparent"
+    border.width: (selected && Appearance.shouldIncreaseContrast) ? 1.0 : 0
 
     Accessible.role: Accessible.ListItem
     Accessible.name: title
@@ -27,6 +33,7 @@ Rectangle {
 
     TapHandler {
         onTapped: {
+            FocusModel.markPointerNavigation();
             if (root.enabled) {
                 root.rowClicked();
             }
@@ -43,14 +50,15 @@ Rectangle {
             visible: root.iconName !== ""
             name: root.iconName
             size: 16
-            color: root.selected ? Theme.accent : (root.enabled ? Theme.textSecondary : Theme.textDisabled)
+            fill: root.selected ? 1 : 0
+            color: (root.selected && root.focusedSelection) ? "#FFFFFF" : (root.selected ? Theme.accent : (root.enabled ? Theme.textSecondary : Theme.textDisabled))
         }
 
         Text {
             Layout.fillWidth: true
             text: root.title
-            font: Typography.controlLabel
-            color: root.selected ? Theme.selectionText : (root.enabled ? Theme.textPrimary : Theme.textDisabled)
+            font: Typography.body
+            color: (root.selected && root.focusedSelection) ? "#FFFFFF" : (root.enabled ? Theme.textPrimary : Theme.textDisabled)
             elide: Text.ElideRight
         }
 
@@ -58,15 +66,15 @@ Rectangle {
             visible: root.badgeText !== ""
             implicitWidth: badgeLabel.implicitWidth + Spacing.xs * 2
             implicitHeight: 18
-            radius: Geometry.radiusPill
-            color: root.selected ? Theme.accent : Theme.surfaceSecondary
+            radius: 9
+            color: (root.selected && root.focusedSelection) ? Qt.rgba(1, 1, 1, 0.25) : Theme.controlFill
 
             Text {
                 id: badgeLabel
                 anchors.centerIn: parent
                 text: root.badgeText
-                font: Typography.caption
-                color: root.selected ? Theme.accentText : Theme.textSecondary
+                font: Typography.subheadlineTnum
+                color: (root.selected && root.focusedSelection) ? "#FFFFFF" : Theme.textSecondary
             }
         }
     }

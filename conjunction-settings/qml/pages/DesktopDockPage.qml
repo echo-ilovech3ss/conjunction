@@ -77,8 +77,8 @@ ScrollView {
 
                         Controls.Slider {
                             Layout.preferredWidth: 180
-                            from: 36
-                            to: 96
+                            from: 16
+                            to: 128
                             stepSize: 2
                             value: SettingsManager.dockSize
                             onMoved: SettingsManager.setDockSize(Math.round(value))
@@ -226,6 +226,48 @@ ScrollView {
                                 onTapped: SettingsManager.setDockDisplayPolicy("all")
                             }
                         }
+                    }
+                }
+
+                Rectangle { Layout.fillWidth: true; height: 1; color: Theme.separator }
+
+                // 5. Minimize Effect (Genie Effect vs Scale Effect, SPEC §3.1)
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 16
+                    ColumnLayout {
+                        Layout.fillWidth: true; spacing: 2
+                        Text { text: "Minimize Windows Using"; font: Typography.headline; color: Theme.textPrimary }
+                        Text { text: "Genie Effect (425 ms mesh) or Scale Effect (203 ms)"; font: Typography.caption; color: Theme.textSecondary }
+                    }
+                    Controls.SegmentedControl {
+                        currentIndex: SettingsManager.dockMinimizeEffect === "scale" ? 1 : 0
+                        onCurrentIndexChanged: SettingsManager.setDockMinimizeEffect(currentIndex === 1 ? "scale" : "genie")
+                        Controls.Segment { text: "Genie" }
+                        Controls.Segment { text: "Scale" }
+                    }
+                }
+
+                Rectangle { Layout.fillWidth: true; height: 1; color: Theme.separator }
+
+                // 6. Hot Corner Bottom-Right (SPEC §5.3 Quick Note default = 14)
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 16
+                    ColumnLayout {
+                        Layout.fillWidth: true; spacing: 2
+                        Text { text: "Bottom-Right Hot Corner"; font: Typography.headline; color: Theme.textPrimary }
+                        Text { text: "Action triggered when moving pointer to bottom-right"; font: Typography.caption; color: Theme.textSecondary }
+                    }
+                    Controls.SegmentedControl {
+                        currentIndex: SettingsManager.hotCornerBottomRight === 14 ? 0 : (SettingsManager.hotCornerBottomRight === 2 ? 1 : 2)
+                        onCurrentIndexChanged: {
+                            var codes = [14, 2, 0];
+                            SettingsManager.setHotCornerBottomRight(codes[currentIndex] || 0);
+                        }
+                        Controls.Segment { text: "Quick Note" }
+                        Controls.Segment { text: "Mission Control" }
+                        Controls.Segment { text: "None" }
                     }
                 }
             }

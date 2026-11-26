@@ -1,0 +1,12 @@
+{
+    "KPlugin": {
+        "Name": "Conjunction KWin Bridge",
+        "Description": "Bridges KWin 6 Wayland window lifecycle events to Conjunction Shell via D-Bus",
+        "Id": "conjunction-kwin-bridge",
+        "Version": "1.0",
+        "Author": "Conjunction Project",
+        "License": "GPL-2.0-or-later"
+    },
+    "X-Plasma-API": "javascript",
+    "X-Plasma-MainScript": "code/main.js"
+}

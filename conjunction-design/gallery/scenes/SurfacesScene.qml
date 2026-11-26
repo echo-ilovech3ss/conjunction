@@ -13,7 +13,7 @@ Surface {
         spacing: Spacing.md
 
         Text {
-            text: "Surfaces, Depth & Geometry"
+            text: "Surfaces, Continuous Squircles & Concentric Nesting"
             font: Typography.windowTitle
             color: Theme.textPrimary
         }
@@ -36,19 +36,7 @@ Surface {
                 ColumnLayout {
                     anchors.centerIn: parent
                     Text { text: "Base Surface"; font: Typography.controlLabel; color: Theme.textPrimary; Layout.alignment: Qt.AlignCenter }
-                    Text { text: "elevation: \"base\""; font: Typography.caption; color: Theme.textSecondary; Layout.alignment: Qt.AlignCenter }
-                }
-            }
-
-            Surface {
-                elevation: "raised"
-                Layout.fillWidth: true
-                height: 100
-
-                ColumnLayout {
-                    anchors.centerIn: parent
-                    Text { text: "Raised Card"; font: Typography.controlLabel; color: Theme.textPrimary; Layout.alignment: Qt.AlignCenter }
-                    Text { text: "elevation: \"raised\""; font: Typography.caption; color: Theme.textSecondary; Layout.alignment: Qt.AlignCenter }
+                    Text { text: "radius 12pt"; font: Typography.caption; color: Theme.textSecondary; Layout.alignment: Qt.AlignCenter }
                 }
             }
 
@@ -59,60 +47,53 @@ Surface {
 
                 ColumnLayout {
                     anchors.centerIn: parent
-                    Text { text: "Popover / Sheet"; font: Typography.controlLabel; color: Theme.textPrimary; Layout.alignment: Qt.AlignCenter }
-                    Text { text: "elevation: \"popover\""; font: Typography.caption; color: Theme.textSecondary; Layout.alignment: Qt.AlignCenter }
+                    Text { text: "Popover Surface"; font: Typography.controlLabel; color: Theme.textPrimary; Layout.alignment: Qt.AlignCenter }
+                    Text { text: "cr = 14pt, shadow 24%"; font: Typography.caption; color: Theme.textSecondary; Layout.alignment: Qt.AlignCenter }
+                }
+            }
+
+            Surface {
+                elevation: "dialog"
+                Layout.fillWidth: true
+                height: 100
+
+                ColumnLayout {
+                    anchors.centerIn: parent
+                    Text { text: "Dialog / Window"; font: Typography.controlLabel; color: Theme.textPrimary; Layout.alignment: Qt.AlignCenter }
+                    Text { text: "cr = 16pt (24.5pt tangent)"; font: Typography.caption; color: Theme.textSecondary; Layout.alignment: Qt.AlignCenter }
                 }
             }
         }
 
         Text {
-            text: "Corner Radii Hierarchy"
+            text: "Concentric Nesting Formula: R_inner = max(4, R_outer - padding)"
             font: Typography.sectionHeading
             color: Theme.textPrimary
         }
 
-        RowLayout {
-            spacing: Spacing.md
-            Layout.fillWidth: true
+        // Outer 16pt squircle with 8pt pad -> Inner 8pt squircle
+        SquircleRect {
+            Layout.preferredWidth: 340
+            Layout.preferredHeight: 84
+            radius: Geometry.radiusWindow // 16 pt
+            color: Theme.controlFill
+            borderColor: Theme.separator
+            borderWidth: 1
 
-            Rectangle {
-                Layout.fillWidth: true
-                height: 40
-                radius: Geometry.radiusSmall
-                color: Theme.surfaceSecondary
-                border.color: Theme.separator
-                border.width: Geometry.separatorThickness
-                Text { anchors.centerIn: parent; text: "Small (4px)"; font: Typography.caption; color: Theme.textPrimary }
-            }
+            SquircleRect {
+                anchors.fill: parent
+                anchors.margins: 8
+                radius: Geometry.concentricRadius(Geometry.radiusWindow, 8) // 8 pt
+                color: Theme.surface
+                borderColor: Theme.separator
+                borderWidth: 1
 
-            Rectangle {
-                Layout.fillWidth: true
-                height: 40
-                radius: Geometry.radiusMedium
-                color: Theme.surfaceSecondary
-                border.color: Theme.separator
-                border.width: Geometry.separatorThickness
-                Text { anchors.centerIn: parent; text: "Medium (8px)"; font: Typography.caption; color: Theme.textPrimary }
-            }
-
-            Rectangle {
-                Layout.fillWidth: true
-                height: 40
-                radius: Geometry.radiusLarge
-                color: Theme.surfaceSecondary
-                border.color: Theme.separator
-                border.width: Geometry.separatorThickness
-                Text { anchors.centerIn: parent; text: "Large (12px)"; font: Typography.caption; color: Theme.textPrimary }
-            }
-
-            Rectangle {
-                Layout.fillWidth: true
-                height: 40
-                radius: Geometry.radiusPill
-                color: Theme.surfaceSecondary
-                border.color: Theme.separator
-                border.width: Geometry.separatorThickness
-                Text { anchors.centerIn: parent; text: "Pill (Badge)"; font: Typography.caption; color: Theme.textPrimary }
+                Text {
+                    anchors.centerIn: parent
+                    text: "Outer 16pt - Pad 8pt = Inner 8pt Continuous Squircle"
+                    font: Typography.subheadline
+                    color: Theme.textPrimary
+                }
             }
         }
 

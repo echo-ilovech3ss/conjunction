@@ -1,13 +1,17 @@
 import QtQuick
 import QtQuick.Templates as T
-import QtQuick.Layouts
 import Conjunction.Design
 
 T.ComboBox {
     id: control
 
+    // SPEC §2.3 PopUpButton/ComboBox height: mini 16, small 21, regular 24, large 28
+    property string sizeClass: "regular"
+
+    onPressedChanged: if (pressed) FocusModel.markPointerNavigation()
+
     implicitWidth: Math.max(140, contentItem.implicitWidth + Spacing.lg * 2)
-    implicitHeight: Geometry.controlHeightMedium
+    implicitHeight: Geometry.popUpHeight(sizeClass)
 
     activeFocusOnTab: true
     focusPolicy: Qt.StrongFocus
@@ -16,40 +20,31 @@ T.ComboBox {
     Accessible.name: currentText
     Accessible.focusable: true
 
-    background: Rectangle {
+    background: SquircleRect {
         id: bg
-        radius: Geometry.radiusSmall
-        color: control.enabled ? (control.down ? Theme.surfaceSecondary : Theme.surface) : Theme.surfaceSecondary
-        border.color: control.activeFocus ? Theme.accent : Theme.separator
-        border.width: Geometry.separatorThickness
+        radius: Geometry.radiusTextField
+        color: control.enabled ? (control.down ? Theme.controlFillPressed : Theme.controlBackgroundColor) : Theme.controlFill
+        borderColor: Appearance.shouldIncreaseContrast ? Theme.highContrastBorderColor : (control.activeFocus ? Theme.accent : Theme.separator)
+        borderWidth: Geometry.separatorThickness
 
-        ColumnLayout {
+        Icon {
             anchors.right: parent.right
             anchors.rightMargin: Spacing.sm
             anchors.verticalCenter: parent.verticalCenter
-            spacing: 1
-
-            Text {
-                text: "?"
-                font.pixelSize: 8
-                color: control.enabled ? Theme.textSecondary : Theme.textDisabled
-            }
-            Text {
-                text: "?"
-                font.pixelSize: 8
-                color: control.enabled ? Theme.textSecondary : Theme.textDisabled
-            }
+            name: "chevron-down"
+            size: 14
+            color: control.enabled ? Theme.textSecondary : Theme.textDisabled
         }
 
         FocusRing {
-            active: control.activeFocus && FocusModel.keyboardNavigationActive
             target: bg
+            isTextInput: false
         }
     }
 
     contentItem: Text {
         text: control.displayText
-        font: Typography.controlLabel
+        font: (control.sizeClass === "small") ? Typography.subheadline : Typography.body
         color: control.enabled ? Theme.textPrimary : Theme.textDisabled
         verticalAlignment: Text.AlignVCenter
         leftPadding: Spacing.sm
@@ -58,9 +53,9 @@ T.ComboBox {
     }
 
     popup: T.Popup {
-        y: control.height + Spacing.xxs
+        y: control.height + Spacing.xs
         width: control.width
-        implicitHeight: Math.min(200, contentItem.implicitHeight + Spacing.xs * 2)
+        implicitHeight: Math.min(220, contentItem.implicitHeight + Spacing.xs * 2)
         padding: Spacing.xs
 
         contentItem: ListView {
@@ -72,22 +67,24 @@ T.ComboBox {
 
         background: Surface {
             elevation: "popover"
+            radius: Geometry.radiusMenu
         }
     }
 
     delegate: Item {
         width: control.width - Spacing.xs * 2
-        height: Geometry.controlHeightSmall
+        height: 24
         property bool highlighted: control.highlightedIndex === index
 
         Rectangle {
             anchors.fill: parent
-            radius: Geometry.radiusSmall - 1
-            color: highlighted ? Theme.selection : (hoverHandler.hovered ? Theme.surfaceSecondary : "transparent")
+            radius: Geometry.radiusMenuItem
+            color: highlighted ? Theme.selection : (hoverHandler.hovered ? Theme.controlFillHover : "transparent")
 
             HoverHandler { id: hoverHandler }
             TapHandler {
                 onTapped: {
+                    FocusModel.markPointerNavigation();
                     control.currentIndex = index;
                     control.popup.close();
                 }
@@ -96,6 +93,7 @@ T.ComboBox {
             Text {
                 anchors.fill: parent
                 anchors.leftMargin: Spacing.sm
+                anchors.rightMargin: Spacing.sm
                 text: (typeof modelData === "string") ? modelData : (model.text || "")
                 font: Typography.body
                 color: highlighted ? Theme.selectionText : Theme.textPrimary
