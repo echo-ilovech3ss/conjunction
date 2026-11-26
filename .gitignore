@@ -7,6 +7,10 @@ __pycache__/
 *.tar.zst
 *.log
 out/
+*.iso
+*.qcow2
+*.raw
+*.ppm
 pkgcache/
 target/
 *.png
@@ -14,8 +18,6 @@ target/
 *.jpg
 !assets/**/*.png
 !assets/*.png
-!archiso/airootfs/usr/share/icons/**/*.png
-!archiso/airootfs/usr/share/pixmaps/*.png
-!archiso/airootfs/usr/share/conjunction/**/*.png
 !docs/design/screenshots/*.png
+docs/design/macos-reference/
 
