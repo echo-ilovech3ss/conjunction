@@ -8,8 +8,8 @@ Item {
     id: root
     property Item backdropItem: null
 
-    width: 844
-    height: 584
+    width: Math.min(844, parent ? parent.width - 32 : 844)
+    height: Math.min(584, parent ? parent.height - 140 : 584)
 
     property string searchFilter: ""
     property string categoryFilter: "All"
@@ -53,45 +53,59 @@ Item {
 
                 Item { Layout.fillWidth: true }
 
-                Row {
-                    spacing: 6
-                    Repeater {
-                        model: ["All", "Utilities", "Internet", "Development", "System"]
-                        delegate: Item {
-                            width: catTxt.implicitWidth + 22
-                            height: 28
-                            Rectangle {
-                                anchors.fill: parent; radius: 14
-                                color: root.categoryFilter === modelData ? Theme.systemBlue
-                                    : (Appearance.isDark ? Qt.rgba(1,1,1,0.10) : Qt.rgba(0,0,0,0.06))
+                Flickable {
+                    Layout.fillWidth: true
+                    Layout.minimumWidth: 0
+                    Layout.preferredHeight: 30
+                    contentWidth: catRow.implicitWidth
+                    contentHeight: 30
+                    clip: true
+
+                    Row {
+                        id: catRow
+                        spacing: 6
+                        Repeater {
+                            model: ["All", "Utilities", "Internet", "Development", "System"]
+                            delegate: Item {
+                                width: Math.min(132, catTxt.implicitWidth + 22)
+                                height: 28
+                                Rectangle {
+                                    anchors.fill: parent; radius: 14
+                                    color: root.categoryFilter === modelData ? Theme.systemBlue
+                                        : (Appearance.isDark ? Qt.rgba(1,1,1,0.10) : Qt.rgba(0,0,0,0.06))
+                                }
+                                Text {
+                                    id: catTxt
+                                    width: Math.min(implicitWidth, parent.width - 12)
+                                    anchors.centerIn: parent
+                                    text: modelData
+                                    color: root.categoryFilter === modelData ? "#FFFFFF" : Theme.labelColor
+                                    font: Typography.callout
+                                    elide: Text.ElideRight
+                                }
+                                MouseArea { anchors.fill: parent; onClicked: root.categoryFilter = modelData }
                             }
-                            Text {
-                                id: catTxt
-                                anchors.centerIn: parent
-                                text: modelData
-                                color: root.categoryFilter === modelData ? "#FFFFFF" : Theme.labelColor
-                                font: Typography.callout
-                            }
-                            MouseArea { anchors.fill: parent; onClicked: root.categoryFilter = modelData }
                         }
                     }
                 }
 
                 C.SearchField {
-                    Layout.preferredWidth: 210
+                    Layout.preferredWidth: Math.min(210, Math.round(root.width * 0.30))
+                    Layout.minimumWidth: 110
                     placeholderText: "Search apps"
                     text: root.searchFilter
                     onTextChanged: root.searchFilter = text
                 }
             }
 
-            // Responsive App Grid (6 columns)
+            // Responsive App Grid
             GridView {
                 id: appGrid
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                cellWidth: Math.floor(width / 6)
-                cellHeight: 112
+                readonly property int cols: Math.max(3, Math.min(6, Math.floor(Math.max(120, width) / 118)))
+                cellWidth: Math.floor(width / cols)
+                cellHeight: Math.round(112 * Math.max(1.0, Appearance.fontScale * 0.92))
                 clip: true
                 model: root.filteredApps
 
@@ -109,8 +123,9 @@ Item {
                     }
 
                     ColumnLayout {
+                        width: Math.max(48, parent.width - 14)
                         anchors.centerIn: parent
-                        spacing: 8
+                        spacing: 6
 
                         Rectangle {
                             Layout.alignment: Qt.AlignHCenter
@@ -122,8 +137,21 @@ Item {
                             border.width: 0.75
                             border.color: Qt.rgba(1, 1, 1, 0.25)
 
+                            Image {
+                                id: themeTileIcon
+                                anchors.centerIn: parent
+                                width: 36; height: 36
+                                sourceSize: Qt.size(72, 72)
+                                fillMode: Image.PreserveAspectFit
+                                smooth: true
+                                source: (modelData.icon && modelData.icon !== "" && Icons.getMaterialGlyph(modelData.icon) === "" && Icons.getPath(modelData.icon) === "")
+                                    ? ("image://icon/" + encodeURIComponent(modelData.icon)) : ""
+                                visible: status === Image.Ready
+                            }
+
                             Icon {
                                 anchors.centerIn: parent
+                                visible: !themeTileIcon.visible
                                 name: modelData.icon || "applications"
                                 size: 32
                                 color: "#FFFFFF"
@@ -132,11 +160,14 @@ Item {
 
                         Text {
                             Layout.alignment: Qt.AlignHCenter
+                            Layout.fillWidth: true
                             Layout.maximumWidth: appGrid.cellWidth - 16
                             text: modelData.name || modelData.id
                             color: Theme.labelColor
                             font: Typography.subheadline
                             elide: Text.ElideRight
+                            maximumLineCount: 2
+                            wrapMode: Text.Wrap
                             horizontalAlignment: Text.AlignHCenter
                         }
                     }

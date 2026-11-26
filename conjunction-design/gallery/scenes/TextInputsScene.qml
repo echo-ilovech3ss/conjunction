@@ -31,12 +31,15 @@ Surface {
 
             ColumnLayout {
                 spacing: Spacing.md
-                Layout.preferredWidth: 320
+                Layout.fillWidth: true
+                Layout.minimumWidth: 0
 
                 Text {
+                    Layout.fillWidth: true
                     text: "Single-Line Text Fields"
                     font: Typography.sectionHeading
                     color: Theme.textPrimary
+                    elide: Text.ElideRight
                 }
 
                 TextField {
@@ -71,12 +74,15 @@ Surface {
 
             ColumnLayout {
                 spacing: Spacing.md
-                Layout.preferredWidth: 320
+                Layout.fillWidth: true
+                Layout.minimumWidth: 0
 
                 Text {
+                    Layout.fillWidth: true
                     text: "Search Field & Multi-Line Editor"
                     font: Typography.sectionHeading
                     color: Theme.textPrimary
+                    elide: Text.ElideRight
                 }
 
                 SearchField {

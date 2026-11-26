@@ -10,24 +10,28 @@ ScrollView {
     contentWidth: availableWidth
 
     ColumnLayout {
-        width: Math.min(root.width - 48, 640)
+        width: Math.min(root.availableWidth - 36, 480)
         anchors.horizontalCenter: parent.horizontalCenter
         spacing: 16
 
         Item { height: 12 }
 
         Text {
+            Layout.fillWidth: true
             text: "Search Results (" + SettingsManager.searchResults.length + ")"
             font: Typography.title
             color: Theme.textPrimary
             Layout.leftMargin: 4
+            elide: Text.ElideRight
         }
 
         Text {
+            Layout.fillWidth: true
             text: "Showing matching system settings for \"" + SettingsManager.searchQuery + "\""
             font: Typography.body
             color: Theme.textSecondary
             Layout.leftMargin: 4
+            wrapMode: Text.Wrap
         }
 
         // Empty state
@@ -41,19 +45,24 @@ ScrollView {
             visible: SettingsManager.searchResults.length === 0
 
             ColumnLayout {
-                anchors.centerIn: parent
+                anchors.fill: parent
+                anchors.margins: 16
                 spacing: 8
                 Text {
+                    Layout.fillWidth: true
                     text: "No Settings Found"
                     font: Typography.headline
                     color: Theme.textPrimary
-                    Layout.alignment: Qt.AlignHCenter
+                    elide: Text.ElideRight
+                    horizontalAlignment: Text.AlignHCenter
                 }
                 Text {
+                    Layout.fillWidth: true
                     text: "Try searching for \"dark\", \"wifi\", \"dock zoom\", or \"volume\"."
                     font: Typography.caption
                     color: Theme.textSecondary
-                    Layout.alignment: Qt.AlignHCenter
+                    wrapMode: Text.Wrap
+                    horizontalAlignment: Text.AlignHCenter
                 }
             }
         }
@@ -92,11 +101,15 @@ ScrollView {
 
                         ColumnLayout {
                             Layout.fillWidth: true
+                            Layout.minimumWidth: 0
                             spacing: 2
                             Text {
+                                Layout.fillWidth: true
+                                Layout.minimumWidth: 0
                                 text: modelData.title
                                 font: Typography.headline
                                 color: Theme.textPrimary
+                                elide: Text.ElideRight
                             }
                             Text {
                                 text: modelData.section + " • " + modelData.description

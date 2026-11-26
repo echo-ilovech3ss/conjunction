@@ -14,8 +14,9 @@ Rectangle {
 
     signal clicked()
 
+    Layout.fillWidth: true
     implicitWidth: parent ? parent.width : 300
-    implicitHeight: subtitle !== "" ? 54 : 44
+    implicitHeight: Math.max(subtitle !== "" ? 54 : 44, textCol.implicitHeight + 12)
     color: selected ? Theme.selection : (hoverHandler.hovered ? Theme.surfaceSecondary : Theme.surface)
 
     Accessible.role: Accessible.ListItem
@@ -35,14 +36,21 @@ Rectangle {
             visible: root.iconName !== ""
             name: root.iconName
             size: 20
+            Layout.preferredWidth: visible ? size : 0
+            Layout.preferredHeight: visible ? size : 0
             color: root.selected ? Theme.accent : Theme.textPrimary
         }
 
         ColumnLayout {
+            id: textCol
             Layout.fillWidth: true
+            Layout.minimumWidth: 0
             spacing: 2
 
             Text {
+                id: rowTitle
+                Layout.fillWidth: true
+                Layout.minimumWidth: 0
                 text: root.title
                 font: Typography.body
                 color: root.selected ? Theme.selectionText : Theme.textPrimary
@@ -50,7 +58,10 @@ Rectangle {
             }
 
             Text {
+                id: rowSubtitle
                 visible: root.subtitle !== ""
+                Layout.fillWidth: true
+                Layout.minimumWidth: 0
                 text: root.subtitle
                 font: Typography.secondaryBody
                 color: root.selected ? Theme.selectionText : Theme.textSecondary
@@ -60,10 +71,21 @@ Rectangle {
 
         Item {
             id: accessoryContainer
-            implicitWidth: root.accessoryItem ? root.accessoryItem.implicitWidth : 0
-            implicitHeight: root.accessoryItem ? root.accessoryItem.implicitHeight : 0
+            visible: root.accessoryItem !== null
+            Layout.alignment: Qt.AlignVCenter
+            Layout.maximumWidth: Math.max(60, root.width * 0.45)
+            Layout.preferredWidth: root.accessoryItem ? Math.min(Layout.maximumWidth, root.accessoryItem.implicitWidth) : 0
+            Layout.preferredHeight: root.accessoryItem ? root.accessoryItem.implicitHeight : 0
+            implicitWidth: Layout.preferredWidth
+            implicitHeight: Layout.preferredHeight
             data: root.accessoryItem ? [root.accessoryItem] : []
         }
+    }
+
+    ToolTip {
+        visible: hoverHandler.hovered && (rowTitle.truncated || rowSubtitle.truncated)
+        text: rowSubtitle.truncated && root.subtitle !== "" ? (root.title + "\n" + root.subtitle) : root.title
+        delay: 400
     }
 
     Rectangle {

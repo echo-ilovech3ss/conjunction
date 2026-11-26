@@ -14,9 +14,11 @@ Surface {
         spacing: Spacing.md
 
         Text {
+            Layout.fillWidth: true
             text: "Button Hierarchy & Size Classes"
             font: Typography.windowTitle
             color: Theme.textPrimary
+            elide: Text.ElideRight
         }
 
         Rectangle {
@@ -26,17 +28,21 @@ Surface {
         }
 
         Text {
+            Layout.fillWidth: true
             text: "Action Hierarchy"
             font: Typography.sectionHeading
             color: Theme.textPrimary
+            elide: Text.ElideRight
         }
 
-        RowLayout {
+        Flow {
+            Layout.fillWidth: true
             spacing: Spacing.sm
 
             Button {
-                text: "Default Action"
+                text: Appearance.stressMode ? Appearance.stressLongTitle : "Default Action"
                 isDefault: true
+                width: Math.min(implicitWidth, root.width - Geometry.contentPadding * 2)
             }
 
             Button {
@@ -60,12 +66,15 @@ Surface {
         }
 
         Text {
+            Layout.fillWidth: true
             text: "Icon Integration & Size Classes"
             font: Typography.sectionHeading
             color: Theme.textPrimary
+            elide: Text.ElideRight
         }
 
-        RowLayout {
+        Flow {
+            Layout.fillWidth: true
             spacing: Spacing.sm
 
             Button {
@@ -94,12 +103,15 @@ Surface {
         }
 
         Text {
+            Layout.fillWidth: true
             text: "Toolbar Buttons (Low rest weight, hover-activated)"
             font: Typography.sectionHeading
             color: Theme.textPrimary
+            elide: Text.ElideRight
         }
 
-        RowLayout {
+        Flow {
+            Layout.fillWidth: true
             spacing: Spacing.xs
 
             ToolButton {

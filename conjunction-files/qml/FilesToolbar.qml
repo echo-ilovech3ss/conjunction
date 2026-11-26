@@ -46,15 +46,15 @@ Item {
         // Back / Forward navigation
         RowLayout {
             spacing: 4
-            Button {
-                iconName: "go-previous"
+            ToolButton {
+                iconName: "chevron-left"
                 sizeClass: "compact"
                 enabled: FilesModel.canGoBack
                 onClicked: FilesModel.goBack()
                 implicitWidth: 28; implicitHeight: 28
             }
-            Button {
-                iconName: "go-next"
+            ToolButton {
+                iconName: "chevron-right"
                 sizeClass: "compact"
                 enabled: FilesModel.canGoForward
                 onClicked: FilesModel.goForward()
@@ -62,9 +62,10 @@ Item {
             }
         }
 
-        // Current Folder Title + Inline Path Jump
+        // Current Folder Title
         Text {
             Layout.fillWidth: true
+            Layout.minimumWidth: 0
             text: {
                 var c = FilesModel.pathComponents;
                 return (c && c.length > 0) ? c[c.length - 1].name : "Files";
@@ -77,6 +78,8 @@ Item {
         // View Mode Switcher: Icon (Cmd+1), List (Cmd+2), Column (Cmd+3), Gallery (Cmd+4)
         SegmentedControl {
             id: viewSwitcher
+            inToolbar: true
+            Layout.maximumWidth: 260
             currentIndex: root.currentViewIndex
             onCurrentIndexChanged: {
                 if (root.currentViewIndex !== currentIndex) {
@@ -92,37 +95,43 @@ Item {
 
         ToolButton {
             visible: root.canEject
-            iconName: "media-eject"
+            iconName: "eject"
+            sizeClass: "compact"
             tooltipText: "Eject (Cmd+E)"
             onClicked: root.ejectRequested()
-            implicitWidth: 30; implicitHeight: 28
+            implicitWidth: 28; implicitHeight: 28
         }
 
         ToolButton {
-            iconName: "folder-new"
+            iconName: "plus"
+            sizeClass: "compact"
             tooltipText: "New Folder"
             onClicked: root.newFolderRequested()
-            implicitWidth: 30; implicitHeight: 28
+            implicitWidth: 28; implicitHeight: 28
         }
 
         ToolButton {
-            iconName: "document-properties"
+            iconName: "info"
+            sizeClass: "compact"
             tooltipText: "Get Info (Cmd+I)"
             onClicked: root.getInfoRequested()
-            implicitWidth: 30; implicitHeight: 28
+            implicitWidth: 28; implicitHeight: 28
         }
 
         ToolButton {
-            iconName: "view-preview"
+            iconName: "sidebar"
+            sizeClass: "compact"
+            checked: root.inspectorOpen
             tooltipText: "Toggle Preview Inspector"
             onClicked: root.toggleInspectorRequested()
-            implicitWidth: 30; implicitHeight: 28
+            implicitWidth: 28; implicitHeight: 28
         }
 
         SearchField {
             id: searchField
             placeholderText: "Search"
-            Layout.preferredWidth: 160
+            Layout.preferredWidth: Math.min(145, Math.round(root.width * 0.22))
+            Layout.minimumWidth: 84
             Layout.preferredHeight: 28
             text: FilesModel.searchFilter
             onTextChanged: FilesModel.searchFilter = text

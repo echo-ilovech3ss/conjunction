@@ -2,55 +2,20 @@
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-CHROOT="/root/conjunction-build/arch-chroot/root.x86_64/work/archiso-work/x86_64/airootfs"
+BUILD_DIR="${BUILD_DIR:-/tmp/build-shelld}"
+PREFIX="${PREFIX:-/usr}"
 
-echo "[INFO] Copying shell and design sources into Arch chroot..."
-mkdir -p "${CHROOT}/tmp/conj-shelld-build"
-mkdir -p "${CHROOT}/tmp/conjunction-design-build"
+cmake -S "${REPO_ROOT}/conj-shelld" -B "${BUILD_DIR}" -DCMAKE_INSTALL_PREFIX="${PREFIX}"
+cmake --build "${BUILD_DIR}" -j"$(nproc)"
+cmake --install "${BUILD_DIR}" ${DESTDIR:+--prefix "${DESTDIR}/${PREFIX#/}"}
 
-rm -rf "${CHROOT}/var/tmp/conj-shelld-src"
-cp -r "${REPO_ROOT}/conj-shelld" "${CHROOT}/var/tmp/conj-shelld-src"
+mkdir -p "${PREFIX}/share/kwin/effects/conjunction-overview"
+cp -r "${REPO_ROOT}/data/conjunction-overview/"* "${PREFIX}/share/kwin/effects/conjunction-overview/"
+mkdir -p "${PREFIX}/share/kwin/scripts/conjunctionbridge/contents/code"
+cp "${REPO_ROOT}/data/conjunction-kwin-bridge.js" "${PREFIX}/share/kwin/scripts/conjunctionbridge/contents/code/main.js"
+mkdir -p "${PREFIX}/share/plasma/look-and-feel"
+cp -r "${REPO_ROOT}/plasma/look-and-feel/"* "${PREFIX}/share/plasma/look-and-feel/"
+mkdir -p "${PREFIX}/share/wallpapers/Conjunction"
+cp -r "${REPO_ROOT}/data/wallpapers/"* "${PREFIX}/share/wallpapers/Conjunction/"
 
-rm -rf "${CHROOT}/var/tmp/conjunction-design-src"
-cp -r "${REPO_ROOT}/conjunction-design" "${CHROOT}/var/tmp/conjunction-design-src"
-
-echo "[INFO] Compiling conj-shelld inside Arch chroot..."
-arch-chroot "$CHROOT" bash -c '
-set -e
-cd /var/tmp/conj-shelld-src
-rm -rf build
-cmake -B build -S . -G Ninja
-cmake --build build
-cp build/conj-shelld /usr/bin/conj-shelld
-chmod 755 /usr/bin/conj-shelld
-'
-
-echo "[INFO] Compiling conjunction-reference-app and gallery inside Arch chroot..."
-arch-chroot "$CHROOT" bash -c '
-set -e
-cd /var/tmp/conjunction-design-src
-rm -rf build
-cmake -B build -S . -G Ninja
-cmake --build build
-cp build/conjunction-reference-app /usr/bin/conjunction-reference-app
-cp build/conjunction-design-gallery /usr/bin/conjunction-design-gallery
-chmod 755 /usr/bin/conjunction-reference-app /usr/bin/conjunction-design-gallery
-'
-
-echo "[INFO] Copying QML modules to /usr/share/conjunction/ in chroot..."
-mkdir -p "${CHROOT}/usr/share/conjunction/qml"
-mkdir -p "${CHROOT}/usr/share/conjunction/shell"
-mkdir -p "${CHROOT}/usr/share/conjunction/reference"
-cp -r "${REPO_ROOT}/conjunction-design/qml/"* "${CHROOT}/usr/share/conjunction/qml/"
-cp -r "${REPO_ROOT}/conj-shelld/qml/"* "${CHROOT}/usr/share/conjunction/shell/"
-cp -r "${REPO_ROOT}/conjunction-design/reference_app/"* "${CHROOT}/usr/share/conjunction/reference/"
-
-mkdir -p "${CHROOT}/usr/share/kwin/effects/conjunction-overview"
-cp -r "${REPO_ROOT}/data/conjunction-overview/"* "${CHROOT}/usr/share/kwin/effects/conjunction-overview/"
-
-mkdir -p /tmp/wsl-target/release
-cp "${CHROOT}/usr/bin/conj-shelld" /tmp/wsl-target/release/conj-shelld
-cp "${CHROOT}/usr/bin/conjunction-reference-app" /tmp/wsl-target/release/conjunction-reference-app
-cp "${CHROOT}/usr/bin/conjunction-design-gallery" /tmp/wsl-target/release/conjunction-design-gallery
-
-echo "[SUCCESS] Shell binaries and reference app successfully built and deployed!"
+echo "[SUCCESS] conj-shelld and Plasma look-and-feel assets installed to ${PREFIX}"

@@ -74,8 +74,12 @@ Item {
                                 spacing: 6
 
                                 Image {
+                                    Layout.preferredWidth: 16
+                                    Layout.preferredHeight: 16
                                     width: 16
                                     height: 16
+                                    sourceSize: Qt.size(32, 32)
+                                    clip: true
                                     fillMode: Image.PreserveAspectFit
                                     source: (model.bundleIcon && model.bundleIcon !== "")
                                             ? ("file://" + model.bundleIcon)
@@ -84,6 +88,7 @@ Item {
 
                                 Text {
                                     Layout.fillWidth: true
+                                    Layout.minimumWidth: 0
                                     text: model.name
                                     font.pixelSize: 12
                                     elide: Text.ElideRight
@@ -200,9 +205,11 @@ Item {
 
                     Text {
                         Layout.fillWidth: true
+                        Layout.minimumWidth: 0
                         horizontalAlignment: Text.AlignHCenter
                         text: ColumnModel.previewData.sizeFormatted ? (ColumnModel.previewData.sizeFormatted + " — " + (ColumnModel.previewData.mimeType || "")) : ""
                         font.pixelSize: 11
+                        elide: Text.ElideRight
                         color: isDarkTheme ? "#8E8E93" : "#86868B"
                     }
 
@@ -218,13 +225,15 @@ Item {
                         spacing: 4
 
                         RowLayout {
+                            Layout.fillWidth: true
                             Text { text: "Modified:"; font.pixelSize: 11; color: isDarkTheme ? "#8E8E93" : "#86868B"; Layout.preferredWidth: 60 }
-                            Text { text: ColumnModel.previewData.modifiedFormatted || "--"; font.pixelSize: 11; color: isDarkTheme ? "#DDD" : "#333" }
+                            Text { Layout.fillWidth: true; Layout.minimumWidth: 0; elide: Text.ElideRight; text: ColumnModel.previewData.modifiedFormatted || "--"; font.pixelSize: 11; color: isDarkTheme ? "#DDD" : "#333" }
                         }
                         RowLayout {
+                            Layout.fillWidth: true
                             visible: ColumnModel.previewData.bundleId !== undefined && ColumnModel.previewData.bundleId !== ""
                             Text { text: "Bundle ID:"; font.pixelSize: 11; color: isDarkTheme ? "#8E8E93" : "#86868B"; Layout.preferredWidth: 60 }
-                            Text { text: ColumnModel.previewData.bundleId || ""; font.pixelSize: 11; color: isDarkTheme ? "#DDD" : "#333"; elide: Text.ElideRight }
+                            Text { Layout.fillWidth: true; Layout.minimumWidth: 0; text: ColumnModel.previewData.bundleId || ""; font.pixelSize: 11; color: isDarkTheme ? "#DDD" : "#333"; elide: Text.ElideRight }
                         }
                     }
 
@@ -233,7 +242,7 @@ Item {
                     Button {
                         Layout.fillWidth: true
                         text: "Quick Look"
-                        iconName: "system-search"
+                        iconName: "search"
                         onClicked: {
                             var it = ColumnModel.previewData;
                             root.quickLookRequested(it);

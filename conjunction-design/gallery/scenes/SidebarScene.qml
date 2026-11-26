@@ -14,7 +14,7 @@ Surface {
 
         Sidebar {
             Layout.fillHeight: true
-            implicitWidth: 220
+            implicitWidth: Math.min(220, Math.round(root.width * 0.40))
 
             SidebarSection { title: "Favorites" }
             SidebarRow { title: "Applications"; iconName: "settings"; selected: true; badgeText: "18" }
@@ -36,26 +36,36 @@ Surface {
             Layout.fillHeight: true
             color: Theme.surface
 
-            ColumnLayout {
+            Flickable {
                 anchors.fill: parent
                 anchors.margins: Geometry.contentPadding
-                spacing: Spacing.sm
+                clip: true
+                contentWidth: width
+                contentHeight: sbRightCol.implicitHeight
 
-                Text {
-                    text: "Sidebar Interaction Semantics"
-                    font: Typography.windowTitle
-                    color: Theme.textPrimary
+                ColumnLayout {
+                    id: sbRightCol
+                    width: parent.width
+                    spacing: Spacing.sm
+
+                    Text {
+                        Layout.fillWidth: true
+                        Layout.minimumWidth: 0
+                        text: "Sidebar Interaction Semantics"
+                        font: Typography.windowTitle
+                        color: Theme.textPrimary
+                        wrapMode: Text.WordWrap
+                    }
+
+                    Text {
+                        text: "The sidebar represents the leading navigation column. Selection highlights are soft and accent-aware. The keyboard focus ring remains distinct from item selection."
+                        font: Typography.body
+                        color: Theme.textSecondary
+                        wrapMode: Text.WordWrap
+                        Layout.fillWidth: true
+                        Layout.minimumWidth: 0
+                    }
                 }
-
-                Text {
-                    text: "The sidebar represents the leading navigation column. Selection highlights are soft and accent-aware. The keyboard focus ring remains distinct from item selection."
-                    font: Typography.body
-                    color: Theme.textSecondary
-                    wrapMode: Text.WordWrap
-                    Layout.fillWidth: true
-                }
-
-                Item { Layout.fillHeight: true }
             }
         }
     }

@@ -16,8 +16,10 @@ Rectangle {
 
     readonly property int targetHeight: Geometry.segmentedHeight(sizeClass, inToolbar)
 
-    implicitHeight: targetHeight
+    implicitHeight: Math.max(targetHeight, segmentLayout.implicitHeight + Spacing.xxs * 2)
     implicitWidth: segmentLayout.implicitWidth + Spacing.xxs * 2
+    Layout.minimumWidth: Math.min(implicitWidth, Math.max(48, segmentLayout.Layout.minimumWidth + Spacing.xxs * 2))
+    clip: true
 
     radius: targetHeight * 0.5
     color: Theme.controlFill

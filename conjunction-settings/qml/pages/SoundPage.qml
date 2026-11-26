@@ -10,24 +10,28 @@ ScrollView {
     contentWidth: availableWidth
 
     ColumnLayout {
-        width: Math.min(root.width - 48, 640)
+        width: Math.min(root.availableWidth - 36, 480)
         anchors.horizontalCenter: parent.horizontalCenter
         spacing: 20
 
         Item { height: 12 }
 
         Text {
+            Layout.fillWidth: true
             text: "Sound"
             font: Typography.title
             color: Theme.textPrimary
             Layout.leftMargin: 4
+            elide: Text.ElideRight
         }
 
         Text {
+            Layout.fillWidth: true
             text: "Output volume, alert sounds, and playback device selection."
             font: Typography.body
             color: Theme.textSecondary
             Layout.leftMargin: 4
+            wrapMode: Text.Wrap
         }
 
         // Sound Output Card
@@ -62,21 +66,28 @@ ScrollView {
 
                         ColumnLayout {
                             Layout.fillWidth: true
+                            Layout.minimumWidth: 0
                             spacing: 2
                             Text {
+                                Layout.fillWidth: true
+                                Layout.minimumWidth: 0
                                 text: "Output Volume"
                                 font: Typography.headline
                                 color: Theme.textPrimary
+                                elide: Text.ElideRight
                             }
                             Text {
+                                Layout.fillWidth: true
+                                Layout.minimumWidth: 0
                                 text: "Master audio volume level (" + SettingsManager.soundVolume + "%)"
                                 font: Typography.caption
                                 color: Theme.textSecondary
+                                elide: Text.ElideRight
                             }
                         }
 
                         Controls.Slider {
-                            Layout.preferredWidth: 180
+                            Layout.preferredWidth: Math.min(180, Math.round(soundColumn.width * 0.42))
                             from: 0
                             to: 100
                             stepSize: 1
@@ -108,16 +119,23 @@ ScrollView {
 
                         ColumnLayout {
                             Layout.fillWidth: true
+                            Layout.minimumWidth: 0
                             spacing: 2
                             Text {
+                                Layout.fillWidth: true
+                                Layout.minimumWidth: 0
                                 text: "Mute Audio"
                                 font: Typography.headline
                                 color: Theme.textPrimary
+                                elide: Text.ElideRight
                             }
                             Text {
+                                Layout.fillWidth: true
+                                Layout.minimumWidth: 0
                                 text: "Silence all audio output channels"
                                 font: Typography.caption
                                 color: Theme.textSecondary
+                                elide: Text.ElideRight
                             }
                         }
 
@@ -165,6 +183,8 @@ ScrollView {
                                     font: Typography.body
                                     color: Theme.textPrimary
                                     Layout.fillWidth: true
+                                    Layout.minimumWidth: 0
+                                    elide: Text.ElideRight
                                 }
 
                                 Text {

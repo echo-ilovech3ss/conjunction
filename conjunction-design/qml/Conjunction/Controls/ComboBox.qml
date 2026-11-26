@@ -43,6 +43,7 @@ T.ComboBox {
     }
 
     contentItem: Text {
+        id: comboLabel
         text: control.displayText
         font: (control.sizeClass === "small") ? Typography.subheadline : Typography.body
         color: control.enabled ? Theme.textPrimary : Theme.textDisabled
@@ -52,17 +53,28 @@ T.ComboBox {
         elide: Text.ElideRight
     }
 
+    ToolTip {
+        visible: control.hovered && comboLabel.truncated && control.displayText !== ""
+        text: control.displayText
+        delay: 400
+    }
+
     popup: T.Popup {
+        readonly property real maxWinW: control.T.Overlay.overlay ? Math.max(180, control.T.Overlay.overlay.width - 16) : 420
+        readonly property real maxWinH: control.T.Overlay.overlay ? Math.max(120, control.T.Overlay.overlay.height - 16) : 320
         y: control.height + Spacing.xs
-        width: control.width
-        implicitHeight: Math.min(220, contentItem.implicitHeight + Spacing.xs * 2)
+        width: Math.min(Math.max(control.width, 180), maxWinW)
+        implicitHeight: Math.min(Math.min(260, maxWinH), contentItem.implicitHeight + Spacing.xs * 2)
+        margins: 8
         padding: Spacing.xs
 
         contentItem: ListView {
+            id: comboList
             clip: true
             implicitHeight: contentHeight
             model: control.popup.visible ? control.delegateModel : null
             currentIndex: control.highlightedIndex
+            T.ScrollBar.vertical: ScrollBar {}
         }
 
         background: Surface {
@@ -72,8 +84,8 @@ T.ComboBox {
     }
 
     delegate: Item {
-        width: control.width - Spacing.xs * 2
-        height: 24
+        width: comboList ? comboList.width : Math.max(160, control.width - Spacing.xs * 2)
+        height: Math.max(24, itemLabel.implicitHeight + 6)
         property bool highlighted: control.highlightedIndex === index
 
         Rectangle {
@@ -91,6 +103,7 @@ T.ComboBox {
             }
 
             Text {
+                id: itemLabel
                 anchors.fill: parent
                 anchors.leftMargin: Spacing.sm
                 anchors.rightMargin: Spacing.sm
@@ -99,6 +112,12 @@ T.ComboBox {
                 color: highlighted ? Theme.selectionText : Theme.textPrimary
                 verticalAlignment: Text.AlignVCenter
                 elide: Text.ElideRight
+            }
+
+            ToolTip {
+                visible: hoverHandler.hovered && itemLabel.truncated && itemLabel.text !== ""
+                text: itemLabel.text
+                delay: 400
             }
         }
     }

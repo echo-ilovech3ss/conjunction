@@ -14,6 +14,8 @@ Item {
         Appearance.setReducedMotion(ShellState.reducedMotion);
         Appearance.setReduceTransparency(ShellState.reduceTransparency);
         Appearance.setIncreaseContrast(ShellState.increaseContrast);
+        if (typeof initialRtl !== "undefined" && initialRtl) Appearance.setLayoutDirection(Qt.RightToLeft);
+        if (typeof initialFontScale !== "undefined" && initialFontScale > 0) Appearance.setFontScale(initialFontScale);
     }
 
     Component.onCompleted: syncDesignTokens()
@@ -31,13 +33,20 @@ Item {
     Window {
         id: compositeWindow
         visible: !ShellState.layerShellMode
-        width: 1280
-        height: 800
+        width: (typeof initialCompositeWidth !== "undefined" && initialCompositeWidth > 0) ? initialCompositeWidth : 1280
+        height: (typeof initialCompositeHeight !== "undefined" && initialCompositeHeight > 0) ? initialCompositeHeight : 800
         title: "Conjunction Desktop Shell"
         color: Appearance.isDark ? "#0D1526" : "#CFE4F7"
         flags: Qt.FramelessWindowHint | Qt.Window
 
-        // Crisp procedural Light/Dark Conjunction Desktop Wallpaper (Backdrop for Liquid Glass shader)
+        Item {
+            id: desktopCanvas
+            width: compositeWindow.width
+            height: compositeWindow.height
+            LayoutMirroring.enabled: Appearance.isRTL
+            LayoutMirroring.childrenInherit: true
+
+            // Crisp procedural Light/Dark Conjunction Desktop Wallpaper (Backdrop for Liquid Glass shader)
         Item {
             id: wallpaperBackdrop
             anchors.fill: parent
@@ -121,7 +130,13 @@ Item {
         }
 
         NotificationBanner {
-            visible: ShellState.activeBanners.length > 0 && !ShellState.notificationCenterVisible
+            visible: ShellState.activeBanners.length > 0
+                && !ShellState.notificationCenterVisible
+                && !ShellState.controlCenterVisible
+                && !ShellState.overviewActive
+                && !ShellState.quickNoteVisible
+                && !ShellState.appLauncherVisible
+                && !ShellState.spotlightVisible
             anchors.top: topBar.bottom
             anchors.topMargin: 12
             anchors.right: parent.right
@@ -131,9 +146,10 @@ Item {
         }
 
         Spotlight {
+            id: compSpotlight
             visible: ShellState.spotlightVisible
             anchors.horizontalCenter: parent.horizontalCenter
-            y: 165
+            y: Math.min(165, Math.max(40, Math.round((parent.height - 96 - height) * 0.45)))
             backdropItem: wallpaperBackdrop
             z: 80
         }
@@ -141,6 +157,7 @@ Item {
         AppLauncher {
             visible: ShellState.appLauncherVisible
             anchors.centerIn: parent
+            anchors.verticalCenterOffset: -24
             backdropItem: wallpaperBackdrop
             z: 82
         }
@@ -168,6 +185,7 @@ Item {
             backdropItem: wallpaperBackdrop
             z: 90
         }
+        }
     }
 
     // ---- 2. WAYLAND LAYERSHELL MULTI-WINDOW MODE (Native KWin 6 Desktop Session) ----
@@ -180,8 +198,12 @@ Item {
         flags: Qt.FramelessWindowHint | Qt.WindowDoesNotAcceptFocus
         Component.onCompleted: if (ShellState.layerShellMode) ShellState.bindLayerShell(lsTopBarWindow, "topbar", ShellState.notchBar ? 39 : 28)
 
-        TopBar {
-            anchors.fill: parent
+        Item {
+            width: lsTopBarWindow.width
+            height: lsTopBarWindow.height
+            LayoutMirroring.enabled: Appearance.isRTL
+            LayoutMirroring.childrenInherit: true
+            TopBar { anchors.fill: parent }
         }
     }
 
@@ -194,9 +216,12 @@ Item {
         flags: Qt.FramelessWindowHint | Qt.WindowDoesNotAcceptFocus
         Component.onCompleted: if (ShellState.layerShellMode) ShellState.bindLayerShell(lsDockWindow, "dock", 0)
 
-        Dock {
-            id: lsDock
-            anchors.centerIn: parent
+        Item {
+            width: lsDockWindow.width
+            height: lsDockWindow.height
+            LayoutMirroring.enabled: Appearance.isRTL
+            LayoutMirroring.childrenInherit: true
+            Dock { id: lsDock; anchors.centerIn: parent }
         }
     }
 
@@ -218,67 +243,83 @@ Item {
         flags: Qt.FramelessWindowHint
         Component.onCompleted: if (ShellState.layerShellMode) ShellState.bindLayerShell(lsOverlayWindow, "overlay", -1)
 
-        MouseArea {
-            anchors.fill: parent
-            onClicked: {
-                ShellState.controlCenterVisible = false;
-                ShellState.notificationCenterVisible = false;
-                ShellState.spotlightVisible = false;
-                ShellState.appLauncherVisible = false;
+        Item {
+            id: overlayCanvas
+            width: lsOverlayWindow.width
+            height: lsOverlayWindow.height
+            LayoutMirroring.enabled: Appearance.isRTL
+            LayoutMirroring.childrenInherit: true
+
+            MouseArea {
+                anchors.fill: parent
+                onClicked: {
+                    ShellState.controlCenterVisible = false;
+                    ShellState.notificationCenterVisible = false;
+                    ShellState.spotlightVisible = false;
+                    ShellState.appLauncherVisible = false;
+                }
             }
-        }
 
-        ControlCenter {
-            visible: ShellState.controlCenterVisible
-            anchors.top: parent.top
-            anchors.topMargin: (ShellState.notchBar ? 39 : 28) + 10
-            anchors.right: parent.right
-            anchors.rightMargin: 12
-        }
+            ControlCenter {
+                visible: ShellState.controlCenterVisible
+                anchors.top: parent.top
+                anchors.topMargin: (ShellState.notchBar ? 39 : 28) + 10
+                anchors.right: parent.right
+                anchors.rightMargin: 12
+            }
 
-        NotificationCenter {
-            visible: ShellState.notificationCenterVisible
-            anchors.top: parent.top
-            anchors.topMargin: (ShellState.notchBar ? 39 : 28) + 10
-            anchors.right: parent.right
-            anchors.rightMargin: 12
-        }
+            NotificationCenter {
+                visible: ShellState.notificationCenterVisible
+                anchors.top: parent.top
+                anchors.topMargin: (ShellState.notchBar ? 39 : 28) + 10
+                anchors.right: parent.right
+                anchors.rightMargin: 12
+            }
 
-        NotificationBanner {
-            visible: ShellState.activeBanners.length > 0 && !ShellState.notificationCenterVisible
-            anchors.top: parent.top
-            anchors.topMargin: (ShellState.notchBar ? 39 : 28) + 12
-            anchors.right: parent.right
-            anchors.rightMargin: 14
-        }
+            NotificationBanner {
+                visible: ShellState.activeBanners.length > 0
+                    && !ShellState.notificationCenterVisible
+                    && !ShellState.controlCenterVisible
+                    && !ShellState.overviewActive
+                    && !ShellState.quickNoteVisible
+                    && !ShellState.appLauncherVisible
+                    && !ShellState.spotlightVisible
+                anchors.top: parent.top
+                anchors.topMargin: (ShellState.notchBar ? 39 : 28) + 12
+                anchors.right: parent.right
+                anchors.rightMargin: 14
+            }
 
-        Spotlight {
-            visible: ShellState.spotlightVisible
-            anchors.horizontalCenter: parent.horizontalCenter
-            y: 165
-        }
+            Spotlight {
+                id: lsSpotlight
+                visible: ShellState.spotlightVisible
+                anchors.horizontalCenter: parent.horizontalCenter
+                y: Math.min(165, Math.max(40, Math.round((parent.height - 96 - height) * 0.45)))
+            }
 
-        AppLauncher {
-            visible: ShellState.appLauncherVisible
-            anchors.centerIn: parent
-        }
+            AppLauncher {
+                visible: ShellState.appLauncherVisible
+                anchors.centerIn: parent
+                anchors.verticalCenterOffset: -24
+            }
 
-        AppSwitcherHUD {
-            visible: ShellState.appSwitcherVisible
-            anchors.centerIn: parent
-        }
+            AppSwitcherHUD {
+                visible: ShellState.appSwitcherVisible
+                anchors.centerIn: parent
+            }
 
-        QuickNoteOverlay {
-            visible: ShellState.quickNoteVisible
-            anchors.right: parent.right
-            anchors.rightMargin: 24
-            anchors.bottom: parent.bottom
-            anchors.bottomMargin: 112
-        }
+            QuickNoteOverlay {
+                visible: ShellState.quickNoteVisible
+                anchors.right: parent.right
+                anchors.rightMargin: 24
+                anchors.bottom: parent.bottom
+                anchors.bottomMargin: 112
+            }
 
-        OverviewOverlay {
-            visible: ShellState.overviewActive
-            anchors.fill: parent
+            OverviewOverlay {
+                visible: ShellState.overviewActive
+                anchors.fill: parent
+            }
         }
     }
 }

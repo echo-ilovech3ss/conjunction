@@ -44,6 +44,10 @@ bool TerminalSession::initialize(const QString &workingDir, const QString &profi
     m_currentDir = dir;
     m_activeProfile = profile;
 
+    if (qEnvironmentVariableIsEmpty("SHELL")) {
+        qputenv("SHELL", "/bin/bash");
+    }
+
     KPluginMetaData metaData(QStringLiteral("kf6/parts/konsolepart"));
     auto res = KPluginFactory::instantiatePlugin<KParts::ReadOnlyPart>(metaData, m_parentWidget, QVariantList());
     if (!res.plugin) {
@@ -68,6 +72,11 @@ bool TerminalSession::initialize(const QString &workingDir, const QString &profi
     connect(m_part, SIGNAL(currentDirectoryChanged(QString)), this, SLOT(onDirectoryChanged(QString)));
     connect(m_part, &QObject::destroyed, this, &TerminalSession::finished);
 
+    // Ensure SHELL is populated even in stripped container/systemd environments
+    if (qEnvironmentVariableIsEmpty("SHELL")) {
+        qputenv("SHELL", "/bin/bash");
+    }
+
     // Launch default user login shell in specified directory
     m_iface->showShellInDir(dir);
 
@@ -85,6 +94,10 @@ bool TerminalSession::startProgram(const QString &program, const QStringList &ar
     }
     m_initialDir = dir;
     m_currentDir = dir;
+
+    if (qEnvironmentVariableIsEmpty("SHELL")) {
+        qputenv("SHELL", "/bin/bash");
+    }
 
     KPluginMetaData metaData(QStringLiteral("kf6/parts/konsolepart"));
     auto res = KPluginFactory::instantiatePlugin<KParts::ReadOnlyPart>(metaData, m_parentWidget, QVariantList());
@@ -105,6 +118,9 @@ bool TerminalSession::startProgram(const QString &program, const QStringList &ar
     connect(m_part, SIGNAL(currentDirectoryChanged(QString)), this, SLOT(onDirectoryChanged(QString)));
     connect(m_part, &QObject::destroyed, this, &TerminalSession::finished);
 
+    if (qEnvironmentVariableIsEmpty("SHELL")) {
+        qputenv("SHELL", "/bin/bash");
+    }
     m_iface->showShellInDir(dir);
     m_iface->startProgram(program, args);
 

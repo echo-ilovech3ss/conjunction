@@ -8,15 +8,22 @@ Item {
     id: root
     property Item backdropItem: null
 
-    width: 304 // 292 content + 12 margins
-    height: ccColumn.implicitHeight + 8
+    width: Math.min(304, parent ? parent.width - 16 : 304) // 292 content + 12 margins
+    height: Math.min(ccColumn.implicitHeight + 8, parent ? parent.height - 124 : ccColumn.implicitHeight + 8)
+    clip: true
 
-    Column {
-        id: ccColumn
-        anchors.top: parent.top
-        anchors.horizontalCenter: parent.horizontalCenter
-        width: 292
-        spacing: 12 // SPEC §4.3 uniform 12 pt gutter
+    Flickable {
+        anchors.fill: parent
+        contentWidth: width
+        contentHeight: ccColumn.implicitHeight
+        clip: true
+
+        Column {
+            id: ccColumn
+            anchors.top: parent.top
+            anchors.horizontalCenter: parent.horizontalCenter
+            width: Math.min(292, parent.width - 8)
+            spacing: 12 // SPEC §4.3 uniform 12 pt gutter
 
         // ---- Rows 1..3: Left 3x (2x1 = 140x64) + Right (2x2 Media 140x140 + 2x 1x1 64x64) ----
         Row {
@@ -48,7 +55,7 @@ Item {
                         }
                         Column {
                             Layout.fillWidth: true
-                            Text { text: "Wi-Fi"; color: Theme.labelColor; font: Typography.headline }
+                            Text { text: "Wi-Fi"; color: Theme.labelColor; font: Typography.headline; elide: Text.ElideRight; width: 68 }
                             Text { text: ShellState.wifiEnabled ? ShellState.wifiSsid : "Off"; color: Theme.secondaryLabelColor; font: Typography.subheadline; elide: Text.ElideRight; width: 68 }
                         }
                     }
@@ -75,8 +82,8 @@ Item {
                         }
                         Column {
                             Layout.fillWidth: true
-                            Text { text: "Bluetooth"; color: Theme.labelColor; font: Typography.headline }
-                            Text { text: ShellState.bluetoothEnabled ? "On" : "Off"; color: Theme.secondaryLabelColor; font: Typography.subheadline }
+                            Text { text: "Bluetooth"; color: Theme.labelColor; font: Typography.headline; elide: Text.ElideRight; width: 68 }
+                            Text { text: ShellState.bluetoothEnabled ? "On" : "Off"; color: Theme.secondaryLabelColor; font: Typography.subheadline; elide: Text.ElideRight; width: 68 }
                         }
                     }
                     MouseArea { anchors.fill: parent; onClicked: ShellState.toggleBluetooth() }
@@ -102,8 +109,8 @@ Item {
                         }
                         Column {
                             Layout.fillWidth: true
-                            Text { text: "Nearby"; color: Theme.labelColor; font: Typography.headline }
-                            Text { text: ShellState.nearbyShareEnabled ? "Everyone" : "Off"; color: Theme.secondaryLabelColor; font: Typography.subheadline }
+                            Text { text: "Nearby"; color: Theme.labelColor; font: Typography.headline; elide: Text.ElideRight; width: 68 }
+                            Text { text: ShellState.nearbyShareEnabled ? "Everyone" : "Off"; color: Theme.secondaryLabelColor; font: Typography.subheadline; elide: Text.ElideRight; width: 68 }
                         }
                     }
                     MouseArea { anchors.fill: parent; onClicked: ShellState.toggleNearbyShare() }
@@ -137,6 +144,8 @@ Item {
                             color: Theme.labelColor
                             font: Typography.headline
                             Layout.fillWidth: true
+                            Layout.minimumWidth: 0
+                            elide: Text.ElideRight
                         }
                         Item { Layout.fillHeight: true }
                         RowLayout {
@@ -244,6 +253,8 @@ Item {
                         color: Theme.labelColor
                         font: Typography.headline
                         Layout.fillWidth: true
+                        Layout.minimumWidth: 0
+                        elide: Text.ElideRight
                     }
                 }
                 MouseArea { anchors.fill: parent; onClicked: ShellState.toggleDoNotDisturb() }
@@ -318,7 +329,7 @@ Item {
                 ColumnLayout {
                     Layout.fillWidth: true
                     spacing: 4
-                    Text { text: "Sound"; color: Theme.labelColor; font: Typography.headline }
+                    Text { Layout.fillWidth: true; Layout.minimumWidth: 0; elide: Text.ElideRight; text: "Sound"; color: Theme.labelColor; font: Typography.headline }
                     RowLayout {
                         Layout.fillWidth: true
                         spacing: 8
@@ -367,22 +378,28 @@ Item {
         // ---- Footer: Centered "Edit Controls" Pill (~110x28, cr=14) ----
         Item {
             width: 292
-            height: 32
+            height: Math.max(32, ccEditText.implicitHeight + 12)
             GlassSurface {
                 anchors.centerIn: parent
-                width: 112; height: 28
+                width: Math.min(260, Math.max(112, ccEditText.implicitWidth + 28))
+                height: Math.max(28, ccEditText.implicitHeight + 10)
                 variant: "clear"
-                cornerRadius: 14
+                cornerRadius: height * 0.5
                 shadowPreset: "pill"
                 backdropItem: root.backdropItem
                 Text {
+                    id: ccEditText
                     anchors.centerIn: parent
+                    width: Math.min(implicitWidth, parent.width - 16)
                     text: "Edit Controls"
                     color: Theme.labelColor
                     font: Typography.callout
+                    elide: Text.ElideRight
+                    horizontalAlignment: Text.AlignHCenter
                 }
                 MouseArea { anchors.fill: parent; onClicked: ShellState.OpenSetting("controlcenter") }
             }
+        }
         }
     }
 }

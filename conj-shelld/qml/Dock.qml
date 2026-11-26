@@ -8,7 +8,12 @@ Item {
     id: root
     property Item backdropItem: null
 
-    readonly property real baseTileSize: ShellState.dockTileSize // SPEC §4.2 nominal P0 = 54 pt (16-128)
+    readonly property int totalDockItems: 2
+        + (ShellState.dockItems ? ShellState.dockItems.length : 0)
+        + (ShellState.minimizedWindows ? ShellState.minimizedWindows.length : 0)
+        + (ShellState.mountedVolumes ? ShellState.mountedVolumes.length : 0)
+    readonly property real maxAvailableW: root.parent ? Math.max(360, root.parent.width - 24) : 1200
+    readonly property real baseTileSize: Math.min(ShellState.dockTileSize, Math.max(24, Math.floor((maxAvailableW - 44) / Math.max(1, totalDockItems * 1.14)))) // SPEC §4.2 nominal P0 = 54 pt (16-128)
     readonly property real maxScale: ShellState.dockMagnification ? ShellState.dockScaleMax : 1.0
     readonly property real capsuleHeight: baseTileSize + 20 // 74 pt at P0=54
     readonly property real centerSpacing: 60.0 * (baseTileSize / 54.0)
@@ -16,7 +21,7 @@ Item {
 
     implicitHeight: Math.max(108.5, Math.round(baseTileSize * 2.02))
     height: implicitHeight
-    width: Math.max(capsule.width + 80, 420)
+    width: Math.min(maxAvailableW + 24, Math.max(capsule.width + 80, 420))
 
     property bool pointerInside: dockMouse.containsMouse
     property real pointerLocalX: -9999
@@ -39,7 +44,7 @@ Item {
         visible: root.pointerInside && root.hoveredTitle !== ""
         x: Math.max(8, Math.min(root.width - width - 8, capsule.x + root.hoveredCenterX - width * 0.5))
         y: capsule.y - (root.baseTileSize * (root.maxScale - 1.0)) - height - 8
-        width: tipText.implicitWidth + 24
+        width: Math.min(tipText.implicitWidth + 24, root.width - 16)
         height: 26
         variant: "clear"
         cornerRadius: 13
@@ -49,10 +54,13 @@ Item {
 
         Text {
             id: tipText
+            width: Math.min(implicitWidth, Math.max(20, parent.width - 16))
             anchors.centerIn: parent
             text: root.hoveredTitle
             color: Theme.labelColor
             font: Typography.callout
+            elide: Text.ElideRight
+            horizontalAlignment: Text.AlignHCenter
         }
     }
 
@@ -173,8 +181,22 @@ Item {
                         border.color: Appearance.isDark ? Qt.rgba(1, 1, 1, 0.22) : Qt.rgba(0, 0, 0, 0.12)
                     }
 
+                    Image {
+                        id: dockThemeIcon
+                        anchors.centerIn: parent
+                        width: Math.round(root.baseTileSize * 0.62)
+                        height: width
+                        sourceSize: Qt.size(96, 96)
+                        fillMode: Image.PreserveAspectFit
+                        smooth: true
+                        source: (modelData.icon && modelData.icon !== "" && Icons.getMaterialGlyph(modelData.icon) === "" && Icons.getPath(modelData.icon) === "")
+                            ? ("image://icon/" + encodeURIComponent(modelData.icon)) : ""
+                        visible: status === Image.Ready
+                    }
+
                     Icon {
                         anchors.centerIn: parent
+                        visible: !dockThemeIcon.visible
                         name: modelData.icon || "applications"
                         size: Math.round(root.baseTileSize * 0.56)
                         color: (modelData.id === "org.conjunction.files" || modelData.id === "org.conjunction.terminal" || modelData.id === "org.conjunction.settings" || modelData.active)

@@ -14,15 +14,19 @@ Surface {
         spacing: Spacing.md
 
         Text {
+            Layout.fillWidth: true
             text: "Dialogs, Sheets & Alerts"
             font: Typography.windowTitle
             color: Theme.textPrimary
+            elide: Text.ElideRight
         }
 
         Text {
+            Layout.fillWidth: true
             text: "Sheets slide down from the parent window top context. Standard modal dialogs center with backdrop dimming. Return activates default action; Escape cancels."
             font: Typography.secondaryBody
             color: Theme.textSecondary
+            wrapMode: Text.Wrap
         }
 
         Rectangle {
@@ -31,7 +35,8 @@ Surface {
             color: Theme.separator
         }
 
-        RowLayout {
+        Flow {
+            Layout.fillWidth: true
             spacing: Spacing.md
 
             Button {

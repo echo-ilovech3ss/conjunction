@@ -19,12 +19,24 @@ Rectangle {
             leadingItems: [
                 ToolButton { iconName: "arrow-left"; tooltipText: "Back" },
                 ToolButton { iconName: "arrow-right"; tooltipText: "Forward" },
-                Text { text: "Conjunction Applications"; font: Typography.sectionHeading; color: Theme.textPrimary; verticalAlignment: Text.AlignVCenter }
+                Text {
+                    Layout.fillWidth: true
+                    Layout.minimumWidth: 0
+                    Layout.maximumWidth: Math.min(160, Math.round(root.width * 0.16))
+                    text: Appearance.stressMode ? Appearance.stressLongTitle : "Conjunction Applications"
+                    font: Typography.sectionHeading
+                    color: Theme.textPrimary
+                    verticalAlignment: Text.AlignVCenter
+                    elide: Text.ElideRight
+                }
             ]
 
             centerItems: [
                 SegmentedControl {
                     currentIndex: 0
+                    Layout.fillWidth: true
+                    Layout.minimumWidth: 72
+                    Layout.maximumWidth: Math.min(220, Math.round(root.width * 0.28))
                     Segment { iconName: "copy"; text: "Installed" }
                     Segment { iconName: "search"; text: "Updates" }
                     Segment { iconName: "settings"; text: "Settings" }
@@ -32,9 +44,20 @@ Rectangle {
             ]
 
             trailingItems: [
-                SearchField { implicitWidth: 180 },
+                SearchField {
+                    Layout.preferredWidth: Math.min(120, Math.round(root.width * 0.14))
+                    Layout.minimumWidth: 40
+                    Layout.maximumWidth: 140
+                    Layout.fillWidth: true
+                },
                 ToolButton { iconName: "settings"; tooltipText: "Filter" },
-                Button { text: "Add App"; isDefault: true }
+                Button {
+                    text: "Add App"
+                    isDefault: true
+                    Layout.fillWidth: true
+                    Layout.minimumWidth: 36
+                    Layout.maximumWidth: 72
+                }
             ]
         }
 
@@ -45,7 +68,7 @@ Rectangle {
 
             Sidebar {
                 Layout.fillHeight: true
-                implicitWidth: 200
+                implicitWidth: Math.min(190, Math.round(root.width * 0.30))
 
                 SidebarSection { title: "Locations" }
                 SidebarRow { title: "Workstation Apps"; iconName: "settings"; selected: true; badgeText: "24" }
@@ -95,43 +118,49 @@ Rectangle {
 
                     Rectangle {
                         Layout.fillWidth: true
-                        height: 48
+                        Layout.preferredHeight: Math.max(48, bottomFlow.implicitHeight + 16)
                         color: Theme.surfaceSecondary
                         border.color: Theme.separator
                         border.width: Geometry.separatorThickness
 
-                        RowLayout {
-                            anchors.fill: parent
+                        Flow {
+                            id: bottomFlow
+                            anchors.left: parent.left
+                            anchors.right: parent.right
+                            anchors.verticalCenter: parent.verticalCenter
                             anchors.leftMargin: Spacing.md
                             anchors.rightMargin: Spacing.md
-                            spacing: Spacing.sm
+                            spacing: Spacing.xs
 
                             Button {
                                 id: inspectBtn
                                 text: "Inspect Details"
+                                Layout.maximumWidth: 120
                                 onClicked: refPopover.open()
                             }
 
                             Button {
-                                text: "Remove Selected"
+                                text: "Remove"
                                 isDestructive: true
+                                Layout.maximumWidth: 96
                                 onClicked: refAlert.open()
                             }
 
                             Button {
-                                text: "View Manifest Sheet"
+                                text: "Manifest"
+                                Layout.maximumWidth: 96
                                 onClicked: refSheet.open()
                             }
 
-                            Item { Layout.fillWidth: true }
-
                             Button {
                                 text: "Cancel"
+                                Layout.maximumWidth: 80
                             }
 
                             Button {
-                                text: "Apply Changes"
+                                text: "Apply"
                                 isDefault: true
+                                Layout.maximumWidth: 80
                             }
                         }
                     }

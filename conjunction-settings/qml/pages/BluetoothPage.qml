@@ -10,24 +10,28 @@ ScrollView {
     contentWidth: availableWidth
 
     ColumnLayout {
-        width: Math.min(root.width - 48, 640)
+        width: Math.min(root.availableWidth - 36, 480)
         anchors.horizontalCenter: parent.horizontalCenter
         spacing: 20
 
         Item { height: 12 }
 
         Text {
+            Layout.fillWidth: true
             text: "Bluetooth"
             font: Typography.title
             color: Theme.textPrimary
             Layout.leftMargin: 4
+            elide: Text.ElideRight
         }
 
         Text {
+            Layout.fillWidth: true
             text: "Manage wireless Bluetooth controllers, mice, keyboards, and accessories."
             font: Typography.body
             color: Theme.textSecondary
             Layout.leftMargin: 4
+            wrapMode: Text.Wrap
         }
 
         // Adapter State Card
@@ -37,25 +41,33 @@ ScrollView {
             color: Theme.isDark ? "#14FFFFFF" : "#08000000"
             border.color: (SettingsManager.highlightedSetting === "bluetooth.enabled") ? Theme.accent : Theme.separator
             border.width: (SettingsManager.highlightedSetting === "bluetooth.enabled") ? 2 : 1
-            implicitHeight: 84
+            implicitHeight: Math.max(84, btHdrRow.implicitHeight + 32)
 
             RowLayout {
+                id: btHdrRow
                 anchors.fill: parent
                 anchors.margins: 16
                 spacing: 16
 
                 ColumnLayout {
                     Layout.fillWidth: true
+                    Layout.minimumWidth: 0
                     spacing: 2
                     Text {
+                        Layout.fillWidth: true
+                        Layout.minimumWidth: 0
                         text: "Bluetooth Adapter"
                         font: Typography.headline
                         color: Theme.textPrimary
+                        elide: Text.ElideRight
                     }
                     Text {
+                        Layout.fillWidth: true
+                        Layout.minimumWidth: 0
                         text: BluetoothBackend.hasAdapter ? (BluetoothBackend.isEnabled ? "Bluetooth is active and discoverable" : "Bluetooth adapter is turned off") : "No Bluetooth hardware detected on this machine"
                         font: Typography.caption
                         color: Theme.textSecondary
+                        elide: Text.ElideRight
                     }
                 }
 
@@ -95,15 +107,17 @@ ScrollView {
                     Layout.fillWidth: true
                     spacing: 2
                     Text {
+                        Layout.fillWidth: true
                         text: "Bluetooth Not Available"
                         font: Typography.headline
                         color: Theme.textPrimary
+                        elide: Text.ElideRight
                     }
                     Text {
                         text: "No Bluetooth controller or radio was detected. Connect a USB Bluetooth dongle or verify kernel drivers to pair accessories."
                         font: Typography.caption
                         color: Theme.textSecondary
-                        wrapMode: Text.WordWrap
+                        wrapMode: Text.Wrap
                         Layout.fillWidth: true
                     }
                 }
@@ -157,16 +171,23 @@ ScrollView {
 
                             ColumnLayout {
                                 Layout.fillWidth: true
+                                Layout.minimumWidth: 0
                                 spacing: 1
                                 Text {
+                                    Layout.fillWidth: true
+                                    Layout.minimumWidth: 0
                                     text: modelData.name
                                     font: Typography.body
                                     color: Theme.textPrimary
+                                    elide: Text.ElideRight
                                 }
                                 Text {
+                                    Layout.fillWidth: true
+                                    Layout.minimumWidth: 0
                                     text: modelData.address
                                     font: Typography.caption
                                     color: Theme.textSecondary
+                                    elide: Text.ElideRight
                                 }
                             }
 

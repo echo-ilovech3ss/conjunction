@@ -9,11 +9,12 @@ Rectangle {
     property string text: ""
     property string iconName: ""
     property bool selected: false
-    property bool enabled: true
 
     Layout.fillWidth: true
     Layout.fillHeight: true
+    Layout.minimumWidth: iconName !== "" && text !== "" ? 32 : 24
     implicitWidth: segRow.implicitWidth + Spacing.md * 1.5
+    implicitHeight: segRow.implicitHeight + 6
 
     // Concentric (h - 4) / 2 thumb radius (SPEC §2.1)
     radius: height * 0.5
@@ -48,22 +49,38 @@ Rectangle {
 
     RowLayout {
         id: segRow
-        anchors.centerIn: parent
+        x: Math.max(Spacing.xs, Math.round((parent.width - width) * 0.5))
+        width: Math.min(implicitWidth, Math.max(0, parent.width - Spacing.xs * 2))
+        height: parent.height
         spacing: Spacing.xs
 
         Icon {
             visible: segment.iconName !== ""
             name: segment.iconName
             size: 14
+            Layout.preferredWidth: size
+            Layout.preferredHeight: size
             fill: segment.selected ? 1 : 0
             color: segment.selected ? Theme.textPrimary : (segment.enabled ? Theme.textSecondary : Theme.textDisabled)
         }
 
         Text {
+            id: segText
             visible: segment.text !== ""
+            Layout.fillWidth: true
+            Layout.minimumWidth: 0
             text: segment.text
             font: Typography.body
             color: segment.selected ? Theme.textPrimary : (segment.enabled ? Theme.textSecondary : Theme.textDisabled)
+            horizontalAlignment: Text.AlignHCenter
+            verticalAlignment: Text.AlignVCenter
+            elide: Text.ElideRight
         }
+    }
+
+    ToolTip {
+        visible: hoverHandler.hovered && segText.truncated && segment.text !== ""
+        text: segment.text
+        delay: 400
     }
 }

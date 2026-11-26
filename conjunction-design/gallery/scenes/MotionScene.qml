@@ -15,15 +15,19 @@ Surface {
         spacing: Spacing.md
 
         Text {
+            Layout.fillWidth: true
             text: "Motion Tokens & Reduced Motion"
             font: Typography.windowTitle
             color: Theme.textPrimary
+            elide: Text.ElideRight
         }
 
         Text {
+            Layout.fillWidth: true
             text: "Motion tokens define consistent duration and curves. When Reduced Motion is active, durations collapse to instant."
             font: Typography.secondaryBody
             color: Theme.textSecondary
+            wrapMode: Text.Wrap
         }
 
         Rectangle {
@@ -32,7 +36,8 @@ Surface {
             color: Theme.separator
         }
 
-        RowLayout {
+        Flow {
+            Layout.fillWidth: true
             spacing: Spacing.md
 
             Rectangle {

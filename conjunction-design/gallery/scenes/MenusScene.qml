@@ -14,15 +14,19 @@ Surface {
         spacing: Spacing.md
 
         Text {
+            Layout.fillWidth: true
             text: "Desktop Menus & Action Model"
             font: Typography.windowTitle
             color: Theme.textPrimary
+            elide: Text.ElideRight
         }
 
         Text {
+            Layout.fillWidth: true
             text: "Dense desktop interaction surfaces supporting icons, shortcut labels, headings, checkable items, and shared Action models."
             font: Typography.secondaryBody
             color: Theme.textSecondary
+            wrapMode: Text.Wrap
         }
 
         Rectangle {
@@ -31,7 +35,8 @@ Surface {
             color: Theme.separator
         }
 
-        RowLayout {
+        Flow {
+            Layout.fillWidth: true
             spacing: Spacing.md
 
             Button {

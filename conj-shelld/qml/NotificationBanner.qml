@@ -7,7 +7,7 @@ Item {
     id: root
     property Item backdropItem: null
 
-    width: 344
+    width: Math.min(344, parent ? parent.width - 24 : 344)
     height: bannerCol.implicitHeight
 
     Column {
@@ -41,11 +41,12 @@ Item {
                         Layout.fillWidth: true
                         spacing: 2
                         RowLayout {
-                            Text { text: modelData.appName || "System"; color: Theme.secondaryLabelColor; font: Typography.subheadline; Layout.fillWidth: true }
+                            Layout.fillWidth: true
+                            Text { text: modelData.appName || "System"; color: Theme.secondaryLabelColor; font: Typography.subheadline; elide: Text.ElideRight; Layout.fillWidth: true; Layout.minimumWidth: 0 }
                             Text { text: "now"; color: Theme.tertiaryLabelColor; font: Typography.caption1 }
                         }
-                        Text { text: modelData.summary || ""; color: Theme.labelColor; font: Typography.headline; elide: Text.ElideRight; Layout.fillWidth: true }
-                        Text { text: modelData.body || ""; color: Theme.secondaryLabelColor; font: Typography.callout; wrapMode: Text.WordWrap; maximumLineCount: 2; Layout.fillWidth: true }
+                        Text { text: modelData.summary || ""; color: Theme.labelColor; font: Typography.headline; elide: Text.ElideRight; Layout.fillWidth: true; Layout.minimumWidth: 0 }
+                        Text { text: modelData.body || ""; color: Theme.secondaryLabelColor; font: Typography.callout; wrapMode: Text.Wrap; elide: Text.ElideRight; maximumLineCount: 2; Layout.fillWidth: true; Layout.minimumWidth: 0 }
                     }
 
                     Item {

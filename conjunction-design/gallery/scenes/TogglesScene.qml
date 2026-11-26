@@ -14,16 +14,19 @@ Surface {
         spacing: Spacing.md
 
         Text {
+            Layout.fillWidth: true
             text: "Selection & Toggle Controls"
             font: Typography.windowTitle
             color: Theme.textPrimary
+            elide: Text.ElideRight
         }
 
         Text {
-            text: "Checkbox: used for settings taking effect after form confirmation.
-Switch: used for settings with immediate, emphasized system state changes."
+            Layout.fillWidth: true
+            text: "Checkbox: used for settings taking effect after form confirmation.\nSwitch: used for settings with immediate, emphasized system state changes."
             font: Typography.secondaryBody
             color: Theme.textSecondary
+            wrapMode: Text.Wrap
         }
 
         Rectangle {
@@ -33,34 +36,42 @@ Switch: used for settings with immediate, emphasized system state changes."
         }
 
         RowLayout {
-            spacing: Spacing.xl
+            spacing: Spacing.md
             Layout.fillWidth: true
 
             ColumnLayout {
+                Layout.fillWidth: true
+                Layout.minimumWidth: 0
                 spacing: Spacing.sm
 
                 Text {
+                    Layout.fillWidth: true
                     text: "Checkboxes"
                     font: Typography.sectionHeading
                     color: Theme.textPrimary
+                    elide: Text.ElideRight
                 }
 
                 CheckBox {
-                    text: "Unchecked Option"
+                    Layout.fillWidth: true; Layout.minimumWidth: 0
+                    text: Appearance.stressMode ? Appearance.stressLongTitle : "Unchecked Option"
                     checked: false
                 }
 
                 CheckBox {
+                    Layout.fillWidth: true; Layout.minimumWidth: 0
                     text: "Checked Option"
                     checked: true
                 }
 
                 CheckBox {
+                    Layout.fillWidth: true; Layout.minimumWidth: 0
                     text: "Indeterminate Option"
                     checkState: Qt.PartiallyChecked
                 }
 
                 CheckBox {
+                    Layout.fillWidth: true; Layout.minimumWidth: 0
                     text: "Disabled Checked"
                     checked: true
                     enabled: false
@@ -68,53 +79,68 @@ Switch: used for settings with immediate, emphasized system state changes."
             }
 
             ColumnLayout {
+                Layout.fillWidth: true
+                Layout.minimumWidth: 0
                 spacing: Spacing.sm
 
                 Text {
+                    Layout.fillWidth: true
                     text: "Radio Buttons (Exclusive Group)"
                     font: Typography.sectionHeading
                     color: Theme.textPrimary
+                    elide: Text.ElideRight
                 }
 
                 RadioButton {
-                    text: "Automatic Configuration"
+                    Layout.fillWidth: true; Layout.minimumWidth: 0
+                    text: Appearance.stressMode ? Appearance.stressCompoundWord : "Automatic Configuration"
                     checked: true
                 }
 
                 RadioButton {
+                    Layout.fillWidth: true; Layout.minimumWidth: 0
                     text: "Manual Architecture"
                 }
 
                 RadioButton {
+                    Layout.fillWidth: true; Layout.minimumWidth: 0
                     text: "Custom Fallback Engine"
                 }
 
                 RadioButton {
+                    Layout.fillWidth: true; Layout.minimumWidth: 0
                     text: "Disabled Radio"
                     enabled: false
                 }
             }
 
             ColumnLayout {
+                Layout.fillWidth: true
+                Layout.minimumWidth: 0
                 spacing: Spacing.sm
 
                 Text {
+                    Layout.fillWidth: true
                     text: "Switches (Immediate State)"
                     font: Typography.sectionHeading
                     color: Theme.textPrimary
+                    elide: Text.ElideRight
                 }
 
                 Switch {
-                    text: "Hardware Acceleration (ON)"
+                    Layout.fillWidth: true; Layout.minimumWidth: 0
+                    text: Appearance.stressMode ? Appearance.stressUnbrokenUrl : "Hardware Acceleration (ON)"
                     checked: true
                 }
 
                 Switch {
+                    Layout.fillWidth: true; Layout.minimumWidth: 0
                     text: "Background Indexing (OFF)"
                     checked: false
                 }
 
                 Switch {
+                    Layout.fillWidth: true; Layout.minimumWidth: 0
                     text: "Disabled Feature"
                     checked: true
                     enabled: false

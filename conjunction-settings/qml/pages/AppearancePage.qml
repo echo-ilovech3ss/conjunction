@@ -10,24 +10,28 @@ ScrollView {
     contentWidth: availableWidth
 
     ColumnLayout {
-        width: Math.min(root.width - 48, 640)
+        width: Math.min(root.availableWidth - 36, 480)
         anchors.horizontalCenter: parent.horizontalCenter
         spacing: 20
 
         Item { height: 12 }
 
         Text {
+            Layout.fillWidth: true
             text: "Appearance"
             font: Typography.title
             color: Theme.textPrimary
             Layout.leftMargin: 4
+            elide: Text.ElideRight
         }
 
         Text {
+            Layout.fillWidth: true
             text: "Customize the look and feel of Conjunction desktop and applications."
             font: Typography.body
             color: Theme.textSecondary
             Layout.leftMargin: 4
+            wrapMode: Text.Wrap
         }
 
         // Appearance Mode Hero Card (SPEC §4.8 Light / Dark switcher + Preview)
@@ -38,18 +42,20 @@ ScrollView {
             color: Theme.isDark ? Qt.rgba(1,1,1,0.06) : "#FFFFFF"
             border.color: (SettingsManager.highlightedSetting === "appearance.mode") ? Theme.systemBlue : Theme.separatorColor
             border.width: (SettingsManager.highlightedSetting === "appearance.mode") ? 2 : 1
-            implicitHeight: 96
+            implicitHeight: Math.max(96, modeRow.implicitHeight + 32)
 
             RowLayout {
+                id: modeRow
                 anchors.fill: parent
                 anchors.margins: 16
                 spacing: 16
 
                 ColumnLayout {
                     Layout.fillWidth: true
+                    Layout.minimumWidth: 0
                     spacing: 2
-                    Text { text: "Appearance"; font: Typography.headline; color: Theme.labelColor }
-                    Text { text: "Select Light or Dark appearance across desktop surfaces"; font: Typography.caption1; color: Theme.secondaryLabelColor }
+                    Text { Layout.fillWidth: true; Layout.minimumWidth: 0; text: "Appearance"; font: Typography.headline; color: Theme.labelColor; elide: Text.ElideRight }
+                    Text { Layout.fillWidth: true; Layout.minimumWidth: 0; text: Appearance.stressMode ? Appearance.stressLongTitle : "Select Light or Dark appearance across desktop surfaces"; font: Typography.caption1; color: Theme.secondaryLabelColor; elide: Text.ElideRight }
                 }
 
                 RowLayout {
@@ -92,16 +98,17 @@ ScrollView {
             color: Theme.isDark ? Qt.rgba(1,1,1,0.06) : "#FFFFFF"
             border.color: (SettingsManager.highlightedSetting === "appearance.accent") ? Theme.systemBlue : Theme.separatorColor
             border.width: (SettingsManager.highlightedSetting === "appearance.accent") ? 2 : 1
-            implicitHeight: 76
+            implicitHeight: Math.max(76, accentRow.implicitHeight + 32)
 
             RowLayout {
+                id: accentRow
                 anchors.fill: parent
                 anchors.margins: 16
                 spacing: 16
                 ColumnLayout {
-                    Layout.fillWidth: true; spacing: 2
-                    Text { text: "Accent Color"; font: Typography.headline; color: Theme.labelColor }
-                    Text { text: "System highlight and focus indicator tint"; font: Typography.caption1; color: Theme.secondaryLabelColor }
+                    Layout.fillWidth: true; Layout.minimumWidth: 0; spacing: 2
+                    Text { Layout.fillWidth: true; Layout.minimumWidth: 0; text: "Accent Color"; font: Typography.headline; color: Theme.labelColor; elide: Text.ElideRight }
+                    Text { Layout.fillWidth: true; Layout.minimumWidth: 0; text: "System highlight and focus indicator tint"; font: Typography.caption1; color: Theme.secondaryLabelColor; elide: Text.ElideRight }
                 }
                 RowLayout {
                     spacing: 8
@@ -148,9 +155,9 @@ ScrollView {
                 RowLayout {
                     Layout.fillWidth: true
                     ColumnLayout {
-                        Layout.fillWidth: true; spacing: 2
-                        Text { text: "Reduce Transparency"; font: Typography.headline; color: Theme.labelColor }
-                        Text { text: "Replace translucent glass surfaces with opaque fills"; font: Typography.caption1; color: Theme.secondaryLabelColor }
+                        Layout.fillWidth: true; Layout.minimumWidth: 0; spacing: 2
+                        Text { Layout.fillWidth: true; Layout.minimumWidth: 0; text: "Reduce Transparency"; font: Typography.headline; color: Theme.labelColor; elide: Text.ElideRight }
+                        Text { Layout.fillWidth: true; Layout.minimumWidth: 0; text: "Replace translucent glass surfaces with opaque fills"; font: Typography.caption1; color: Theme.secondaryLabelColor; elide: Text.ElideRight }
                     }
                     Controls.Switch {
                         checked: SettingsManager.reduceTransparency
@@ -163,9 +170,9 @@ ScrollView {
                 RowLayout {
                     Layout.fillWidth: true
                     ColumnLayout {
-                        Layout.fillWidth: true; spacing: 2
-                        Text { text: "Increase Contrast"; font: Typography.headline; color: Theme.labelColor }
-                        Text { text: "Strengthen borders, separators, and label legibility"; font: Typography.caption1; color: Theme.secondaryLabelColor }
+                        Layout.fillWidth: true; Layout.minimumWidth: 0; spacing: 2
+                        Text { Layout.fillWidth: true; Layout.minimumWidth: 0; text: "Increase Contrast"; font: Typography.headline; color: Theme.labelColor; elide: Text.ElideRight }
+                        Text { Layout.fillWidth: true; Layout.minimumWidth: 0; text: "Strengthen borders, separators, and label legibility"; font: Typography.caption1; color: Theme.secondaryLabelColor; elide: Text.ElideRight }
                     }
                     Controls.Switch {
                         checked: SettingsManager.increaseContrast
@@ -178,9 +185,9 @@ ScrollView {
                 RowLayout {
                     Layout.fillWidth: true
                     ColumnLayout {
-                        Layout.fillWidth: true; spacing: 2
-                        Text { text: "Reduced Motion"; font: Typography.headline; color: Theme.labelColor }
-                        Text { text: "Crossfade windows instead of spring & Genie transitions"; font: Typography.caption1; color: Theme.secondaryLabelColor }
+                        Layout.fillWidth: true; Layout.minimumWidth: 0; spacing: 2
+                        Text { Layout.fillWidth: true; Layout.minimumWidth: 0; text: "Reduced Motion"; font: Typography.headline; color: Theme.labelColor; elide: Text.ElideRight }
+                        Text { Layout.fillWidth: true; Layout.minimumWidth: 0; text: "Crossfade windows instead of spring & Genie transitions"; font: Typography.caption1; color: Theme.secondaryLabelColor; elide: Text.ElideRight }
                     }
                     Controls.Switch {
                         checked: SettingsManager.reducedMotion

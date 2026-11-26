@@ -17,13 +17,15 @@ Item {
     property bool preferPhosphor: false
 
     readonly property string phosphorPath: Icons.getPhosphorUrl(name, weight >= 500)
-    readonly property bool usePhosphor: preferPhosphor && phosphorPath !== ""
+    readonly property bool usePhosphor: phosphorPath !== "" && (preferPhosphor || Icons.preferPhosphorFallback(name))
     readonly property string materialGlyph: Icons.getMaterialGlyph(name)
+    readonly property string effectiveGlyph: (materialGlyph !== "" && Icons.getPath(name) === "") ? materialGlyph : ((!usePhosphor && Icons.getPath(name) === "" && name !== "") ? "\ue5c3" : "")
 
     width: size
     height: size
     implicitWidth: size
     implicitHeight: size
+    clip: true
 
     // Phosphor SVG renderer when specifically requested or missing from Material
     Item {
@@ -53,9 +55,9 @@ Item {
     // Material Symbols Rounded variable-font symbol renderer (SPEC §2.4)
     Text {
         id: symbolText
-        visible: !root.usePhosphor && root.materialGlyph !== ""
+        visible: !root.usePhosphor && root.effectiveGlyph !== ""
         anchors.centerIn: parent
-        text: root.materialGlyph
+        text: root.effectiveGlyph
         color: root.color
         font.family: Typography.symbolFamily
         font.pixelSize: Math.max(10, root.size)
@@ -71,14 +73,11 @@ Item {
         horizontalAlignment: Text.AlignHCenter
     }
 
-    // Fallback SVG path if requested icon only exists in pathMap
+    // Fallback SVG path if requested icon exists in pathMap
     Shape {
         id: shapeFallback
-        visible: symbolText.visible && symbolText.paintedWidth === 0 && Icons.getPath(root.name) !== ""
+        visible: !root.usePhosphor && Icons.getPath(root.name) !== ""
         anchors.fill: parent
-        asynchronous: true
-        layer.enabled: true
-        layer.samples: 4
 
         ShapePath {
             fillColor: root.color

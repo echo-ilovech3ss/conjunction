@@ -16,5 +16,6 @@ Item {
         text: root.text.toUpperCase()
         font: Typography.caption
         color: Theme.textSecondary
+        elide: Text.ElideRight
     }
 }

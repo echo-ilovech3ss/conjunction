@@ -9,11 +9,13 @@ import Conjunction.Controls 1.0
 // Icon / List / Column / Gallery Views (Cmd+1..4), Inspector (260 pt), Path Bar & Status Bar
 Window {
     id: window
-    width: 980
-    height: 620
+    width: (typeof initialWidth !== "undefined" && initialWidth > 0) ? initialWidth : 980
+    height: (typeof initialHeight !== "undefined" && initialHeight > 0) ? initialHeight : 620
     minimumWidth: 720
     minimumHeight: 450
     visible: true
+    LayoutMirroring.enabled: Appearance.isRTL
+    LayoutMirroring.childrenInherit: true
     title: {
         var comp = FilesModel.pathComponents;
         if (comp && comp.length > 0) {
@@ -35,11 +37,21 @@ Window {
 
     Component.onCompleted: {
         Appearance.setMode(isDarkTheme ? "dark" : "light");
+        if (typeof initialRtl !== "undefined" && initialRtl) Appearance.setLayoutDirection(Qt.RightToLeft);
+        if (typeof initialFontScale !== "undefined" && initialFontScale > 0) Appearance.setFontScale(initialFontScale);
+        if (typeof initialStressMode !== "undefined" && initialStressMode) Appearance.setStressMode(true);
         if (cliQuickLookTarget && cliQuickLookTarget !== "") {
             quickLookOverlay.show(cliQuickLookTarget);
         } else if (cliGetInfoTarget && cliGetInfoTarget !== "") {
             getInfoDialog.show(cliGetInfoTarget);
         }
+    }
+
+    function setViewModeByName(name) {
+        if (name === "icon") viewMode = 0;
+        else if (name === "list") viewMode = 1;
+        else if (name === "column") viewMode = 2;
+        else if (name === "gallery") viewMode = 3;
     }
 
     function getActiveSelectedItem() {
@@ -240,6 +252,7 @@ Window {
 
                     Text {
                         Layout.fillWidth: true
+                        Layout.minimumWidth: 0
                         text: parent.parent.inspItem ? parent.parent.inspItem.name : title
                         color: Theme.labelColor
                         font: Typography.headlineBold
@@ -249,9 +262,11 @@ Window {
 
                     Text {
                         Layout.fillWidth: true
+                        Layout.minimumWidth: 0
                         text: parent.parent.inspItem ? ((parent.parent.inspItem.mimeType || "") + " — " + (parent.parent.inspItem.sizeFormatted || "")) : (FilesModel.count + " items")
                         color: Theme.secondaryLabelColor
                         font: Typography.caption1
+                        elide: Text.ElideRight
                         horizontalAlignment: Text.AlignHCenter
                     }
 
@@ -259,10 +274,11 @@ Window {
 
                     Text {
                         Layout.fillWidth: true
+                        Layout.minimumWidth: 0
                         text: parent.parent.inspItem ? ("Modified: " + (parent.parent.inspItem.modifiedFormatted || "--")) : ("Path: " + FilesModel.currentPath)
                         color: Theme.secondaryLabelColor
                         font: Typography.callout
-                        wrapMode: Text.WordWrap
+                        wrapMode: Text.Wrap
                     }
 
                     Item { Layout.fillHeight: true }
@@ -275,24 +291,33 @@ Window {
             visible: window.showPathBar
             Layout.fillWidth: true
             height: 24
+            clip: true
             color: isDarkTheme ? "#222224" : "#F3F3F5"
             Rectangle { anchors.top: parent.top; anchors.left: parent.left; anchors.right: parent.right; height: 1; color: Theme.separatorColor }
-            Row {
-                anchors.verticalCenter: parent.verticalCenter
-                anchors.left: parent.left
+            Flickable {
+                anchors.fill: parent
                 anchors.leftMargin: 14
-                spacing: 6
-                Repeater {
-                    model: FilesModel.pathComponents
-                    delegate: Row {
-                        spacing: 6
-                        Text {
-                            text: modelData.name
-                            color: Theme.secondaryLabelColor
-                            font: Typography.caption1
-                            MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: FilesModel.setPath(modelData.path) }
+                anchors.rightMargin: 14
+                contentWidth: pathRow.implicitWidth
+                contentHeight: height
+                clip: true
+
+                Row {
+                    id: pathRow
+                    anchors.verticalCenter: parent.verticalCenter
+                    spacing: 6
+                    Repeater {
+                        model: FilesModel.pathComponents
+                        delegate: Row {
+                            spacing: 6
+                            Text {
+                                text: modelData.name
+                                color: Theme.secondaryLabelColor
+                                font: Typography.caption1
+                                MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: FilesModel.setPath(modelData.path) }
+                            }
+                            Text { visible: index < FilesModel.pathComponents.length - 1; text: "›"; color: Theme.tertiaryLabelColor; font: Typography.caption1 }
                         }
-                        Text { visible: index < FilesModel.pathComponents.length - 1; text: "›"; color: Theme.tertiaryLabelColor; font: Typography.caption1 }
                     }
                 }
             }
@@ -309,9 +334,9 @@ Window {
                 anchors.fill: parent
                 anchors.leftMargin: 16
                 anchors.rightMargin: 16
-                Text { text: FilesModel.count + " items"; font: Typography.caption1; color: Theme.secondaryLabelColor }
+                Text { Layout.minimumWidth: 0; elide: Text.ElideRight; text: FilesModel.count + " items"; font: Typography.caption1; color: Theme.secondaryLabelColor }
                 Item { Layout.fillWidth: true }
-                Text { text: "Conjunction Volume"; font: Typography.caption1; color: Theme.secondaryLabelColor }
+                Text { Layout.minimumWidth: 0; elide: Text.ElideRight; text: "Conjunction Volume"; font: Typography.caption1; color: Theme.secondaryLabelColor }
             }
         }
     }

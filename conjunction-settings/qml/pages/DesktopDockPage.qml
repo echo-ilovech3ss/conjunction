@@ -10,24 +10,28 @@ ScrollView {
     contentWidth: availableWidth
 
     ColumnLayout {
-        width: Math.min(root.width - 48, 640)
+        width: Math.min(root.availableWidth - 36, 480)
         anchors.horizontalCenter: parent.horizontalCenter
         spacing: 20
 
         Item { height: 12 }
 
         Text {
+            Layout.fillWidth: true
             text: "Desktop & Dock"
             font: Typography.title
             color: Theme.textPrimary
             Layout.leftMargin: 4
+            elide: Text.ElideRight
         }
 
         Text {
+            Layout.fillWidth: true
             text: "Configure the floating Dock, magnification behavior, and multi-monitor placement."
             font: Typography.body
             color: Theme.textSecondary
             Layout.leftMargin: 4
+            wrapMode: Text.Wrap
         }
 
         // Dock Settings Card
@@ -62,21 +66,28 @@ ScrollView {
 
                         ColumnLayout {
                             Layout.fillWidth: true
+                            Layout.minimumWidth: 0
                             spacing: 2
                             Text {
+                                Layout.fillWidth: true
+                                Layout.minimumWidth: 0
                                 text: "Dock Size"
                                 font: Typography.headline
                                 color: Theme.textPrimary
+                                elide: Text.ElideRight
                             }
                             Text {
+                                Layout.fillWidth: true
+                                Layout.minimumWidth: 0
                                 text: "Base icon and bar height (" + SettingsManager.dockSize + " px)"
                                 font: Typography.caption
                                 color: Theme.textSecondary
+                                elide: Text.ElideRight
                             }
                         }
 
                         Controls.Slider {
-                            Layout.preferredWidth: 180
+                            Layout.preferredWidth: Math.min(180, Math.round(dockColumn.width * 0.42))
                             from: 16
                             to: 128
                             stepSize: 2
@@ -105,16 +116,23 @@ ScrollView {
 
                         ColumnLayout {
                             Layout.fillWidth: true
+                            Layout.minimumWidth: 0
                             spacing: 2
                             Text {
+                                Layout.fillWidth: true
+                                Layout.minimumWidth: 0
                                 text: "Dock Magnification"
                                 font: Typography.headline
                                 color: Theme.textPrimary
+                                elide: Text.ElideRight
                             }
                             Text {
+                                Layout.fillWidth: true
+                                Layout.minimumWidth: 0
                                 text: "Magnify icons smoothly on pointer hover"
                                 font: Typography.caption
                                 color: Theme.textSecondary
+                                elide: Text.ElideRight
                             }
                         }
 
@@ -179,16 +197,23 @@ ScrollView {
 
                     ColumnLayout {
                         Layout.fillWidth: true
+                        Layout.minimumWidth: 0
                         spacing: 2
                         Text {
+                            Layout.fillWidth: true
+                            Layout.minimumWidth: 0
                             text: "Display Placement"
                             font: Typography.headline
                             color: Theme.textPrimary
+                            elide: Text.ElideRight
                         }
                         Text {
+                            Layout.fillWidth: true
+                            Layout.minimumWidth: 0
                             text: "Which connected displays render the Dock"
                             font: Typography.caption
                             color: Theme.textSecondary
+                            elide: Text.ElideRight
                         }
                     }
 
@@ -196,14 +221,18 @@ ScrollView {
                         spacing: 8
 
                         Rectangle {
-                            width: 100
-                            height: 32
+                            width: Math.min(110, Math.max(88, priTxt.implicitWidth + 16))
+                            height: Math.max(32, priTxt.implicitHeight + 12)
                             radius: 6
                             color: SettingsManager.dockDisplayPolicy === "primary" ? Theme.accent : (Theme.isDark ? "#22FFFFFF" : "#15000000")
                             Text {
+                                id: priTxt
                                 anchors.centerIn: parent
+                                width: Math.min(implicitWidth, parent.width - 10)
                                 text: "Primary Only"
                                 font: Typography.caption
+                                elide: Text.ElideRight
+                                horizontalAlignment: Text.AlignHCenter
                                 color: SettingsManager.dockDisplayPolicy === "primary" ? "#FFFFFF" : Theme.textPrimary
                             }
                             TapHandler {
@@ -212,14 +241,18 @@ ScrollView {
                         }
 
                         Rectangle {
-                            width: 100
-                            height: 32
+                            width: Math.min(110, Math.max(88, allTxt.implicitWidth + 16))
+                            height: Math.max(32, allTxt.implicitHeight + 12)
                             radius: 6
                             color: SettingsManager.dockDisplayPolicy === "all" ? Theme.accent : (Theme.isDark ? "#22FFFFFF" : "#15000000")
                             Text {
+                                id: allTxt
                                 anchors.centerIn: parent
+                                width: Math.min(implicitWidth, parent.width - 10)
                                 text: "All Displays"
                                 font: Typography.caption
+                                elide: Text.ElideRight
+                                horizontalAlignment: Text.AlignHCenter
                                 color: SettingsManager.dockDisplayPolicy === "all" ? "#FFFFFF" : Theme.textPrimary
                             }
                             TapHandler {
@@ -236,11 +269,12 @@ ScrollView {
                     Layout.fillWidth: true
                     spacing: 16
                     ColumnLayout {
-                        Layout.fillWidth: true; spacing: 2
-                        Text { text: "Minimize Windows Using"; font: Typography.headline; color: Theme.textPrimary }
-                        Text { text: "Genie Effect (425 ms mesh) or Scale Effect (203 ms)"; font: Typography.caption; color: Theme.textSecondary }
+                        Layout.fillWidth: true; Layout.minimumWidth: 0; spacing: 2
+                        Text { Layout.fillWidth: true; Layout.minimumWidth: 0; text: "Minimize Windows Using"; font: Typography.headline; color: Theme.textPrimary; elide: Text.ElideRight }
+                        Text { Layout.fillWidth: true; Layout.minimumWidth: 0; text: "Genie Effect (425 ms mesh) or Scale Effect (203 ms)"; font: Typography.caption; color: Theme.textSecondary; elide: Text.ElideRight }
                     }
                     Controls.SegmentedControl {
+                        Layout.maximumWidth: 160
                         currentIndex: SettingsManager.dockMinimizeEffect === "scale" ? 1 : 0
                         onCurrentIndexChanged: SettingsManager.setDockMinimizeEffect(currentIndex === 1 ? "scale" : "genie")
                         Controls.Segment { text: "Genie" }
@@ -251,15 +285,16 @@ ScrollView {
                 Rectangle { Layout.fillWidth: true; height: 1; color: Theme.separator }
 
                 // 6. Hot Corner Bottom-Right (SPEC §5.3 Quick Note default = 14)
-                RowLayout {
+                ColumnLayout {
                     Layout.fillWidth: true
-                    spacing: 16
+                    spacing: 8
                     ColumnLayout {
                         Layout.fillWidth: true; spacing: 2
-                        Text { text: "Bottom-Right Hot Corner"; font: Typography.headline; color: Theme.textPrimary }
-                        Text { text: "Action triggered when moving pointer to bottom-right"; font: Typography.caption; color: Theme.textSecondary }
+                        Text { Layout.fillWidth: true; Layout.minimumWidth: 0; text: "Bottom-Right Hot Corner"; font: Typography.headline; color: Theme.textPrimary; elide: Text.ElideRight }
+                        Text { Layout.fillWidth: true; Layout.minimumWidth: 0; text: "Action triggered when moving pointer to bottom-right"; font: Typography.caption; color: Theme.textSecondary; elide: Text.ElideRight }
                     }
                     Controls.SegmentedControl {
+                        Layout.fillWidth: true
                         currentIndex: SettingsManager.hotCornerBottomRight === 14 ? 0 : (SettingsManager.hotCornerBottomRight === 2 ? 1 : 2)
                         onCurrentIndexChanged: {
                             var codes = [14, 2, 0];
@@ -267,7 +302,7 @@ ScrollView {
                         }
                         Controls.Segment { text: "Quick Note" }
                         Controls.Segment { text: "Mission Control" }
-                        Controls.Segment { text: "None" }
+                        Controls.Segment { text: "Off" }
                     }
                 }
             }

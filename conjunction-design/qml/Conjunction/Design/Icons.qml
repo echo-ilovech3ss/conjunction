@@ -89,6 +89,14 @@ QtObject {
         "eject": "eject",
         "sidebar": "sidebar-simple",
         "terminal": "terminal-window",
+        "utilities-terminal": "terminal-window",
+        "settings": "gear",
+        "preferences-system": "gear",
+        "sun": "sun",
+        "moon": "moon",
+        "focus": "moon",
+        "nearby": "share-network",
+        "stage": "layout",
         "window": "app-window",
         "browsers": "browsers",
         "command": "command",
@@ -98,6 +106,13 @@ QtObject {
         "sliders": "sliders",
         "layout": "layout"
     })
+
+    function preferPhosphorFallback(name) {
+        return name === "terminal" || name === "utilities-terminal"
+            || name === "settings" || name === "preferences-system"
+            || name === "sun" || name === "moon" || name === "focus"
+            || name === "nearby" || name === "stage";
+    }
 
     // Built-in SVG vector paths for zero-dependency fallback
     readonly property var pathMap: ({
@@ -109,11 +124,30 @@ QtObject {
         "arrow-left": "M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z",
         "arrow-right": "M12 4l-1.41 1.41L16.17 11H4v2h12.17l-5.58 5.59L12 20l8-8z",
         "refresh": "M17.65 6.35A7.958 7.958 0 0 0 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08A5.99 5.99 0 0 1 12 18c-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z",
-        "copy": "M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"
+        "copy": "M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z",
+        "sidebar": "M3 5v14h18V5H3zm6 12H5V7h4v10zm10 0h-8V7h8v10z",
+        "eject": "M5 17h14v2H5zm7-12L5.33 15h13.34z",
+        "plus": "M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z",
+        "info": "M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"
     })
 
     function getMaterialGlyph(name) {
-        return materialMap[name] || name;
+        var xdgFallback = ({
+            "applications": "\ue5c3",
+            "application-x-executable": "\ue5c3",
+            "dialog-information": "\ue88e",
+            "globe": "\ue80b",
+            "utilities-terminal": "\ueb8e",
+            "system-file-manager": "\ue2c7",
+            "preferences-desktop": "\ue8b8",
+            "system-search": "\ue8b6",
+            "go-previous": "\ue5c4",
+            "go-next": "\ue5c8",
+            "media-eject": "\ue8fb",
+            "folder-new": "\ue2cc",
+            "document-properties": "\ue88e"
+        });
+        return materialMap[name] || xdgFallback[name] || "";
     }
 
     function getPhosphorUrl(name, bold) {

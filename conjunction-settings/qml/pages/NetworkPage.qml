@@ -10,24 +10,28 @@ ScrollView {
     contentWidth: availableWidth
 
     ColumnLayout {
-        width: Math.min(root.width - 48, 640)
+        width: Math.min(root.availableWidth - 36, 480)
         anchors.horizontalCenter: parent.horizontalCenter
         spacing: 20
 
         Item { height: 12 }
 
         Text {
+            Layout.fillWidth: true
             text: "Network"
             font: Typography.title
             color: Theme.textPrimary
             Layout.leftMargin: 4
+            elide: Text.ElideRight
         }
 
         Text {
+            Layout.fillWidth: true
             text: "Wi-Fi connections, network status, and IP configuration."
             font: Typography.body
             color: Theme.textSecondary
             Layout.leftMargin: 4
+            wrapMode: Text.Wrap
         }
 
         // Wi-Fi Master Toggle Card
@@ -37,25 +41,33 @@ ScrollView {
             color: Theme.isDark ? "#14FFFFFF" : "#08000000"
             border.color: (SettingsManager.highlightedSetting === "network.wifi.enabled") ? Theme.accent : Theme.separator
             border.width: (SettingsManager.highlightedSetting === "network.wifi.enabled") ? 2 : 1
-            implicitHeight: 84
+            implicitHeight: Math.max(84, wifiHdrRow.implicitHeight + 32)
 
             RowLayout {
+                id: wifiHdrRow
                 anchors.fill: parent
                 anchors.margins: 16
                 spacing: 16
 
                 ColumnLayout {
                     Layout.fillWidth: true
+                    Layout.minimumWidth: 0
                     spacing: 2
                     Text {
+                        Layout.fillWidth: true
+                        Layout.minimumWidth: 0
                         text: "Wi-Fi"
                         font: Typography.headline
                         color: Theme.textPrimary
+                        elide: Text.ElideRight
                     }
                     Text {
+                        Layout.fillWidth: true
+                        Layout.minimumWidth: 0
                         text: NetworkBackend.isWirelessEnabled ? ("Connected to " + NetworkBackend.activeSsid + " (" + NetworkBackend.ipAddress + ")") : "Wi-Fi adapter is turned off"
                         font: Typography.caption
                         color: Theme.textSecondary
+                        elide: Text.ElideRight
                     }
                 }
 
@@ -116,16 +128,23 @@ ScrollView {
 
                             ColumnLayout {
                                 Layout.fillWidth: true
+                                Layout.minimumWidth: 0
                                 spacing: 1
                                 Text {
+                                    Layout.fillWidth: true
+                                    Layout.minimumWidth: 0
                                     text: modelData.ssid
                                     font: Typography.body
                                     color: Theme.textPrimary
+                                    elide: Text.ElideRight
                                 }
                                 Text {
+                                    Layout.fillWidth: true
+                                    Layout.minimumWidth: 0
                                     text: modelData.security + " • Signal " + modelData.signal + "%"
                                     font: Typography.caption
                                     color: Theme.textSecondary
+                                    elide: Text.ElideRight
                                 }
                             }
 

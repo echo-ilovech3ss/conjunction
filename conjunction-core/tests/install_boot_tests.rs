@@ -47,10 +47,13 @@ fn test_fedora_bootc_containerfiles_present() {
     assert!(cf.contains("conj-bundle"));
     assert!(cf.contains("conj-appctl"));
     assert!(cf.contains("conj-sysd"));
+    assert!(cf.contains("kwin"));
+    assert!(cf.contains("plasma/look-and-feel"));
     assert!(cf.contains("data/dolphin-plugin"));
     assert!(cf.contains("flathub.flatpakrepo"));
     assert!(cf.contains("umu-launcher"));
     assert!(cf.contains("fex-emu"));
+    assert!(cf.contains("fex-emu-rootfs-fedora"));
     assert!(cf.contains("box64"));
 
     let nv = std::fs::read_to_string(&nvidia_containerfile).unwrap();

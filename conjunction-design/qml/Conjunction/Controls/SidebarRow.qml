@@ -16,7 +16,7 @@ Rectangle {
 
     // SPEC §4.7: 30 pt height, cr = 10 pt inside 10 pt inset
     Layout.fillWidth: true
-    implicitHeight: 30
+    implicitHeight: Math.max(30, rowTitleText.implicitHeight + 8)
     radius: Geometry.radiusSidebarPill
 
     color: selected
@@ -55,7 +55,9 @@ Rectangle {
         }
 
         Text {
+            id: rowTitleText
             Layout.fillWidth: true
+            Layout.minimumWidth: 0
             text: root.title
             font: Typography.body
             color: (root.selected && root.focusedSelection) ? "#FFFFFF" : (root.enabled ? Theme.textPrimary : Theme.textDisabled)
@@ -64,18 +66,28 @@ Rectangle {
 
         Rectangle {
             visible: root.badgeText !== ""
-            implicitWidth: badgeLabel.implicitWidth + Spacing.xs * 2
-            implicitHeight: 18
+            Layout.maximumWidth: 56
+            implicitWidth: Math.min(56, badgeLabel.implicitWidth + Spacing.xs * 2)
+            implicitHeight: Math.max(18, badgeLabel.implicitHeight + 2)
             radius: 9
             color: (root.selected && root.focusedSelection) ? Qt.rgba(1, 1, 1, 0.25) : Theme.controlFill
 
             Text {
                 id: badgeLabel
                 anchors.centerIn: parent
+                width: Math.min(implicitWidth, 44)
                 text: root.badgeText
                 font: Typography.subheadlineTnum
                 color: (root.selected && root.focusedSelection) ? "#FFFFFF" : Theme.textSecondary
+                elide: Text.ElideRight
+                horizontalAlignment: Text.AlignHCenter
             }
         }
+    }
+
+    ToolTip {
+        visible: hoverHandler.hovered && rowTitleText.truncated && root.title !== ""
+        text: root.title
+        delay: 400
     }
 }

@@ -12,7 +12,8 @@ Item {
     property Item backdropItem: null
 
     // SPEC §4.6 Unified Toolbar 54 pt over ScrollPocket
-    implicitHeight: Geometry.toolbarHeightUnified
+    implicitHeight: Math.max(Geometry.toolbarHeightUnified, mainToolbarRow.implicitHeight + 8)
+    clip: true
 
     ScrollPocket {
         anchors.fill: parent
@@ -22,6 +23,7 @@ Item {
     }
 
     RowLayout {
+        id: mainToolbarRow
         anchors.fill: parent
         anchors.leftMargin: Spacing.lg
         anchors.rightMargin: Spacing.lg
@@ -29,20 +31,24 @@ Item {
 
         RowLayout {
             id: leadingRow
+            Layout.fillWidth: true
+            Layout.minimumWidth: 0
             spacing: Spacing.sm
         }
 
-        Item { Layout.fillWidth: true }
+        Item { Layout.fillWidth: true; Layout.minimumWidth: 0 }
 
         RowLayout {
             id: centerRow
+            Layout.minimumWidth: 0
             spacing: Spacing.sm
         }
 
-        Item { Layout.fillWidth: true }
+        Item { Layout.fillWidth: true; Layout.minimumWidth: 0 }
 
         RowLayout {
             id: trailingRow
+            Layout.minimumWidth: 0
             spacing: Spacing.sm
         }
     }

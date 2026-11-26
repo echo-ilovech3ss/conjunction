@@ -116,13 +116,17 @@ T.Button {
         RowLayout {
             id: contentLayout
             spacing: Spacing.xs
-            anchors.centerIn: parent
+            x: Math.max(0, Math.round((parent.width - width) * 0.5))
+            width: Math.min(implicitWidth, Math.max(0, parent.width))
+            height: parent.height
 
             Icon {
                 id: btnIcon
                 visible: control.iconName !== "" || (control.icon && control.icon.name !== "")
                 name: control.iconName !== "" ? control.iconName : (control.icon ? control.icon.name : "")
                 size: (control.sizeClass === "mini") ? 12 : ((control.sizeClass === "small" || control.sizeClass === "compact") ? 14 : 16)
+                Layout.preferredWidth: size
+                Layout.preferredHeight: size
                 color: {
                     if (!control.enabled) return Theme.textDisabled;
                     if (control.isDefault || control.isDestructive) return "#FFFFFF";
@@ -133,6 +137,8 @@ T.Button {
             Text {
                 id: btnText
                 visible: control.text !== ""
+                Layout.fillWidth: true
+                Layout.minimumWidth: 0
                 text: control.text
                 font: {
                     if (control.sizeClass === "mini") return Typography.miniControl;
@@ -150,6 +156,12 @@ T.Button {
                 elide: Text.ElideRight
             }
         }
+    }
+
+    ToolTip {
+        visible: control.hovered && btnText.truncated && control.text !== ""
+        text: control.text
+        delay: 400
     }
 
     Keys.onPressed: function(event) {

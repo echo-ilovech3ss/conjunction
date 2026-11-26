@@ -77,9 +77,14 @@ Item {
 
                 Image {
                     source: "image://icon/" + model.iconName
+                    Layout.preferredWidth: 16
+                    Layout.preferredHeight: 16
                     width: 16
                     height: 16
+                    sourceSize.width: 16
+                    sourceSize.height: 16
                     fillMode: Image.PreserveAspectFit
+                    clip: true
                     opacity: rowItem.isCurrent ? 1.0 : 0.88
                 }
 

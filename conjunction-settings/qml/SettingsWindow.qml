@@ -8,13 +8,15 @@ import "pages" as Pages
 // SPEC §4.8 System Settings: 740x625 default, 232 pt Glass Sidebar, 52 pt Back/Forward header
 ApplicationWindow {
     id: window
-    width: 740
-    height: 625
-    minimumWidth: 740
-    minimumHeight: 520
+    width: (typeof initialWidth !== "undefined" && initialWidth > 0) ? initialWidth : 740
+    height: (typeof initialHeight !== "undefined" && initialHeight > 0) ? initialHeight : 625
+    minimumWidth: 640
+    minimumHeight: 480
     visible: true
     title: "System Settings"
     color: Theme.windowBackgroundColor
+    LayoutMirroring.enabled: Appearance.isRTL
+    LayoutMirroring.childrenInherit: true
 
     function syncAppearanceTokens() {
         Appearance.setMode(SettingsManager.appearanceMode === "dark" ? "dark" : "light");
@@ -22,6 +24,9 @@ ApplicationWindow {
         Appearance.setReducedMotion(SettingsManager.reducedMotion);
         Appearance.setReduceTransparency(SettingsManager.reduceTransparency);
         Appearance.setIncreaseContrast(SettingsManager.increaseContrast);
+        if (typeof initialRtl !== "undefined" && initialRtl) Appearance.setLayoutDirection(Qt.RightToLeft);
+        if (typeof initialFontScale !== "undefined" && initialFontScale > 0) Appearance.setFontScale(initialFontScale);
+        if (typeof initialStressMode !== "undefined" && initialStressMode) Appearance.setStressMode(true);
     }
 
     Component.onCompleted: syncAppearanceTokens()
@@ -100,6 +105,8 @@ ApplicationWindow {
 
                     Text {
                         Layout.fillWidth: true
+                        Layout.minimumWidth: 0
+                        elide: Text.ElideRight
                         text: {
                             if (SettingsManager.searchQuery.length > 0) return "Search Results";
                             var ps = SettingsManager.pages;

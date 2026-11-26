@@ -50,3 +50,5 @@ target_link_libraries(test-conj-notificationd PRIVATE
 target_include_directories(test-conj-notificationd PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
+
+install(TARGETS conj-notificationd DESTINATION bin)

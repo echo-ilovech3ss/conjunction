@@ -25,8 +25,8 @@ T.MenuItem {
         if (conjunctionAction) conjunctionAction.trigger();
     }
 
-    implicitWidth: 200
-    implicitHeight: 24
+    implicitWidth: Math.min(344, Math.max(200, itemRow.implicitWidth + Spacing.sm * 2))
+    implicitHeight: Math.max(24, itemRow.implicitHeight + 6)
 
     activeFocusOnTab: true
 
@@ -47,6 +47,7 @@ T.MenuItem {
     }
 
     contentItem: RowLayout {
+        id: itemRow
         spacing: Spacing.sm
         anchors.fill: parent
         anchors.leftMargin: Spacing.sm
@@ -56,6 +57,8 @@ T.MenuItem {
             visible: control.iconName !== ""
             name: control.iconName
             size: 14
+            Layout.preferredWidth: size
+            Layout.preferredHeight: size
             color: {
                 if (!control.enabled) return Theme.textDisabled;
                 if (control.highlighted) return control.isDestructive ? "#FFFFFF" : Theme.selectionText;
@@ -64,7 +67,9 @@ T.MenuItem {
         }
 
         Text {
+            id: menuItemText
             Layout.fillWidth: true
+            Layout.minimumWidth: 0
             text: control.text
             font: Typography.body
             color: {
@@ -78,10 +83,18 @@ T.MenuItem {
 
         Text {
             visible: control.shortcutText !== ""
+            Layout.maximumWidth: 96
             text: control.shortcutText
             font: Typography.subheadline
             color: control.highlighted ? (control.isDestructive ? "#FFFFFF" : Theme.selectionText) : Theme.textSecondary
+            elide: Text.ElideRight
             verticalAlignment: Text.AlignVCenter
         }
+    }
+
+    ToolTip {
+        visible: control.hovered && menuItemText.truncated && control.text !== ""
+        text: control.text
+        delay: 400
     }
 }

@@ -25,16 +25,34 @@ ApplicationWindow {
         FocusModel.setKeyboardActive(!!active);
     }
 
-    function configure(theme, rtl, reducedMotion, scale, reduceTransparency, increaseContrast) {
+    function configure(theme, rtl, reducedMotion, scale, reduceTransparency, increaseContrast, stressModeFlag) {
         if (theme && theme !== "") Appearance.setMode(theme);
         if (rtl !== undefined && rtl) Appearance.setLayoutDirection(Qt.RightToLeft);
         if (reducedMotion !== undefined) Appearance.setReducedMotion(!!reducedMotion);
         if (reduceTransparency !== undefined) Appearance.setReduceTransparency(!!reduceTransparency);
         if (increaseContrast !== undefined) Appearance.setIncreaseContrast(!!increaseContrast);
+        if (stressModeFlag !== undefined) Appearance.setStressMode(!!stressModeFlag);
         if (scale && scale !== "") {
             var s = parseFloat(scale);
             if (!isNaN(s) && s > 0) Appearance.setFontScale(s);
         }
+    }
+
+    function setWindowSize(w, h) {
+        if (w >= 320 && h >= 240) {
+            minimumWidth = Math.min(minimumWidth, w);
+            minimumHeight = Math.min(minimumHeight, h);
+            width = w;
+            height = h;
+        }
+    }
+
+    function sceneIds() {
+        var ids = [];
+        for (var i = 0; i < navList.model.count; ++i) {
+            ids.push(navList.model.get(i).sceneId);
+        }
+        return ids;
     }
 
     function captureScreenshot(path, closeWhenDone) {
@@ -71,37 +89,57 @@ ApplicationWindow {
             Layout.fillWidth: true
             visible: !window.isFullBleedCalibration
             leadingItems: [
-                Icon { name: "settings"; size: 18; color: Theme.accent },
-                Text { text: "Conjunction Design"; font: Typography.windowTitle; color: Theme.textPrimary }
+                Icon { name: "settings"; size: 18; color: Theme.accent; Layout.preferredWidth: 18; Layout.preferredHeight: 18 },
+                Text {
+                    Layout.fillWidth: true
+                    Layout.minimumWidth: 0
+                    Layout.maximumWidth: Math.max(60, Math.round(window.width * 0.16))
+                    text: Appearance.stressMode ? Appearance.stressLongTitle : "Conjunction Design"
+                    font: Typography.windowTitle
+                    color: Theme.textPrimary
+                    elide: Text.ElideRight
+                    HoverHandler { id: titleHover }
+                    C.ToolTip { visible: titleHover.hovered && parent.truncated; text: parent.text; delay: 400 }
+                }
             ]
             trailingItems: [
                 C.Button {
                     sizeClass: "pill"
                     text: Appearance.isDark ? "Dark" : "Light"
                     iconName: Appearance.isDark ? "moon" : "sun"
+                    Layout.minimumWidth: 0
+                    Layout.maximumWidth: 86
                     onClicked: Appearance.toggleTheme()
                 },
                 C.Button {
                     sizeClass: "pill"
                     text: Appearance.shouldReduceTransparency ? "Opaque" : "Glass"
                     isDefault: Appearance.shouldReduceTransparency
+                    Layout.minimumWidth: 0
+                    Layout.maximumWidth: 86
                     onClicked: Appearance.setReduceTransparency(!Appearance.reduceTransparency)
                 },
                 C.Button {
                     sizeClass: "pill"
                     text: Appearance.shouldIncreaseContrast ? "Contrast+" : "Contrast"
                     isDefault: Appearance.shouldIncreaseContrast
+                    Layout.minimumWidth: 0
+                    Layout.maximumWidth: 100
                     onClicked: Appearance.setIncreaseContrast(!Appearance.increaseContrast)
                 },
                 C.Button {
                     sizeClass: "pill"
                     text: Appearance.reducedMotion ? "Motion: Off" : "Motion: On"
                     isDestructive: Appearance.reducedMotion
+                    Layout.minimumWidth: 0
+                    Layout.maximumWidth: 108
                     onClicked: Appearance.setReducedMotion(!Appearance.reducedMotion)
                 },
                 C.Button {
                     sizeClass: "pill"
                     text: Appearance.isRTL ? "RTL" : "LTR"
+                    Layout.minimumWidth: 0
+                    Layout.maximumWidth: 64
                     onClicked: Appearance.toggleRTL()
                 }
             ]
@@ -113,7 +151,7 @@ ApplicationWindow {
             spacing: 0
 
             C.Sidebar {
-                Layout.preferredWidth: 216
+                Layout.preferredWidth: Math.min(216, Math.round(window.width * 0.28))
                 Layout.fillHeight: true
                 visible: !window.isFullBleedCalibration
 
@@ -151,6 +189,7 @@ ApplicationWindow {
                         ListElement { name: "Motion"; sceneId: "motion"; iconName: "refresh" }
                         ListElement { name: "Icons"; sceneId: "icons"; iconName: "search" }
                         ListElement { name: "Benchmark"; sceneId: "benchmark"; iconName: "settings" }
+                        ListElement { name: "Overflow Stress"; sceneId: "stress"; iconName: "warning" }
                     }
 
                     delegate: C.SidebarRow {
@@ -168,11 +207,21 @@ ApplicationWindow {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 color: Theme.background
+                clip: true
 
-                Loader {
-                    id: sceneLoader
+                Flickable {
+                    id: calibrationFlick
                     anchors.fill: parent
                     anchors.margins: window.isFullBleedCalibration ? 0 : Spacing.lg
+                    clip: true
+                    interactive: window.isFullBleedCalibration && (width < 1080 || height < 760)
+                    contentWidth: window.isFullBleedCalibration ? Math.max(width, 1080) : width
+                    contentHeight: window.isFullBleedCalibration ? Math.max(height, 760) : height
+
+                    Loader {
+                        id: sceneLoader
+                        width: calibrationFlick.contentWidth
+                        height: calibrationFlick.contentHeight
 
                     source: {
                         var id = navList.model.get(navList.currentIndex).sceneId;
@@ -202,7 +251,9 @@ ApplicationWindow {
                         if (id === "motion") return "scenes/MotionScene.qml";
                         if (id === "icons") return "scenes/IconsScene.qml";
                         if (id === "benchmark") return "deterministic/DeterministicScene.qml";
+                        if (id === "stress") return "scenes/StressScene.qml";
                         return "scenes/LiquidGlassScene.qml";
+                    }
                     }
                 }
             }

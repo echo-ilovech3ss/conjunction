@@ -7,15 +7,20 @@ Item {
     id: root
     property Item backdropItem: null
 
-    width: 344
-    height: ncColumn.implicitHeight + 16
+    width: Math.min(344, parent ? parent.width - 24 : 344)
+    height: Math.min(ncColumn.implicitHeight + 16, parent ? parent.height - 124 : ncColumn.implicitHeight + 16)
+    clip: true
 
-    ColumnLayout {
-        id: ncColumn
-        anchors.top: parent.top
-        anchors.left: parent.left
-        anchors.right: parent.right
-        spacing: 12
+    Flickable {
+        anchors.fill: parent
+        contentWidth: width
+        contentHeight: ncColumn.implicitHeight + 8
+        clip: true
+
+        ColumnLayout {
+            id: ncColumn
+            width: parent.width
+            spacing: 12
 
         // 1. Stacked Widget Row (185 pt height matching SPEC §4.3)
         RowLayout {
@@ -37,25 +42,35 @@ Item {
                     anchors.margins: 16
                     spacing: 4
                     RowLayout {
+                        Layout.fillWidth: true
                         spacing: 6
                         Icon { name: "sun"; size: 16; color: Theme.systemOrange }
-                        Text { text: "TODAY"; color: Theme.systemOrange; font: Typography.caption2 }
+                        Text { Layout.fillWidth: true; Layout.minimumWidth: 0; text: "TODAY"; color: Theme.systemOrange; font: Typography.caption2; elide: Text.ElideRight }
                     }
                     Text {
+                        Layout.fillWidth: true
+                        Layout.minimumWidth: 0
                         text: Qt.formatDate(new Date(), "dddd")
                         color: Theme.secondaryLabelColor
                         font: Typography.callout
+                        elide: Text.ElideRight
                     }
                     Text {
+                        Layout.fillWidth: true
+                        Layout.minimumWidth: 0
                         text: Qt.formatDate(new Date(), "d")
                         color: Theme.labelColor
                         font: Typography.makeSpecFont(36, Font.DemiBold, -0.01, false, true)
+                        elide: Text.ElideRight
                     }
                     Item { Layout.fillHeight: true }
                     Text {
+                        Layout.fillWidth: true
+                        Layout.minimumWidth: 0
                         text: Qt.formatDate(new Date(), "MMMM yyyy")
                         color: Theme.secondaryLabelColor
                         font: Typography.subheadline
+                        elide: Text.ElideRight
                     }
                 }
             }
@@ -74,20 +89,25 @@ Item {
                     anchors.margins: 16
                     spacing: 6
                     RowLayout {
+                        Layout.fillWidth: true
                         spacing: 6
                         Icon { name: "battery"; size: 16; color: Theme.systemGreen }
-                        Text { text: "SYSTEM"; color: Theme.systemGreen; font: Typography.caption2 }
+                        Text { Layout.fillWidth: true; Layout.minimumWidth: 0; text: "SYSTEM"; color: Theme.systemGreen; font: Typography.caption2; elide: Text.ElideRight }
                     }
                     Text {
+                        Layout.fillWidth: true
+                        Layout.minimumWidth: 0
                         text: "100%"
                         color: Theme.labelColor
                         font: Typography.makeSpecFont(30, Font.DemiBold, -0.01, false, true)
+                        elide: Text.ElideRight
                     }
                     Item { Layout.fillHeight: true }
                     RowLayout {
+                        Layout.fillWidth: true
                         spacing: 6
                         Icon { name: "wifi"; size: 14; color: Theme.systemBlue }
-                        Text { text: ShellState.wifiEnabled ? ShellState.wifiSsid : "Offline"; color: Theme.secondaryLabelColor; font: Typography.subheadline; elide: Text.ElideRight; Layout.fillWidth: true }
+                        Text { text: ShellState.wifiEnabled ? ShellState.wifiSsid : "Offline"; color: Theme.secondaryLabelColor; font: Typography.subheadline; elide: Text.ElideRight; Layout.fillWidth: true; Layout.minimumWidth: 0 }
                     }
                 }
             }
@@ -102,16 +122,19 @@ Item {
                 text: "Notifications"
                 color: Theme.labelColor
                 font: Typography.headline
+                elide: Text.ElideRight
                 Layout.fillWidth: true
+                Layout.minimumWidth: 0
             }
             GlassSurface {
                 visible: ShellState.notificationHistory.length > 0
-                Layout.preferredWidth: 56; Layout.preferredHeight: 22
+                Layout.preferredWidth: Math.max(56, clearLabel.implicitWidth + 18)
+                Layout.preferredHeight: Math.max(22, clearLabel.implicitHeight + 6)
                 variant: "clear"
-                cornerRadius: 11
+                cornerRadius: Layout.preferredHeight * 0.5
                 shadowPreset: "none"
                 backdropItem: root.backdropItem
-                Text { anchors.centerIn: parent; text: "Clear"; color: Theme.labelColor; font: Typography.caption2 }
+                Text { id: clearLabel; anchors.centerIn: parent; text: "Clear"; color: Theme.labelColor; font: Typography.caption2 }
                 MouseArea { anchors.fill: parent; onClicked: ShellState.clearNotificationHistory() }
             }
         }
@@ -141,11 +164,12 @@ Item {
                         Layout.fillWidth: true
                         spacing: 2
                         RowLayout {
-                            Text { text: modelData.appName || "Notification"; color: Theme.secondaryLabelColor; font: Typography.subheadline; Layout.fillWidth: true }
+                            Layout.fillWidth: true
+                            Text { text: modelData.appName || "Notification"; color: Theme.secondaryLabelColor; font: Typography.subheadline; elide: Text.ElideRight; Layout.fillWidth: true; Layout.minimumWidth: 0 }
                             Text { text: "now"; color: Theme.tertiaryLabelColor; font: Typography.caption1 }
                         }
-                        Text { text: modelData.summary || ""; color: Theme.labelColor; font: Typography.headline; elide: Text.ElideRight; Layout.fillWidth: true }
-                        Text { text: modelData.body || ""; color: Theme.secondaryLabelColor; font: Typography.callout; wrapMode: Text.WordWrap; maximumLineCount: 2; Layout.fillWidth: true }
+                        Text { text: modelData.summary || ""; color: Theme.labelColor; font: Typography.headline; elide: Text.ElideRight; Layout.fillWidth: true; Layout.minimumWidth: 0 }
+                        Text { text: modelData.body || ""; color: Theme.secondaryLabelColor; font: Typography.callout; wrapMode: Text.Wrap; elide: Text.ElideRight; maximumLineCount: 2; Layout.fillWidth: true; Layout.minimumWidth: 0 }
                     }
                     Item {
                         Layout.preferredWidth: 22; Layout.preferredHeight: 22
@@ -166,27 +190,40 @@ Item {
             shadowPreset: "pill"
             backdropItem: root.backdropItem
             RowLayout {
-                anchors.centerIn: parent
+                anchors.fill: parent
+                anchors.leftMargin: 16
+                anchors.rightMargin: 16
                 spacing: 8
                 Icon { name: ShellState.doNotDisturb ? "bell-off" : "bell"; size: 18; color: Theme.secondaryLabelColor }
-                Text { text: ShellState.doNotDisturb ? "Focus On — Notifications Paused" : "No New Notifications"; color: Theme.secondaryLabelColor; font: Typography.callout }
+                Text { Layout.fillWidth: true; Layout.minimumWidth: 0; text: ShellState.doNotDisturb ? "Focus On — Notifications Paused" : "No New Notifications"; color: Theme.secondaryLabelColor; font: Typography.callout; elide: Text.ElideRight }
             }
         }
 
         // Footer Centered "Edit Widgets" Pill
         Item {
             Layout.fillWidth: true
-            Layout.preferredHeight: 32
+            Layout.preferredHeight: Math.max(32, editWidgetsTxt.implicitHeight + 12)
             GlassSurface {
                 anchors.centerIn: parent
-                width: 112; height: 28
+                width: Math.min(280, Math.max(112, editWidgetsTxt.implicitWidth + 28))
+                height: Math.max(28, editWidgetsTxt.implicitHeight + 10)
                 variant: "clear"
-                cornerRadius: 14
+                cornerRadius: height * 0.5
                 shadowPreset: "pill"
                 backdropItem: root.backdropItem
-                Text { anchors.centerIn: parent; text: "Edit Widgets"; color: Theme.labelColor; font: Typography.callout }
+                Text {
+                    id: editWidgetsTxt
+                    anchors.centerIn: parent
+                    width: Math.min(implicitWidth, parent.width - 16)
+                    text: "Edit Widgets"
+                    color: Theme.labelColor
+                    font: Typography.callout
+                    elide: Text.ElideRight
+                    horizontalAlignment: Text.AlignHCenter
+                }
                 MouseArea { anchors.fill: parent; onClicked: ShellState.OpenSetting("notifications") }
             }
+        }
         }
     }
 }

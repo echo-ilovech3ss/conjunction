@@ -14,15 +14,19 @@ Surface {
         spacing: Spacing.md
 
         Text {
+            Layout.fillWidth: true
             text: "Anchored Popovers"
             font: Typography.windowTitle
             color: Theme.textPrimary
+            elide: Text.ElideRight
         }
 
         Text {
+            Layout.fillWidth: true
             text: "Transient floating cards anchored to a target control. Dismissed automatically on Escape or clicking outside. Keyboard focus enters predictably and restores to the invoking control upon closing."
             font: Typography.secondaryBody
             color: Theme.textSecondary
+            wrapMode: Text.Wrap
         }
 
         Rectangle {

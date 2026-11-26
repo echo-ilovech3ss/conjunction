@@ -29,7 +29,8 @@ T.TextField {
 
     background: Rectangle {
         id: bg
-        radius: height * 0.5
+        // Capsule: the pill token clamped to half the height.
+        radius: Math.min(Geometry.radiusPill, height * 0.5)
         color: control.enabled ? Theme.controlFill : Theme.surfaceSecondary
         border.color: Appearance.shouldIncreaseContrast ? Theme.highContrastBorderColor : (control.activeFocus ? Theme.accent : Theme.separator)
         border.width: Geometry.separatorThickness

@@ -2,16 +2,72 @@
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
 #include <QQuickWindow>
+#include <QQuickImageProvider>
+#include <QIcon>
+#include "../../conjunction-design/common/overflow_audit.h"
 #include <QCommandLineParser>
 #include <QTimer>
 #include <QDir>
 #include <QFile>
+#include <QFileInfo>
+#include <QPainter>
+#include <QFont>
 #include <QDebug>
 #include <QImage>
 
 #include "window_manager.h"
 #include "menu_registrar.h"
 #include "shell_state.h"
+
+class ThemeIconProvider : public QQuickImageProvider {
+public:
+    ThemeIconProvider() : QQuickImageProvider(QQuickImageProvider::Pixmap) {}
+    QPixmap requestPixmap(const QString &id, QSize *size, const QSize &requestedSize) override {
+        const int target = (requestedSize.isValid() && requestedSize.width() > 0) ? requestedSize.width() : 64;
+        QString key = QUrl::fromPercentEncoding(id.toUtf8());
+        const int q = key.indexOf('?');
+        if (q >= 0) key = key.left(q);
+        QIcon ic = QIcon::fromTheme(key);
+        if (ic.isNull() && key.contains('/')) {
+            ic = QIcon::fromTheme(QFileInfo(key).completeBaseName());
+        }
+        QPixmap pm = ic.isNull() ? QPixmap() : ic.pixmap(target, target);
+        if (pm.isNull()) {
+            // Crisp clean-room glyph fallback for missing XDG desktop icons in minimal environments
+            pm = QPixmap(target, target);
+            pm.fill(Qt::transparent);
+            QPainter painter(&pm);
+            painter.setRenderHint(QPainter::Antialiasing);
+            painter.setPen(QPen(Qt::white, qMax(1.5, target * 0.08), Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+            const qreal m = target * 0.16;
+            const QRectF r(m, m, target - 2 * m, target - 2 * m);
+            if (key.contains("terminal") || key.contains("konsole")) {
+                painter.setBrush(QColor(30, 32, 36, 220));
+                painter.drawRoundedRect(r, target * 0.16, target * 0.16);
+                painter.drawLine(QPointF(target * 0.30, target * 0.40), QPointF(target * 0.44, target * 0.50));
+                painter.drawLine(QPointF(target * 0.44, target * 0.50), QPointF(target * 0.30, target * 0.60));
+                painter.drawLine(QPointF(target * 0.49, target * 0.60), QPointF(target * 0.68, target * 0.60));
+            } else if (key.contains("preferences") || key.contains("settings") || key.contains("system")) {
+                painter.setBrush(QColor(96, 102, 112, 220));
+                painter.drawRoundedRect(r, target * 0.22, target * 0.22);
+                painter.drawEllipse(QPointF(target * 0.5, target * 0.5), target * 0.19, target * 0.19);
+                painter.drawEllipse(QPointF(target * 0.5, target * 0.5), target * 0.07, target * 0.07);
+            } else {
+                painter.setBrush(QColor(68, 128, 220, 210));
+                painter.drawRoundedRect(r, target * 0.18, target * 0.18);
+                QString mono = key.left(2).toUpper();
+                QFont f = painter.font();
+                f.setBold(true);
+                f.setPixelSize(qMax(10, int(target * 0.32)));
+                painter.setFont(f);
+                painter.setPen(Qt::white);
+                painter.drawText(r, Qt::AlignCenter, mono);
+            }
+        }
+        if (size) *size = pm.size();
+        return pm;
+    }
+};
 
 int main(int argc, char *argv[])
 {
@@ -53,6 +109,11 @@ int main(int argc, char *argv[])
     QCommandLineOption notifCenterOption("notification-center", "Show notification center drawer");
     QCommandLineOption compositeOption("composite", "Force single-window composite shell view");
     QCommandLineOption layerShellOption("layer-shell", "Force Wayland LayerShell multi-window mode");
+    QCommandLineOption stressModeOption("stress-mode", "Populate shell with long stress strings for overflow testing");
+    QCommandLineOption auditOverflowOption("audit-overflow", "Run automated QML overflow check on visible shell window(s)");
+    QCommandLineOption widthOption("width", "Override composite window width", "px", "0");
+    QCommandLineOption heightOption("height", "Override composite window height", "px", "0");
+    QCommandLineOption fontScaleOption("font-scale", "Override UI typography scale factor", "scale", "1.0");
 
     parser.addOption(screenshotOption);
     parser.addOption(darkOption);
@@ -76,9 +137,14 @@ int main(int argc, char *argv[])
     parser.addOption(notifCenterOption);
     parser.addOption(compositeOption);
     parser.addOption(layerShellOption);
+    parser.addOption(stressModeOption);
+    parser.addOption(auditOverflowOption);
+    parser.addOption(widthOption);
+    parser.addOption(heightOption);
+    parser.addOption(fontScaleOption);
     parser.process(app);
 
-    if (parser.isSet(rtlOption)) {
+    if (parser.isSet(rtlOption) || qEnvironmentVariable("LANGUAGE").startsWith("ar") || app.isRightToLeft()) {
         app.setLayoutDirection(Qt::RightToLeft);
     }
 
@@ -150,20 +216,25 @@ int main(int argc, char *argv[])
     }
 
     QQmlApplicationEngine engine;
+    engine.addImageProvider(QStringLiteral("icon"), new ThemeIconProvider());
+    engine.rootContext()->setContextProperty("initialRtl", parser.isSet(rtlOption) || qEnvironmentVariable("LANGUAGE").startsWith("ar") || app.isRightToLeft());
+    engine.rootContext()->setContextProperty("initialFontScale", parser.value(fontScaleOption).toDouble());
+    engine.rootContext()->setContextProperty("initialCompositeWidth", parser.value(widthOption).toInt());
+    engine.rootContext()->setContextProperty("initialCompositeHeight", parser.value(heightOption).toInt());
 
     QString appDir = QCoreApplication::applicationDirPath();
+    engine.addImportPath("/usr/lib/qt6/qml");
+    engine.addImportPath("/usr/lib64/qt6/qml");
+    engine.addImportPath("/work/conjunction-design/qml");
+    engine.addImportPath(appDir + "/../../conjunction-design/qml");
     auto addCompiledImportPath = [&](const QString &p) {
         if (QFile::exists(p + "/Conjunction/Design/shaders/liquid_glass.frag.qsb")) {
             engine.addImportPath(p);
         }
     };
-    addCompiledImportPath(appDir + "/../share/conjunction/qml");
-    addCompiledImportPath("/usr/share/conjunction/qml");
     addCompiledImportPath("/tmp/build-design/qml");
-    engine.addImportPath(appDir + "/../../conjunction-design/qml");
-    engine.addImportPath("/work/conjunction-design/qml");
-    engine.addImportPath("/usr/lib64/qt6/qml");
-    engine.addImportPath("/usr/lib/qt6/qml");
+    addCompiledImportPath("/usr/share/conjunction/qml");
+    addCompiledImportPath(appDir + "/../share/conjunction/qml");
 
     engine.rootContext()->setContextProperty("ShellState", shellState);
     engine.rootContext()->setContextProperty("isReducedMotion", parser.isSet(reducedMotionOption));
@@ -191,7 +262,17 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    auto *window = qobject_cast<QQuickWindow*>(engine.rootObjects().first());
+    QQuickWindow *window = qobject_cast<QQuickWindow*>(engine.rootObjects().first());
+    if (!window) {
+        window = engine.rootObjects().first()->findChild<QQuickWindow*>();
+    }
+    if (!window) {
+        for (QWindow *w : QGuiApplication::topLevelWindows()) {
+            if (auto *qw = qobject_cast<QQuickWindow*>(w)) {
+                if (qw->isVisible()) { window = qw; break; }
+            }
+        }
+    }
 
     if (parser.isSet(testModeOption)) {
         qInfo() << "[conj-shelld] Running automated shell test mode...";
@@ -229,11 +310,66 @@ int main(int argc, char *argv[])
         shellState->simulateGlobalMenu(sampleMenu);
     }
 
-    if (parser.isSet(screenshotOption)) {
+    if (parser.isSet(stressModeOption)) {
+        const QString longApp = QStringLiteral("Conjunction Enterprise Workstation Browser — Donaudampfschifffahrtsgesellschaftskapitän — Ultra-Long Application Title");
+        const QString compound = QStringLiteral("Rindfleischetikettierungsüberwachungsaufgabenübertragungsgesetz");
+        const QString longUrl = QStringLiteral("https://conjunction.example.org/workstation/api/v2/bundles/org.conjunction.desktop/verification/long-unbroken-url");
+        shellState->simulateWindow("1001", longApp, "org.conjunction.files", true);
+        shellState->simulateWindow("1002", compound + " — zsh", "org.conjunction.terminal", false);
+        shellState->simulateMinimizedWindow("1003", longUrl, "org.conjunction.settings");
+        shellState->simulateNotification(101, longApp, compound + ": " + longUrl, "Utilities");
+        shellState->simulateNotification(102, compound, longUrl + " " + longApp, "Files");
+        if (parser.isSet(spotlightOption) && parser.value(spotlightOption).isEmpty()) {
+            shellState->setSearchQuery(longApp);
+        }
+        QVariantList stressMenu;
+        for (const QString &lbl : QStringList{longApp, compound, "View", "Window", "Help"}) {
+            QVariantMap m;
+            m["id"] = 200 + stressMenu.size();
+            m["label"] = lbl;
+            QVariantList ch;
+            QVariantMap item;
+            item["id"] = 300 + stressMenu.size();
+            item["label"] = longApp;
+            item["shortcut"] = "Ctrl+Shift+Alt+F12";
+            item["enabled"] = true;
+            ch.append(item);
+            QVariantMap item2;
+            item2["id"] = 310 + stressMenu.size();
+            item2["label"] = longUrl;
+            item2["shortcut"] = "⌘O";
+            item2["enabled"] = true;
+            ch.append(item2);
+            m["children"] = ch;
+            stressMenu.append(m);
+        }
+        shellState->simulateGlobalMenu(stressMenu);
+    }
+
+    if (parser.isSet(auditOverflowOption) || parser.isSet(screenshotOption)) {
         QString outPath = parser.value(screenshotOption);
+        bool doAudit = parser.isSet(auditOverflowOption);
         int delay = parser.isSet(timeoutOption) ? parser.value(timeoutOption).toInt() : 650;
-        QTimer::singleShot(delay, [window, outPath]() {
-            if (window) {
+        QTimer::singleShot(delay, [window, outPath, doAudit]() {
+            int failures = 0;
+            if (doAudit) {
+                for (QWindow *w : QGuiApplication::topLevelWindows()) {
+                    if (auto *qw = qobject_cast<QQuickWindow*>(w)) {
+                        if (!qw->isVisible()) continue;
+                        const auto findings = Conjunction::OverflowAudit::auditWindow(qw);
+                        if (findings.isEmpty()) {
+                            fprintf(stderr, "[OVERFLOW PASS] shellWindow=%s\n", qPrintable(qw->title()));
+                        } else {
+                            failures += findings.size();
+                            fprintf(stderr, "[OVERFLOW FAIL] shellWindow=%s findings=%d\n", qPrintable(qw->title()), static_cast<int>(findings.size()));
+                            for (const auto &f : findings) {
+                                fprintf(stderr, "  - %s | %s | %s\n", qPrintable(f.kind), qPrintable(f.itemDesc), qPrintable(f.detail));
+                            }
+                        }
+                    }
+                }
+            }
+            if (!outPath.isEmpty() && window) {
                 QImage img = window->grabWindow();
                 QDir().mkpath(QFileInfo(outPath).absolutePath());
                 if (img.save(outPath)) {
@@ -242,13 +378,13 @@ int main(int argc, char *argv[])
                     qWarning() << "[conj-shelld] Failed to save screenshot to:" << outPath;
                 }
             }
-            std::exit(0);
+            QCoreApplication::exit(failures == 0 ? 0 : 2);
         });
     } else if (parser.isSet(timeoutOption)) {
         int ms = parser.value(timeoutOption).toInt();
         if (ms > 0) {
             QTimer::singleShot(ms, []() {
-                std::exit(0);
+                QCoreApplication::exit(0);
             });
         }
     }

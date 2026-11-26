@@ -14,9 +14,11 @@ Surface {
         spacing: Spacing.md
 
         Text {
+            Layout.fillWidth: true
             text: "Settings Rows & Dense Data Tables"
             font: Typography.windowTitle
             color: Theme.textPrimary
+            elide: Text.ElideRight
         }
 
         Rectangle {
@@ -26,9 +28,11 @@ Surface {
         }
 
         Text {
+            Layout.fillWidth: true
             text: "List Rows (Settings & Preferences Pattern)"
             font: Typography.sectionHeading
             color: Theme.textPrimary
+            elide: Text.ElideRight
         }
 
         ColumnLayout {
@@ -36,8 +40,8 @@ Surface {
             Layout.fillWidth: true
 
             ListRow {
-                title: "Dark Mode Theme"
-                subtitle: "Dynamically synchronize system palette between light and dark"
+                title: Appearance.stressMode ? Appearance.stressLongTitle : "Dark Mode Theme"
+                subtitle: Appearance.stressMode ? Appearance.stressUnbrokenUrl : "Dynamically synchronize system palette between light and dark"
                 iconName: "settings"
                 accessoryItem: Switch { checked: Appearance.isDark; onToggled: Appearance.toggleTheme() }
             }

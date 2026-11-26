@@ -54,6 +54,8 @@ Item {
                     Image {
                         id: itemIcon
                         anchors.fill: parent
+                        sourceSize: Qt.size(56, 56)
+                        clip: true
                         fillMode: Image.PreserveAspectFit
                         source: (model.bundleIcon && model.bundleIcon !== "")
                                 ? ("file://" + model.bundleIcon)

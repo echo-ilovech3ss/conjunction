@@ -7,6 +7,9 @@
 #include <QDir>
 #include <QDebug>
 #include <QImage>
+#include <functional>
+#include <memory>
+#include "../../conjunction-design/common/overflow_audit.h"
 
 #include "files_model.h"
 #include "sidebar_model.h"
@@ -84,6 +87,12 @@ int main(int argc, char *argv[])
     QCommandLineOption lightOption("light", "Force light theme");
     QCommandLineOption testModeOption("test-mode", "Run automated files acceptance self-test");
     QCommandLineOption timeoutOption("timeout", "Exit after ms", "ms");
+    QCommandLineOption rtlOption("rtl", "Force right-to-left layout");
+    QCommandLineOption fontScaleOption("font-scale", "UI typography scale", "scale", "1.0");
+    QCommandLineOption widthOption("width", "Override initial window width", "px", "0");
+    QCommandLineOption heightOption("height", "Override initial window height", "px", "0");
+    QCommandLineOption stressModeOption("stress-mode", "Create and browse extreme-filename stress test directory");
+    QCommandLineOption auditOverflowOption("audit-overflow", "Walk QML views and fail if any element or Text overflows");
 
     parser.addOption(pathOption);
     parser.addOption(viewOption);
@@ -94,9 +103,37 @@ int main(int argc, char *argv[])
     parser.addOption(lightOption);
     parser.addOption(testModeOption);
     parser.addOption(timeoutOption);
+    parser.addOption(rtlOption);
+    parser.addOption(fontScaleOption);
+    parser.addOption(widthOption);
+    parser.addOption(heightOption);
+    parser.addOption(stressModeOption);
+    parser.addOption(auditOverflowOption);
     parser.process(app);
 
+    const bool reqRtl = parser.isSet(rtlOption) || qEnvironmentVariable("LANGUAGE").startsWith("ar") || app.isRightToLeft();
+    if (reqRtl) {
+        app.setLayoutDirection(Qt::RightToLeft);
+    }
+
     QString initialPath = parser.value(pathOption);
+    if (parser.isSet(stressModeOption) && !parser.isSet(pathOption)) {
+        const QString stressDir = QDir::tempPath() + "/conjunction-stress-files";
+        QDir().mkpath(stressDir);
+        QDir().mkpath(stressDir + "/Donaudampfschifffahrtsgesellschaftskapitän_Vergleichsverzeichnis_80PlusChars");
+        const QStringList files = {
+            "Conjunction_UltraLong_Verification_Filename_Exceeding_Eighty_Characters_1234567890_End.txt",
+            "Rindfleischetikettierungsüberwachungsaufgabenübertragungsgesetz_Document.md",
+            "https%3A%2F%2Fconjunction.example.org%2Fvery%2Flong%2Funbroken%2Fresource%2Fidentifier.log"
+        };
+        for (const QString &fn : files) {
+            QFile sf(stressDir + "/" + fn);
+            if (sf.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+                sf.write("Conjunction overflow verification stress fixture.\n");
+            }
+        }
+        initialPath = stressDir;
+    }
     if (!QFileInfo::exists(initialPath)) {
         initialPath = QDir::homePath();
     }
@@ -122,20 +159,20 @@ int main(int argc, char *argv[])
     QQmlApplicationEngine engine;
     engine.addImageProvider("icon", new IconImageProvider());
 
-    // Search paths for QML modules (Conjunction.Design and Conjunction.Controls)
+    // Search paths for QML modules (prepend compiled .qsb dir LAST so it searches first)
     QString appDir = QCoreApplication::applicationDirPath();
+    engine.addImportPath("/usr/lib/qt6/qml");
+    engine.addImportPath("/usr/lib64/qt6/qml");
+    engine.addImportPath("/work/conjunction-design/qml");
+    engine.addImportPath(appDir + "/../../conjunction-design/qml");
     auto addCompiledImportPath = [&](const QString &p) {
         if (QFile::exists(p + "/Conjunction/Design/shaders/liquid_glass.frag.qsb")) {
             engine.addImportPath(p);
         }
     };
-    addCompiledImportPath(appDir + "/../share/conjunction/qml");
-    addCompiledImportPath("/usr/share/conjunction/qml");
     addCompiledImportPath("/tmp/build-design/qml");
-    engine.addImportPath(appDir + "/../../conjunction-design/qml");
-    engine.addImportPath("/work/conjunction-design/qml");
-    engine.addImportPath("/usr/lib64/qt6/qml");
-    engine.addImportPath("/usr/lib/qt6/qml");
+    addCompiledImportPath("/usr/share/conjunction/qml");
+    addCompiledImportPath(appDir + "/../share/conjunction/qml");
 
     bool isDark = false;
     if (parser.isSet(lightOption)) isDark = false;
@@ -146,10 +183,15 @@ int main(int argc, char *argv[])
     engine.rootContext()->setContextProperty("ColumnModel", columnModel);
     engine.rootContext()->setContextProperty("FileOps", fileOps);
     engine.rootContext()->setContextProperty("QuickLook", quickLook);
-    engine.rootContext()->setContextProperty("initialViewMode", parser.value(viewOption));
+    engine.rootContext()->setContextProperty("initialViewMode", parser.value(viewOption) == "all" ? QString("icon") : parser.value(viewOption));
     engine.rootContext()->setContextProperty("isDarkTheme", isDark);
     engine.rootContext()->setContextProperty("cliQuickLookTarget", parser.value(quicklookOption));
     engine.rootContext()->setContextProperty("cliGetInfoTarget", parser.value(getInfoOption));
+    engine.rootContext()->setContextProperty("initialRtl", reqRtl);
+    engine.rootContext()->setContextProperty("initialFontScale", parser.value(fontScaleOption).toDouble());
+    engine.rootContext()->setContextProperty("initialStressMode", parser.isSet(stressModeOption));
+    engine.rootContext()->setContextProperty("initialWidth", parser.value(widthOption).toInt());
+    engine.rootContext()->setContextProperty("initialHeight", parser.value(heightOption).toInt());
 
     QString qmlFile = appDir + "/../share/conjunction/files/FilesWindow.qml";
     if (!QFile::exists(qmlFile)) qmlFile = "/usr/share/conjunction/files/FilesWindow.qml";
@@ -167,7 +209,46 @@ int main(int argc, char *argv[])
 
     auto *window = qobject_cast<QQuickWindow*>(engine.rootObjects().first());
 
-    if (parser.isSet(screenshotOption)) {
+    if (parser.isSet(auditOverflowOption)) {
+        const QString reqView = parser.value(viewOption);
+        QStringList views = (reqView == QLatin1String("all"))
+            ? QStringList{"icon", "list", "column", "gallery"}
+            : QStringList{reqView};
+        auto failures = std::make_shared<int>(0);
+        auto runNext = std::make_shared<std::function<void(int)>>();
+        const QString outPath = parser.value(screenshotOption);
+        *runNext = [window, views, failures, runNext, outPath](int idx) {
+            if (idx >= views.size()) {
+                if (!outPath.isEmpty() && window) {
+                    QImage img = window->grabWindow();
+                    QDir().mkpath(QFileInfo(outPath).absolutePath());
+                    img.save(outPath);
+                }
+                fprintf(stderr, "FILES_OVERFLOW_AUDIT views=%d failures=%d\n",
+                        static_cast<int>(views.size()), *failures);
+                QCoreApplication::exit(*failures == 0 ? 0 : 2);
+                return;
+            }
+            const QString v = views.at(idx);
+            if (window) QMetaObject::invokeMethod(window, "setViewModeByName", Q_ARG(QVariant, v));
+            QTimer::singleShot(250, [window, v, idx, views, failures, runNext]() {
+                if (window) {
+                    const auto findings = Conjunction::OverflowAudit::auditWindow(window);
+                    if (findings.isEmpty()) {
+                        fprintf(stderr, "[OVERFLOW PASS] filesView=%s\n", qPrintable(v));
+                    } else {
+                        (*failures) += findings.size();
+                        fprintf(stderr, "[OVERFLOW FAIL] filesView=%s findings=%d\n", qPrintable(v), static_cast<int>(findings.size()));
+                        for (const auto &f : findings) {
+                            fprintf(stderr, "  - %s | %s | %s\n", qPrintable(f.kind), qPrintable(f.itemDesc), qPrintable(f.detail));
+                        }
+                    }
+                }
+                (*runNext)(idx + 1);
+            });
+        };
+        QTimer::singleShot(300, [runNext]() { (*runNext)(0); });
+    } else if (parser.isSet(screenshotOption)) {
         QString outPath = parser.value(screenshotOption);
         QTimer::singleShot(600, [window, outPath]() {
             if (window) {

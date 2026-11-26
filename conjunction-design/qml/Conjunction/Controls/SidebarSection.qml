@@ -16,5 +16,6 @@ Item {
         text: root.title
         font: Typography.subheadlineBold // SPEC §4.7: 11 pt Bold
         color: Theme.secondaryLabelColor
+        elide: Text.ElideRight
     }
 }

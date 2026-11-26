@@ -14,15 +14,19 @@ Surface {
         spacing: Spacing.md
 
         Text {
+            Layout.fillWidth: true
             text: "Segmented Controls"
             font: Typography.windowTitle
             color: Theme.textPrimary
+            elide: Text.ElideRight
         }
 
         Text {
+            Layout.fillWidth: true
             text: "Used for small groups of closely related choices, view modes, or sorting modes. Adjacent segments form a cohesive unified control."
             font: Typography.secondaryBody
             color: Theme.textSecondary
+            wrapMode: Text.Wrap
         }
 
         Rectangle {
@@ -32,14 +36,17 @@ Surface {
         }
 
         Text {
+            Layout.fillWidth: true
             text: "Text Segments (View Mode Selector)"
             font: Typography.sectionHeading
             color: Theme.textPrimary
+            elide: Text.ElideRight
         }
 
         SegmentedControl {
             currentIndex: 0
-            Segment { text: "Day View" }
+            Layout.maximumWidth: parent.width
+            Segment { text: Appearance.stressMode ? Appearance.stressCompoundWord : "Day View" }
             Segment { text: "Week View" }
             Segment { text: "Month View" }
             Segment { text: "Year View" }

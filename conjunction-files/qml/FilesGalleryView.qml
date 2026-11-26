@@ -64,6 +64,10 @@ Item {
 
                     Text {
                         Layout.alignment: Qt.AlignHCenter
+                        Layout.fillWidth: true
+                        Layout.minimumWidth: 0
+                        horizontalAlignment: Text.AlignHCenter
+                        elide: Text.ElideRight
                         text: root.selectedItem
                             ? ((root.selectedItem.isAppBundle ? "Application Bundle" : (root.selectedItem.mimeType || ""))
                                + " • " + (root.selectedItem.sizeFormatted || ""))

@@ -8,8 +8,9 @@ Item {
     property Item backdropItem: null
 
     readonly property var items: ShellState.dockItems || []
-    width: Math.max(220, switcherRow.implicitWidth + 44)
-    height: 138
+    width: Math.min(parent ? parent.width - 32 : 1200, Math.max(220, switcherRow.implicitWidth + 44))
+    height: Math.max(138, 108 + Math.ceil(Typography.subheadlineBold.pixelSize * 1.6))
+    clip: true
 
     GlassSurface {
         anchors.fill: parent
@@ -18,10 +19,18 @@ Item {
         shadowPreset: "window"
         backdropItem: root.backdropItem
 
-        Row {
-            id: switcherRow
-            anchors.centerIn: parent
-            spacing: 12
+        Flickable {
+            anchors.fill: parent
+            anchors.margins: 16
+            contentWidth: Math.max(width, switcherRow.implicitWidth)
+            contentHeight: height
+            clip: true
+
+            Row {
+                id: switcherRow
+                anchors.verticalCenter: parent.verticalCenter
+                x: Math.max(0, Math.round((parent.width - width) * 0.5))
+                spacing: 12
 
             Repeater {
                 model: root.items
@@ -52,7 +61,18 @@ Item {
                                 : modelData.id === "org.conjunction.terminal" ? "#26282C"
                                 : modelData.id === "org.conjunction.settings" ? "#6E737D"
                                 : Theme.systemBlue
-                            Icon { anchors.centerIn: parent; name: modelData.icon || "applications"; size: 38; color: "#FFFFFF" }
+                            Image {
+                                id: hudThemeImg
+                                anchors.centerIn: parent
+                                width: 42; height: 42
+                                sourceSize: Qt.size(84, 84)
+                                fillMode: Image.PreserveAspectFit
+                                smooth: true
+                                source: (modelData.icon && modelData.icon !== "" && Icons.getMaterialGlyph(modelData.icon) === "" && Icons.getPath(modelData.icon) === "")
+                                    ? ("image://icon/" + encodeURIComponent(modelData.icon)) : ""
+                                visible: status === Image.Ready
+                            }
+                            Icon { visible: !hudThemeImg.visible; anchors.centerIn: parent; name: modelData.icon || "applications"; size: 38; color: "#FFFFFF" }
                         }
 
                         MouseArea {
@@ -75,6 +95,7 @@ Item {
                         horizontalAlignment: Text.AlignHCenter
                     }
                 }
+            }
             }
         }
     }

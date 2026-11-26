@@ -31,8 +31,8 @@ Item {
         if (filteredResults.length > 0) previewExpanded = true;
     }
 
-    width: 680
-    height: hasResults || ShellState.searchQuery !== "" ? 430 : 54
+    width: Math.min(680, parent ? parent.width - 32 : 680)
+    height: Math.min(hasResults || ShellState.searchQuery !== "" ? 430 : 54, parent ? parent.height - 148 : 430)
     Behavior on height { NumberAnimation { duration: Motion.duration(Motion.quickSearchOpen); easing.type: Easing.OutCubic } }
 
     GlassSurface {
@@ -62,6 +62,7 @@ Item {
                     TextInput {
                         id: queryInput
                         Layout.fillWidth: true
+                        Layout.minimumWidth: 80
                         text: ShellState.searchQuery
                         color: Theme.labelColor
                         selectionColor: Theme.selectedContentBackgroundColor
@@ -69,17 +70,21 @@ Item {
                         clip: true
                         focus: root.visible
                         onTextChanged: {
+                            if (!activeFocus) cursorPosition = 0;
                             if (ShellState.searchQuery !== text) {
                                 ShellState.searchQuery = text;
                                 root.currentIndex = 0;
                             }
                         }
+                        Component.onCompleted: cursorPosition = 0
 
                         Text {
                             visible: queryInput.text === ""
+                            width: parent.width
                             text: "Quick Search"
                             color: Theme.tertiaryLabelColor
                             font: parent.font
+                            elide: Text.ElideRight
                             anchors.verticalCenter: parent.verticalCenter
                         }
 
@@ -100,25 +105,40 @@ Item {
                     }
 
                     // Quick category filter pills (64x30 condensed pills)
-                    Row {
+                    Flickable {
                         visible: root.height > 80
-                        spacing: 4
-                        Repeater {
-                            model: ["All", "Apps", "Files", "Settings"]
-                            delegate: Item {
-                                width: 58; height: 28
-                                Rectangle {
-                                    anchors.fill: parent; radius: 14
-                                    color: root.activeFilter === modelData ? Theme.systemBlue
-                                        : (Appearance.isDark ? Qt.rgba(1,1,1,0.09) : Qt.rgba(0,0,0,0.06))
+                        Layout.maximumWidth: Math.min(filterRow.implicitWidth, Math.round(root.width * 0.44))
+                        Layout.preferredWidth: Layout.maximumWidth
+                        Layout.preferredHeight: 28
+                        contentWidth: filterRow.implicitWidth
+                        contentHeight: 28
+                        clip: true
+
+                        Row {
+                            id: filterRow
+                            spacing: 4
+                            Repeater {
+                                model: ["All", "Apps", "Files", "Settings"]
+                                delegate: Item {
+                                    width: Math.max(54, Math.min(86, filterLabel.implicitWidth + 16))
+                                    height: 28
+                                    Rectangle {
+                                        anchors.fill: parent; radius: 14
+                                        color: root.activeFilter === modelData ? Theme.systemBlue
+                                            : (Appearance.isDark ? Qt.rgba(1,1,1,0.09) : Qt.rgba(0,0,0,0.06))
+                                    }
+                                    Text {
+                                        id: filterLabel
+                                        width: Math.min(implicitWidth, parent.width - 8)
+                                        anchors.centerIn: parent
+                                        text: modelData
+                                        color: root.activeFilter === modelData ? "#FFFFFF" : Theme.labelColor
+                                        font: Typography.caption2
+                                        elide: Text.ElideRight
+                                        horizontalAlignment: Text.AlignHCenter
+                                    }
+                                    MouseArea { anchors.fill: parent; onClicked: root.activeFilter = modelData }
                                 }
-                                Text {
-                                    anchors.centerIn: parent
-                                    text: modelData
-                                    color: root.activeFilter === modelData ? "#FFFFFF" : Theme.labelColor
-                                    font: Typography.caption2
-                                }
-                                MouseArea { anchors.fill: parent; onClicked: root.activeFilter = modelData }
                             }
                         }
                     }
@@ -143,7 +163,9 @@ Item {
 
                 ListView {
                     id: resultsList
-                    Layout.preferredWidth: root.previewExpanded ? 340 : root.width
+                    visible: root.filteredResults.length > 0
+                    Layout.preferredWidth: root.previewExpanded ? Math.min(340, Math.round(root.width * 0.50)) : root.width
+                    Layout.minimumWidth: 160
                     Layout.fillHeight: true
                     clip: true
                     topMargin: 8
@@ -184,6 +206,7 @@ Item {
 
                             ColumnLayout {
                                 Layout.fillWidth: true
+                                Layout.minimumWidth: 0
                                 spacing: 0
                                 Text {
                                     text: modelData.title || ""
@@ -191,6 +214,7 @@ Item {
                                     font: Typography.headline
                                     elide: Text.ElideRight
                                     Layout.fillWidth: true
+                                    Layout.minimumWidth: 0
                                 }
                                 Text {
                                     text: modelData.subtitle || ""
@@ -212,6 +236,40 @@ Item {
                                 var origIdx = (ShellState.searchResults || []).indexOf(modelData);
                                 ShellState.activateSearchResult(origIdx >= 0 ? origIdx : index);
                             }
+                        }
+                    }
+                }
+
+                Item {
+                    visible: root.filteredResults.length === 0
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+
+                    ColumnLayout {
+                        anchors.centerIn: parent
+                        width: Math.min(parent.width - 48, 360)
+                        spacing: 8
+                        Icon {
+                            Layout.alignment: Qt.AlignHCenter
+                            name: "search"
+                            size: 28
+                            color: Theme.tertiaryLabelColor
+                        }
+                        Text {
+                            Layout.fillWidth: true
+                            horizontalAlignment: Text.AlignHCenter
+                            text: "No Results Found"
+                            font: Typography.headline
+                            color: Theme.labelColor
+                            elide: Text.ElideRight
+                        }
+                        Text {
+                            Layout.fillWidth: true
+                            horizontalAlignment: Text.AlignHCenter
+                            text: ShellState.searchQuery
+                            font: Typography.callout
+                            color: Theme.secondaryLabelColor
+                            elide: Text.ElideMiddle
                         }
                     }
                 }
@@ -281,7 +339,8 @@ Item {
                             text: parent.parent.cur ? (parent.parent.cur.previewDetail || parent.parent.cur.subtitle || "") : ""
                             color: Theme.secondaryLabelColor
                             font: Typography.callout
-                            wrapMode: Text.WordWrap
+                            wrapMode: Text.Wrap
+                            elide: Text.ElideRight
                         }
 
                         RowLayout {

@@ -33,8 +33,8 @@ Rectangle {
 
     Rectangle {
         id: card
-        width: 640
-        height: 480
+        width: Math.min(640, root.width - 24)
+        height: Math.min(480, root.height - 24)
         anchors.centerIn: parent
         radius: 12
         color: isDarkTheme ? "#242426" : "#F5F5F7"
@@ -130,7 +130,9 @@ Rectangle {
                     anchors.margins: 12
 
                     QQC2.ScrollView {
+                        id: qlScroll
                         anchors.fill: parent
+                        contentWidth: availableWidth
                         clip: true
 
                         QQC2.TextArea {
@@ -139,7 +141,14 @@ Rectangle {
                             font.family: "monospace"
                             font.pixelSize: 11
                             color: isDarkTheme ? "#E5E5EA" : "#1D1D1F"
+                            padding: 12
                             wrapMode: Text.WrapAnywhere
+                            background: Rectangle {
+                                color: isDarkTheme ? "#1C1C1E" : "#FFFFFF"
+                                radius: 8
+                                border.color: isDarkTheme ? "#38383A" : "#D2D2D7"
+                                border.width: 1
+                            }
                         }
                     }
                 }
@@ -166,6 +175,9 @@ Rectangle {
 
                         Text {
                             Layout.alignment: Qt.AlignHCenter
+                            Layout.fillWidth: true
+                            horizontalAlignment: Text.AlignHCenter
+                            elide: Text.ElideMiddle
                             text: root.previewData.bundleName || root.previewData.name || ""
                             font.pixelSize: 18
                             font.weight: Font.Bold
@@ -175,13 +187,16 @@ Rectangle {
                         Rectangle {
                             Layout.alignment: Qt.AlignHCenter
                             height: 22
-                            width: bIdText.implicitWidth + 16
+                            width: Math.min(parent.width, bIdText.implicitWidth + 16)
                             radius: 11
                             color: isDarkTheme ? "#333336" : "#E2E2E6"
 
                             Text {
                                 id: bIdText
                                 anchors.centerIn: parent
+                                width: Math.min(implicitWidth, parent.width - 12)
+                                elide: Text.ElideMiddle
+                                horizontalAlignment: Text.AlignHCenter
                                 text: root.previewData.bundleId || ""
                                 font.pixelSize: 11
                                 color: isDarkTheme ? "#A1A1A6" : "#6E6E73"
@@ -224,6 +239,9 @@ Rectangle {
 
                         Text {
                             Layout.alignment: Qt.AlignHCenter
+                            Layout.fillWidth: true
+                            horizontalAlignment: Text.AlignHCenter
+                            elide: Text.ElideMiddle
                             text: root.previewData.name || ""
                             font.pixelSize: 16
                             font.weight: Font.DemiBold
@@ -232,6 +250,9 @@ Rectangle {
 
                         Text {
                             Layout.alignment: Qt.AlignHCenter
+                            Layout.fillWidth: true
+                            horizontalAlignment: Text.AlignHCenter
+                            elide: Text.ElideRight
                             text: root.previewData.mimeType || ""
                             font.pixelSize: 12
                             color: isDarkTheme ? "#8E8E93" : "#86868B"
@@ -239,6 +260,9 @@ Rectangle {
 
                         Text {
                             Layout.alignment: Qt.AlignHCenter
+                            Layout.fillWidth: true
+                            horizontalAlignment: Text.AlignHCenter
+                            elide: Text.ElideRight
                             text: "Last modified: " + (root.previewData.modifiedFormatted || "--")
                             font.pixelSize: 11
                             color: isDarkTheme ? "#8E8E93" : "#86868B"

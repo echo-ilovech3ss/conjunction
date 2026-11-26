@@ -21,7 +21,9 @@ Item {
 
         // Table Header
         Rectangle {
+            id: headerBar
             Layout.fillWidth: true
+            Layout.preferredHeight: 26
             height: 26
             color: isDarkTheme ? "#222225" : "#E4E4E8"
 
@@ -42,6 +44,7 @@ Item {
                 // Name Column
                 Rectangle {
                     Layout.fillWidth: true
+                    Layout.minimumWidth: 100
                     Layout.preferredWidth: 320
                     height: parent.height
                     color: "transparent"
@@ -49,6 +52,9 @@ Item {
                     RowLayout {
                         anchors.fill: parent
                         Text {
+                            Layout.fillWidth: true
+                            Layout.minimumWidth: 0
+                            elide: Text.ElideRight
                             text: "Name"
                             font.pixelSize: 11
                             font.weight: Font.DemiBold
@@ -74,13 +80,17 @@ Item {
 
                 // Date Modified Column
                 Rectangle {
-                    Layout.preferredWidth: 150
+                    Layout.preferredWidth: Math.min(150, Math.round(headerBar.width * 0.22))
+                    Layout.minimumWidth: 60
                     height: parent.height
                     color: "transparent"
 
                     RowLayout {
                         anchors.fill: parent
                         Text {
+                            Layout.fillWidth: true
+                            Layout.minimumWidth: 0
+                            elide: Text.ElideRight
                             text: "Date Modified"
                             font.pixelSize: 11
                             font.weight: Font.DemiBold
@@ -106,13 +116,17 @@ Item {
 
                 // Size Column
                 Rectangle {
-                    Layout.preferredWidth: 90
+                    Layout.preferredWidth: Math.min(90, Math.round(headerBar.width * 0.14))
+                    Layout.minimumWidth: 48
                     height: parent.height
                     color: "transparent"
 
                     RowLayout {
                         anchors.fill: parent
                         Text {
+                            Layout.fillWidth: true
+                            Layout.minimumWidth: 0
+                            elide: Text.ElideRight
                             text: "Size"
                             font.pixelSize: 11
                             font.weight: Font.DemiBold
@@ -138,13 +152,17 @@ Item {
 
                 // Kind Column
                 Rectangle {
-                    Layout.preferredWidth: 140
+                    Layout.preferredWidth: Math.min(140, Math.round(headerBar.width * 0.20))
+                    Layout.minimumWidth: 54
                     height: parent.height
                     color: "transparent"
 
                     RowLayout {
                         anchors.fill: parent
                         Text {
+                            Layout.fillWidth: true
+                            Layout.minimumWidth: 0
+                            elide: Text.ElideRight
                             text: "Kind"
                             font.pixelSize: 11
                             font.weight: Font.DemiBold
@@ -202,12 +220,17 @@ Item {
                     // Name + Icon
                     RowLayout {
                         Layout.fillWidth: true
+                        Layout.minimumWidth: 100
                         Layout.preferredWidth: 320
                         spacing: 8
 
                         Image {
+                            Layout.preferredWidth: 16
+                            Layout.preferredHeight: 16
                             width: 16
                             height: 16
+                            sourceSize: Qt.size(32, 32)
+                            clip: true
                             fillMode: Image.PreserveAspectFit
                             source: (model.bundleIcon && model.bundleIcon !== "")
                                     ? ("file://" + model.bundleIcon)
@@ -216,6 +239,7 @@ Item {
 
                         Text {
                             Layout.fillWidth: true
+                            Layout.minimumWidth: 0
                             text: model.name
                             font.pixelSize: 12
                             elide: Text.ElideRight
@@ -225,23 +249,28 @@ Item {
 
                     // Date Modified
                     Text {
-                        Layout.preferredWidth: 150
+                        Layout.preferredWidth: Math.min(150, Math.round(rowDelegate.width * 0.22))
+                        Layout.minimumWidth: 60
                         text: model.modifiedFormatted
                         font.pixelSize: 11
+                        elide: Text.ElideRight
                         color: rowDelegate.isSelected ? "#FFFFFF" : (isDarkTheme ? "#8E8E93" : "#6E6E73")
                     }
 
                     // Size
                     Text {
-                        Layout.preferredWidth: 90
+                        Layout.preferredWidth: Math.min(90, Math.round(rowDelegate.width * 0.14))
+                        Layout.minimumWidth: 48
                         text: model.sizeFormatted
                         font.pixelSize: 11
+                        elide: Text.ElideRight
                         color: rowDelegate.isSelected ? "#FFFFFF" : (isDarkTheme ? "#8E8E93" : "#6E6E73")
                     }
 
                     // Kind
                     Text {
-                        Layout.preferredWidth: 140
+                        Layout.preferredWidth: Math.min(140, Math.round(rowDelegate.width * 0.20))
+                        Layout.minimumWidth: 54
                         text: model.isAppBundle ? "Application" : (model.isDir ? "Folder" : model.mimeType)
                         font.pixelSize: 11
                         elide: Text.ElideRight

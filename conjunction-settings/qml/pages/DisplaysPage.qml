@@ -10,24 +10,28 @@ ScrollView {
     contentWidth: availableWidth
 
     ColumnLayout {
-        width: Math.min(root.width - 48, 640)
+        width: Math.min(root.availableWidth - 36, 480)
         anchors.horizontalCenter: parent.horizontalCenter
         spacing: 20
 
         Item { height: 12 }
 
         Text {
+            Layout.fillWidth: true
             text: "Displays"
             font: Typography.title
             color: Theme.textPrimary
             Layout.leftMargin: 4
+            elide: Text.ElideRight
         }
 
         Text {
+            Layout.fillWidth: true
             text: "Resolution, UI scaling, and multi-monitor output configuration."
             font: Typography.body
             color: Theme.textSecondary
             Layout.leftMargin: 4
+            wrapMode: Text.Wrap
         }
 
         // Active Display Info Card
@@ -67,16 +71,23 @@ ScrollView {
 
                     ColumnLayout {
                         Layout.fillWidth: true
+                        Layout.minimumWidth: 0
                         spacing: 2
                         Text {
+                            Layout.fillWidth: true
+                            Layout.minimumWidth: 0
                             text: "Primary Display"
                             font: Typography.headline
                             color: Theme.textPrimary
+                            elide: Text.ElideRight
                         }
                         Text {
+                            Layout.fillWidth: true
+                            Layout.minimumWidth: 0
                             text: DisplayBackend.primaryResolution + " @ " + DisplayBackend.primaryRefreshRate
                             font: Typography.caption
                             color: Theme.textSecondary
+                            elide: Text.ElideRight
                         }
                     }
                 }
@@ -100,28 +111,29 @@ ScrollView {
 
                         ColumnLayout {
                             Layout.fillWidth: true
+                            Layout.minimumWidth: 0
                             spacing: 2
                             Text {
+                                Layout.fillWidth: true
+                                Layout.minimumWidth: 0
                                 text: "Display Scale"
                                 font: Typography.headline
                                 color: Theme.textPrimary
+                                elide: Text.ElideRight
                             }
                             Text {
+                                Layout.fillWidth: true
+                                Layout.minimumWidth: 0
                                 text: "Scale text and controls for high-density monitors"
                                 font: Typography.caption
                                 color: Theme.textSecondary
+                                elide: Text.ElideRight
                             }
                         }
 
-                        RowLayout {
-                            spacing: 8
-
-                            readonly property var scales: [
-                                { label: "100%", val: 1.0 },
-                                { label: "125%", val: 1.25 },
-                                { label: "150%", val: 1.5 },
-                                { label: "200%", val: 2.0 }
-                            ]
+                        Flow {
+                            Layout.maximumWidth: 260
+                            spacing: 6
 
                             Repeater {
                                 model: [
@@ -131,13 +143,14 @@ ScrollView {
                                     { label: "200%", val: 2.0 }
                                 ]
                                 delegate: Rectangle {
-                                    width: 58
-                                    height: 32
+                                    width: Math.max(54, scaleLbl.implicitWidth + 14)
+                                    height: 30
                                     radius: 6
                                     property bool selected: Math.abs(DisplayBackend.currentScale - modelData.val) < 0.05
                                     color: selected ? Theme.accent : (Theme.isDark ? "#22FFFFFF" : "#15000000")
 
                                     Text {
+                                        id: scaleLbl
                                         anchors.centerIn: parent
                                         text: modelData.label
                                         font: Typography.caption
@@ -177,15 +190,19 @@ ScrollView {
                 spacing: 12
 
                 Text {
+                    Layout.fillWidth: true
                     text: "Confirm Display Scale Change"
                     font: Typography.headline
                     color: Theme.textPrimary
+                    elide: Text.ElideRight
                 }
 
                 Text {
+                    Layout.fillWidth: true
                     text: "Reverting to previous resolution/scale in " + DisplayBackend.revertCountdown + " seconds if not confirmed."
                     font: Typography.body
                     color: Theme.textSecondary
+                    wrapMode: Text.Wrap
                 }
 
                 RowLayout {

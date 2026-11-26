@@ -32,8 +32,8 @@ Rectangle {
 
     Rectangle {
         id: card
-        width: 340
-        height: 460
+        width: Math.min(340, root.width - 24)
+        height: Math.min(460, root.height - 24)
         anchors.centerIn: parent
         radius: 10
         color: isDarkTheme ? "#242426" : "#F5F5F7"
@@ -74,24 +74,30 @@ Rectangle {
                 }
             }
 
-            QQC2.ScrollView {
+            Flickable {
+                id: infoFlick
                 Layout.fillWidth: true
                 Layout.fillHeight: true
+                contentWidth: width
+                contentHeight: infoCol.implicitHeight + 16
                 clip: true
 
                 ColumnLayout {
-                    width: card.width - 32
-                    anchors.horizontalCenter: parent.horizontalCenter
+                    id: infoCol
+                    x: 14
+                    width: Math.max(120, infoFlick.width - 28)
                     spacing: 12
 
                     Item { height: 4 }
 
                     // Icon & Primary Details
                     RowLayout {
+                        Layout.fillWidth: true
+                        Layout.minimumWidth: 0
                         spacing: 12
                         Image {
-                            width: 56
-                            height: 56
+                            Layout.preferredWidth: 56
+                            Layout.preferredHeight: 56
                             fillMode: Image.PreserveAspectFit
                             source: (root.infoData.bundleIcon && root.infoData.bundleIcon !== "")
                                     ? ("file://" + root.infoData.bundleIcon)
@@ -100,9 +106,12 @@ Rectangle {
 
                         ColumnLayout {
                             Layout.fillWidth: true
+                            Layout.minimumWidth: 0
                             spacing: 2
 
                             Text {
+                                Layout.fillWidth: true
+                                Layout.minimumWidth: 0
                                 text: root.infoData.name || ""
                                 font.pixelSize: 14
                                 font.weight: Font.Bold
@@ -111,14 +120,20 @@ Rectangle {
                             }
 
                             Text {
+                                Layout.fillWidth: true
+                                Layout.minimumWidth: 0
                                 text: root.infoData.sizeFormatted ? (root.infoData.sizeFormatted + " on disk") : ""
                                 font.pixelSize: 11
+                                elide: Text.ElideRight
                                 color: isDarkTheme ? "#8E8E93" : "#86868B"
                             }
 
                             Text {
+                                Layout.fillWidth: true
+                                Layout.minimumWidth: 0
                                 text: "Modified: " + (root.infoData.modified || "--")
                                 font.pixelSize: 11
+                                elide: Text.ElideRight
                                 color: isDarkTheme ? "#8E8E93" : "#86868B"
                             }
                         }
@@ -132,6 +147,9 @@ Rectangle {
 
                     // General Section
                     Text {
+                        Layout.fillWidth: true
+                        Layout.minimumWidth: 0
+                        elide: Text.ElideRight
                         text: "General:"
                         font.pixelSize: 11
                         font.weight: Font.DemiBold
@@ -143,16 +161,19 @@ Rectangle {
                         spacing: 4
 
                         RowLayout {
+                            Layout.fillWidth: true
                             Text { text: "Kind:"; font.pixelSize: 11; color: isDarkTheme ? "#8E8E93" : "#86868B"; Layout.preferredWidth: 60 }
-                            Text { text: root.infoData.isAppBundle ? "Application" : (root.infoData.isDir ? "Folder" : (root.infoData.mimeType || "Document")); font.pixelSize: 11; color: isDarkTheme ? "#DDD" : "#333" }
+                            Text { Layout.fillWidth: true; Layout.minimumWidth: 0; elide: Text.ElideRight; text: root.infoData.isAppBundle ? "Application" : (root.infoData.isDir ? "Folder" : (root.infoData.mimeType || "Document")); font.pixelSize: 11; color: isDarkTheme ? "#DDD" : "#333" }
                         }
                         RowLayout {
+                            Layout.fillWidth: true
                             Text { text: "Where:"; font.pixelSize: 11; color: isDarkTheme ? "#8E8E93" : "#86868B"; Layout.preferredWidth: 60 }
-                            Text { text: root.infoData.dir || ""; font.pixelSize: 11; color: isDarkTheme ? "#DDD" : "#333"; elide: Text.ElideMiddle; Layout.fillWidth: true }
+                            Text { text: root.infoData.dir || ""; font.pixelSize: 11; color: isDarkTheme ? "#DDD" : "#333"; elide: Text.ElideMiddle; Layout.fillWidth: true; Layout.minimumWidth: 0 }
                         }
                         RowLayout {
+                            Layout.fillWidth: true
                             Text { text: "Created:"; font.pixelSize: 11; color: isDarkTheme ? "#8E8E93" : "#86868B"; Layout.preferredWidth: 60 }
-                            Text { text: root.infoData.created || "--"; font.pixelSize: 11; color: isDarkTheme ? "#DDD" : "#333" }
+                            Text { Layout.fillWidth: true; Layout.minimumWidth: 0; elide: Text.ElideRight; text: root.infoData.created || "--"; font.pixelSize: 11; color: isDarkTheme ? "#DDD" : "#333" }
                         }
                     }
 
@@ -176,8 +197,9 @@ Rectangle {
                         }
 
                         RowLayout {
+                            Layout.fillWidth: true
                             Text { text: "Identifier:"; font.pixelSize: 11; color: isDarkTheme ? "#8E8E93" : "#86868B"; Layout.preferredWidth: 60 }
-                            Text { text: root.infoData.bundleId || ""; font.pixelSize: 11; color: isDarkTheme ? "#DDD" : "#333" }
+                            Text { Layout.fillWidth: true; Layout.minimumWidth: 0; elide: Text.ElideRight; text: root.infoData.bundleId || ""; font.pixelSize: 11; color: isDarkTheme ? "#DDD" : "#333" }
                         }
 
                         RowLayout {

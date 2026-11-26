@@ -8,8 +8,14 @@ T.Popup {
     property Item targetAnchor: null
     property Item invokerItem: null
 
+    readonly property real maxWinW: control.T.Overlay.overlay ? Math.max(180, control.T.Overlay.overlay.width - 16) : 640
+    readonly property real maxWinH: control.T.Overlay.overlay ? Math.max(120, control.T.Overlay.overlay.height - 16) : 480
+
     implicitWidth: 240
     implicitHeight: 160
+    width: Math.min(implicitWidth, maxWinW)
+    height: Math.min(implicitHeight, maxWinH)
+    margins: 8
     padding: Spacing.lg
 
     modal: true

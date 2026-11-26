@@ -15,13 +15,17 @@ T.Popup {
     signal defaultTriggered()
     signal cancelTriggered()
 
+    readonly property real maxWinW: control.T.Overlay.overlay ? Math.max(260, control.T.Overlay.overlay.width - 32) : 420
+    readonly property real maxWinH: control.T.Overlay.overlay ? Math.max(180, control.T.Overlay.overlay.height - 32) : 600
+
     modal: true
     focus: true
     closePolicy: T.Popup.CloseOnEscape
+    margins: 12
     y: 0
-    x: parent ? Math.round((parent.width - implicitWidth) / 2) : 0
-    implicitWidth: 420
-    implicitHeight: sheetLayout.implicitHeight + Spacing.lg * 2
+    x: parent ? Math.round((parent.width - width) / 2) : 0
+    implicitWidth: Math.min(420, maxWinW)
+    implicitHeight: Math.min(sheetLayout.implicitHeight + Spacing.lg * 2, maxWinH)
 
     dim: true
     T.Overlay.modal: Rectangle {
@@ -83,15 +87,30 @@ T.Popup {
             text: control.titleText
             font: Typography.title2Bold
             color: Theme.textPrimary
+            wrapMode: Text.Wrap
+            maximumLineCount: 2
+            elide: Text.ElideRight
             Layout.fillWidth: true
         }
 
-        Text {
-            text: control.messageText
-            font: Typography.body
-            color: Theme.textSecondary
-            wrapMode: Text.WordWrap
+        Flickable {
             Layout.fillWidth: true
+            Layout.fillHeight: true
+            Layout.preferredHeight: sheetMsgText.implicitHeight
+            Layout.maximumHeight: Math.max(48, control.maxWinH - 160)
+            contentWidth: width
+            contentHeight: sheetMsgText.implicitHeight
+            clip: true
+            T.ScrollBar.vertical: ScrollBar {}
+
+            Text {
+                id: sheetMsgText
+                width: parent.width
+                text: control.messageText
+                font: Typography.body
+                color: Theme.textSecondary
+                wrapMode: Text.Wrap
+            }
         }
 
         Rectangle {

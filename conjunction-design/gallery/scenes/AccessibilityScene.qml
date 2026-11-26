@@ -14,16 +14,18 @@ Surface {
         spacing: Spacing.md
 
         Text {
+            Layout.fillWidth: true
             text: "Accessibility: Contrast, Transparency & Motion"
             font: Typography.windowTitle
             color: Theme.textPrimary
+            elide: Text.ElideRight
         }
 
         Text {
             text: "Supports Reduce Transparency (#EDEDED/#282828 solid chrome), Increase Contrast (65% dividers, 1pt borders, pure label primaries), Reduced Motion (180ms crossfades), and Font Scaling."
             font: Typography.secondaryBody
             color: Theme.textSecondary
-            wrapMode: Text.WordWrap
+            wrapMode: Text.Wrap
             Layout.fillWidth: true
         }
 
@@ -33,7 +35,8 @@ Surface {
             color: Theme.separator
         }
 
-        RowLayout {
+        Flow {
+            Layout.fillWidth: true
             spacing: Spacing.md
             CheckBox {
                 text: "Reduce Transparency"
@@ -52,7 +55,8 @@ Surface {
             }
         }
 
-        RowLayout {
+        Flow {
+            Layout.fillWidth: true
             spacing: Spacing.md
             Button { text: "Font Scale 100%"; onClicked: Appearance.setFontScale(1.0) }
             Button { text: "Font Scale 125%"; onClicked: Appearance.setFontScale(1.25) }
@@ -61,9 +65,11 @@ Surface {
         }
 
         Text {
+            Layout.fillWidth: true
             text: "Active Scale: " + Math.round(Appearance.fontScale * 100) + "% | Optical Cap-Scale: " + (Appearance.useOpticalCapScaling ? "ON (0.9685x)" : "OFF")
             font: Typography.sectionHeading
             color: Theme.accent
+            wrapMode: Text.Wrap
         }
 
         Item { Layout.fillHeight: true }

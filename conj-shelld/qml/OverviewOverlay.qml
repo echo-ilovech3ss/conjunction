@@ -56,9 +56,12 @@ Item {
                     }
                     Text {
                         anchors.horizontalCenter: parent.horizontalCenter
+                        width: 140
                         text: modelData.name
                         color: "#FFFFFF"
                         font: Typography.subheadlineBold
+                        elide: Text.ElideRight
+                        horizontalAlignment: Text.AlignHCenter
                     }
                 }
             }
@@ -111,9 +114,11 @@ Item {
                             TrafficLights { active: !!modelData.active }
                             Text {
                                 Layout.fillWidth: true
+                                Layout.minimumWidth: 0
                                 text: modelData.name || modelData.id
                                 color: Theme.labelColor
                                 font: Typography.headline
+                                elide: Text.ElideRight
                                 horizontalAlignment: Text.AlignHCenter
                             }
                             Item { width: 52 }

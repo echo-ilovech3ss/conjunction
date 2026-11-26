@@ -88,5 +88,12 @@ T.Switch {
         color: control.enabled ? Theme.textPrimary : Theme.textDisabled
         verticalAlignment: Text.AlignVCenter
         leftPadding: control.indicator.width + Spacing.sm
+        elide: Text.ElideRight
+    }
+
+    ToolTip {
+        visible: control.hovered && labelText.truncated && control.text !== ""
+        text: control.text
+        delay: 400
     }
 }

@@ -26,6 +26,9 @@ TerminalWindow::TerminalWindow(QWidget *parent)
     setAcceptDrops(true);
     resize(840, 520);
     setWindowTitle(QStringLiteral("Terminal — Conjunction"));
+    QFont termFont(QStringLiteral("JetBrains Mono"));
+    termFont.setPointSizeF(12.0 * 0.9652); // SPEC §2.4 Option A optical cap-height scaling
+    setFont(termFont);
 
     setupUi();
     setupMenus();

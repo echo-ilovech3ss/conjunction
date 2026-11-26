@@ -11,8 +11,9 @@ Rectangle {
 
     signal clicked()
 
+    Layout.fillWidth: true
     implicitWidth: parent ? parent.width : 400
-    implicitHeight: Geometry.controlHeightSmall + 8
+    implicitHeight: Math.max(Geometry.controlHeightSmall + 8, tableRowLayout.implicitHeight + 6)
     color: selected ? Theme.selection : (hoverHandler.hovered ? Theme.surfaceSecondary : Theme.surface)
 
     Accessible.role: Accessible.ListItem
@@ -21,6 +22,7 @@ Rectangle {
     TapHandler { onTapped: root.clicked() }
 
     RowLayout {
+        id: tableRowLayout
         anchors.fill: parent
         anchors.leftMargin: Spacing.md
         anchors.rightMargin: Spacing.md
@@ -29,11 +31,22 @@ Rectangle {
         Repeater {
             model: root.values
             Text {
+                id: cellText
+                readonly property int colCount: Math.max(1, root.values ? root.values.length : 1)
                 Layout.fillWidth: true
+                Layout.minimumWidth: 0
+                Layout.preferredWidth: Math.max(36, Math.floor((tableRowLayout.width - tableRowLayout.spacing * (colCount - 1)) / colCount))
                 text: String(modelData)
                 font: root.isMonospace ? Typography.monospace : Typography.body
                 color: root.selected ? Theme.selectionText : Theme.textPrimary
                 elide: Text.ElideRight
+
+                HoverHandler { id: cellHover }
+                ToolTip {
+                    visible: cellHover.hovered && cellText.truncated && cellText.text !== ""
+                    text: cellText.text
+                    delay: 400
+                }
             }
         }
     }

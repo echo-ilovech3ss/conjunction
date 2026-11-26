@@ -28,6 +28,11 @@ QtObject {
     // Font scaling factor & Optical Cap-Height Scaling (SPEC §2.4 Option A = 0.9685x Inter)
     property real fontScale: 1.0
     property bool useOpticalCapScaling: true
+    property bool stressMode: false
+
+    readonly property string stressLongTitle: "Conjunction Workstation Control Plane — Donaudampfschifffahrtsgesellschaftskapitän — Ultra-Long Overflow Verification Title"
+    readonly property string stressCompoundWord: "Rindfleischetikettierungsüberwachungsaufgabenübertragungsgesetz-Verifikationsmodul"
+    readonly property string stressUnbrokenUrl: "https://conjunction.example.org/workstation/api/v2/bundles/org.conjunction.desktop.verification/artifacts/long-unbroken-resource-identifier"
 
     // Layout direction (Qt.LeftToRight or Qt.RightToLeft)
     property int layoutDirection: Qt.LeftToRight
@@ -61,6 +66,10 @@ QtObject {
 
     function setFontScale(scale) {
         fontScale = Math.max(0.75, Math.min(2.5, scale));
+    }
+
+    function setStressMode(enabled) {
+        stressMode = !!enabled;
     }
 
     function setLayoutDirection(dir) {

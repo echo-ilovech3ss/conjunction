@@ -9,6 +9,9 @@
 #include <QTimer>
 #include <QDir>
 #include <QDebug>
+#include <functional>
+#include <memory>
+#include "../../conjunction-design/common/overflow_audit.h"
 
 #include "settings_manager.h"
 #include "system_info.h"
@@ -94,6 +97,12 @@ int main(int argc, char *argv[])
     QCommandLineOption scaleOption("scale", "UI scale factor", "factor");
     QCommandLineOption screenshotOption("screenshot", "Capture window to PNG file and exit", "file");
     QCommandLineOption timeoutOption("timeout", "Exit after ms", "ms");
+    QCommandLineOption rtlOption("rtl", "Force right-to-left layout");
+    QCommandLineOption fontScaleOption("font-scale", "UI typography scale factor", "scale", "1.0");
+    QCommandLineOption widthOption("width", "Override initial window width", "px", "0");
+    QCommandLineOption heightOption("height", "Override initial window height", "px", "0");
+    QCommandLineOption stressModeOption("stress-mode", "Inject long stress labels and search query");
+    QCommandLineOption auditOverflowOption("audit-overflow", "Walk settings page(s) and fail if any element or Text overflows");
 
     parser.addOption(pageOption);
     parser.addOption(settingOption);
@@ -104,7 +113,18 @@ int main(int argc, char *argv[])
     parser.addOption(scaleOption);
     parser.addOption(screenshotOption);
     parser.addOption(timeoutOption);
+    parser.addOption(rtlOption);
+    parser.addOption(fontScaleOption);
+    parser.addOption(widthOption);
+    parser.addOption(heightOption);
+    parser.addOption(stressModeOption);
+    parser.addOption(auditOverflowOption);
     parser.process(app);
+
+    const bool reqRtl = parser.isSet(rtlOption) || qEnvironmentVariable("LANGUAGE").startsWith("ar") || app.isRightToLeft();
+    if (reqRtl) {
+        app.setLayoutDirection(Qt::RightToLeft);
+    }
 
     auto *settingsMgr = new SettingsManager(&app);
     auto *systemInfo = new SystemInfo(&app);
@@ -143,18 +163,18 @@ int main(int argc, char *argv[])
     engine.addImageProvider("icon", new IconImageProvider());
 
     QString appDir = QCoreApplication::applicationDirPath();
+    engine.addImportPath("/usr/lib/qt6/qml");
+    engine.addImportPath("/usr/lib64/qt6/qml");
+    engine.addImportPath("/work/conjunction-design/qml");
+    engine.addImportPath(appDir + "/../../conjunction-design/qml");
     auto addCompiledImportPath = [&](const QString &p) {
         if (QFile::exists(p + "/Conjunction/Design/shaders/liquid_glass.frag.qsb")) {
             engine.addImportPath(p);
         }
     };
-    addCompiledImportPath(appDir + "/../share/conjunction/qml");
-    addCompiledImportPath("/usr/share/conjunction/qml");
     addCompiledImportPath("/tmp/build-design/qml");
-    engine.addImportPath(appDir + "/../../conjunction-design/qml");
-    engine.addImportPath("/work/conjunction-design/qml");
-    engine.addImportPath("/usr/lib64/qt6/qml");
-    engine.addImportPath("/usr/lib/qt6/qml");
+    addCompiledImportPath("/usr/share/conjunction/qml");
+    addCompiledImportPath(appDir + "/../share/conjunction/qml");
 
     engine.rootContext()->setContextProperty("SettingsManager", settingsMgr);
     engine.rootContext()->setContextProperty("SystemInfo", systemInfo);
@@ -162,6 +182,11 @@ int main(int argc, char *argv[])
     engine.rootContext()->setContextProperty("BluetoothBackend", bluetoothBackend);
     engine.rootContext()->setContextProperty("DisplayBackend", displayBackend);
     engine.rootContext()->setContextProperty("AudioBackend", audioBackend);
+    engine.rootContext()->setContextProperty("initialRtl", reqRtl);
+    engine.rootContext()->setContextProperty("initialFontScale", parser.value(fontScaleOption).toDouble());
+    engine.rootContext()->setContextProperty("initialStressMode", parser.isSet(stressModeOption));
+    engine.rootContext()->setContextProperty("initialWidth", parser.value(widthOption).toInt());
+    engine.rootContext()->setContextProperty("initialHeight", parser.value(heightOption).toInt());
 
     QString qmlFile = appDir + "/../share/conjunction/settings/SettingsWindow.qml";
     if (!QFile::exists(qmlFile)) qmlFile = "/usr/share/conjunction/settings/SettingsWindow.qml";
@@ -179,8 +204,54 @@ int main(int argc, char *argv[])
 
     auto *window = qobject_cast<QQuickWindow*>(engine.rootObjects().first());
 
-    // Screenshot capture automation
-    if (parser.isSet(screenshotOption)) {
+    if (parser.isSet(auditOverflowOption)) {
+        const QString reqPage = parser.value(pageOption);
+        QStringList pages = (reqPage.isEmpty() || reqPage == QLatin1String("all"))
+            ? QStringList{"about", "appearance", "dock", "displays", "sound", "network", "bluetooth", "shortcuts", "default-apps", "search"}
+            : QStringList{reqPage};
+        auto failures = std::make_shared<int>(0);
+        auto runNext = std::make_shared<std::function<void(int)>>();
+        const bool isStress = parser.isSet(stressModeOption);
+        const QString outPath = parser.value(screenshotOption);
+        *runNext = [window, settingsMgr, pages, failures, runNext, isStress, outPath](int idx) {
+            if (idx >= pages.size()) {
+                if (!outPath.isEmpty() && window) {
+                    QImage img = window->grabWindow();
+                    QDir().mkpath(QFileInfo(outPath).absolutePath());
+                    img.save(outPath);
+                }
+                fprintf(stderr, "SETTINGS_OVERFLOW_AUDIT pages=%d failures=%d\n",
+                        static_cast<int>(pages.size()), *failures);
+                QCoreApplication::exit(*failures == 0 ? 0 : 2);
+                return;
+            }
+            const QString pg = pages.at(idx);
+            if (pg == QLatin1String("search")) {
+                settingsMgr->setSearchQuery(isStress
+                    ? QStringLiteral("Donaudampfschifffahrtsgesellschaftskapitän_NotFound_UltraLongQuery")
+                    : QStringLiteral("dock"));
+            } else {
+                settingsMgr->setSearchQuery(QString());
+                settingsMgr->navigateTo(pg, QString());
+            }
+            QTimer::singleShot(180, [window, pg, idx, pages, failures, runNext]() {
+                if (window) {
+                    const auto findings = Conjunction::OverflowAudit::auditWindow(window);
+                    if (findings.isEmpty()) {
+                        fprintf(stderr, "[OVERFLOW PASS] settingsPage=%s\n", qPrintable(pg));
+                    } else {
+                        (*failures) += findings.size();
+                        fprintf(stderr, "[OVERFLOW FAIL] settingsPage=%s findings=%d\n", qPrintable(pg), static_cast<int>(findings.size()));
+                        for (const auto &f : findings) {
+                            fprintf(stderr, "  - %s | %s | %s\n", qPrintable(f.kind), qPrintable(f.itemDesc), qPrintable(f.detail));
+                        }
+                    }
+                }
+                (*runNext)(idx + 1);
+            });
+        };
+        QTimer::singleShot(300, [runNext]() { (*runNext)(0); });
+    } else if (parser.isSet(screenshotOption)) {
         QString outPath = parser.value(screenshotOption);
         int delay = parser.isSet(timeoutOption) ? parser.value(timeoutOption).toInt() : 1200;
 

@@ -112,7 +112,9 @@ Item {
         // 2. Active Application Title (Bold 13pt, 16pt padding visual separation)
         Item {
             id: appTitleBtn
-            Layout.preferredWidth: appTitleText.implicitWidth + 20
+            Layout.preferredWidth: Math.min(appTitleText.implicitWidth + 20, Math.max(72, Math.round(root.width * 0.22)))
+            Layout.minimumWidth: 48
+            Layout.maximumWidth: Math.max(72, Math.round(root.width * 0.24))
             Layout.preferredHeight: 22
             Layout.alignment: Qt.AlignVCenter
 
@@ -126,10 +128,13 @@ Item {
 
             Text {
                 id: appTitleText
+                width: Math.min(implicitWidth, Math.max(0, parent.width - 12))
                 anchors.centerIn: parent
                 text: ShellState.activeAppName
                 color: Theme.labelColor
                 font: Typography.headlineBold
+                elide: Text.ElideRight
+                horizontalAlignment: Text.AlignHCenter
             }
 
             MouseArea {
@@ -141,56 +146,72 @@ Item {
         }
 
         // 3. Global Menus ("File", "Edit", "View", "Go", "Window", "Help")
-        Repeater {
-            model: ShellState.globalMenus.length > 0 ? ShellState.globalMenus : [
-                { "id": 1, "label": "File",   "children": [{"id": 101, "label": "New Window", "shortcut": "⌘N", "enabled": true}, {"id": 102, "label": "Close Window", "shortcut": "⌘W", "enabled": true}] },
-                { "id": 2, "label": "Edit",   "children": [{"id": 201, "label": "Copy", "shortcut": "⌘C", "enabled": true}, {"id": 202, "label": "Paste", "shortcut": "⌘V", "enabled": true}] },
-                { "id": 3, "label": "View",   "children": [{"id": 301, "label": "as Icons", "shortcut": "⌘1", "enabled": true}, {"id": 302, "label": "as List", "shortcut": "⌘2", "enabled": true}] },
-                { "id": 4, "label": "Window", "children": [{"id": 401, "label": "Minimize", "shortcut": "⌘M", "enabled": true}] },
-                { "id": 5, "label": "Help",   "children": [{"id": 501, "label": "Conjunction Help", "shortcut": "", "enabled": true}] }
-            ]
+        Item {
+            id: menuBarContainer
+            Layout.fillWidth: true
+            Layout.minimumWidth: 0
+            Layout.preferredHeight: 24
+            Layout.alignment: Qt.AlignVCenter
+            clip: true
 
-            delegate: Item {
-                id: menuBtn
-                Layout.preferredWidth: menuLabel.implicitWidth + 16
-                Layout.preferredHeight: 22
-                Layout.alignment: Qt.AlignVCenter
+            Row {
+                anchors.verticalCenter: parent.verticalCenter
+                spacing: 2
 
-                Rectangle {
-                    anchors.fill: parent
-                    radius: 6
-                    color: root.openMenuIndex === index
-                        ? Theme.systemBlue
-                        : (mHover.containsMouse ? (Appearance.isDark ? Qt.rgba(1, 1, 1, 0.10) : Qt.rgba(0, 0, 0, 0.06)) : "transparent")
-                    Behavior on color { ColorAnimation { duration: Motion.hoverSwap } }
-                }
+                Repeater {
+                    model: ShellState.globalMenus.length > 0 ? ShellState.globalMenus : [
+                        { "id": 1, "label": "File",   "children": [{"id": 101, "label": "New Window", "shortcut": "⌘N", "enabled": true}, {"id": 102, "label": "Close Window", "shortcut": "⌘W", "enabled": true}] },
+                        { "id": 2, "label": "Edit",   "children": [{"id": 201, "label": "Copy", "shortcut": "⌘C", "enabled": true}, {"id": 202, "label": "Paste", "shortcut": "⌘V", "enabled": true}] },
+                        { "id": 3, "label": "View",   "children": [{"id": 301, "label": "as Icons", "shortcut": "⌘1", "enabled": true}, {"id": 302, "label": "as List", "shortcut": "⌘2", "enabled": true}] },
+                        { "id": 4, "label": "Window", "children": [{"id": 401, "label": "Minimize", "shortcut": "⌘M", "enabled": true}] },
+                        { "id": 5, "label": "Help",   "children": [{"id": 501, "label": "Conjunction Help", "shortcut": "", "enabled": true}] }
+                    ]
 
-                Text {
-                    id: menuLabel
-                    anchors.centerIn: parent
-                    text: modelData.label || ""
-                    color: root.openMenuIndex === index ? "#FFFFFF" : Theme.labelColor
-                    font: Typography.body
-                }
+                    delegate: Item {
+                        id: menuBtn
+                        readonly property int idealWidth: Math.min(110, menuLabel.implicitWidth + 16)
+                        readonly property int availWidth: Math.max(0, menuBarContainer.width - x)
+                        visible: availWidth >= 32
+                        width: visible ? Math.min(idealWidth, availWidth) : 0
+                        height: 22
 
-                MouseArea {
-                    id: mHover
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    onEntered: {
-                        if (root.openMenuIndex >= -1) {
-                            root.openGlobalMenu(index, menuBtn.x + 8, modelData.children || []);
+                        Rectangle {
+                            anchors.fill: parent
+                            radius: 6
+                            color: root.openMenuIndex === index
+                                ? Theme.systemBlue
+                                : (mHover.containsMouse ? (Appearance.isDark ? Qt.rgba(1, 1, 1, 0.10) : Qt.rgba(0, 0, 0, 0.06)) : "transparent")
+                            Behavior on color { ColorAnimation { duration: Motion.hoverSwap } }
                         }
-                    }
-                    onClicked: {
-                        if (root.openMenuIndex === index) root.closeMenus();
-                        else root.openGlobalMenu(index, menuBtn.x + 8, modelData.children || []);
+
+                        Text {
+                            id: menuLabel
+                            width: Math.min(implicitWidth, Math.max(0, parent.width - 10))
+                            anchors.centerIn: parent
+                            text: modelData.label || ""
+                            color: root.openMenuIndex === index ? "#FFFFFF" : Theme.labelColor
+                            font: Typography.body
+                            elide: Text.ElideRight
+                        }
+
+                        MouseArea {
+                            id: mHover
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            onEntered: {
+                                if (root.openMenuIndex >= -1) {
+                                    root.openGlobalMenu(index, menuBtn.mapToItem(root, 0, 0).x, modelData.children || []);
+                                }
+                            }
+                            onClicked: {
+                                if (root.openMenuIndex === index) root.closeMenus();
+                                else root.openGlobalMenu(index, menuBtn.mapToItem(root, 0, 0).x, modelData.children || []);
+                            }
+                        }
                     }
                 }
             }
         }
-
-        Item { Layout.fillWidth: true }
 
         // 4. Right Status Tray (Search, Wi-Fi, Bluetooth, Control Center, Clock + Notifications)
         RowLayout {
@@ -295,10 +316,10 @@ Item {
     GlassSurface {
         id: menuPopup
         visible: root.openMenuIndex >= -1 && root.activeMenuChildren.length > 0
-        x: Math.min(root.activeMenuX, root.width - width - 8)
+        x: Math.max(8, Math.min(root.activeMenuX, root.width - width - 8))
         y: root.height + 2
-        width: 236
-        height: menuCol.implicitHeight + 12
+        width: Math.min(340, Math.max(236, root.width - 16))
+        height: Math.min(menuCol.implicitHeight + 12, root.parent ? Math.max(120, root.parent.height - root.height - 16) : 480)
         variant: "regular"
         cornerRadius: Geometry.radiusMenu
         shadowPreset: "popover"
@@ -313,55 +334,63 @@ Item {
             onExited: menuHideDelay.restart()
         }
 
-        Column {
-            id: menuCol
-            anchors.left: parent.left
-            anchors.right: parent.right
-            anchors.top: parent.top
+        Flickable {
+            anchors.fill: parent
             anchors.margins: 6
-            spacing: 1
+            contentWidth: width
+            contentHeight: menuCol.implicitHeight
+            clip: true
 
-            Repeater {
-                model: root.activeMenuChildren
-                delegate: Item {
-                    width: menuCol.width
-                    height: modelData.separator ? 9 : 24 // SPEC §4.1: 24 pt item rows
+            Column {
+                id: menuCol
+                width: parent.width
+                spacing: 1
 
-                    Rectangle {
-                        visible: !!modelData.separator
-                        anchors.centerIn: parent
-                        width: parent.width - 16
-                        height: 1
-                        color: Theme.menuSeparatorColor
-                    }
+                Repeater {
+                    model: root.activeMenuChildren
+                    delegate: Item {
+                        width: menuCol.width
+                        height: modelData.separator ? 9 : 24 // SPEC §4.1: 24 pt item rows
 
-                    Rectangle {
-                        visible: !modelData.separator
-                        anchors.fill: parent
-                        radius: 8 // SPEC §2.1: 8 pt selection highlight
-                        color: itemMouse.containsMouse && (modelData.enabled !== false) ? Theme.systemBlue : "transparent"
-                    }
-
-                    RowLayout {
-                        visible: !modelData.separator
-                        anchors.fill: parent
-                        anchors.leftMargin: 10
-                        anchors.rightMargin: 10
-                        Text {
-                            text: modelData.label || ""
-                            color: itemMouse.containsMouse && (modelData.enabled !== false)
-                                ? "#FFFFFF"
-                                : (modelData.enabled === false ? Theme.tertiaryLabelColor : Theme.labelColor)
-                            font: Typography.body
-                            Layout.fillWidth: true
+                        Rectangle {
+                            visible: !!modelData.separator
+                            anchors.centerIn: parent
+                            width: parent.width - 16
+                            height: 1
+                            color: Theme.menuSeparatorColor
                         }
-                        Text {
-                            visible: !!(modelData.shortcut && modelData.shortcut !== "")
-                            text: modelData.shortcut || ""
-                            color: itemMouse.containsMouse ? Qt.rgba(1, 1, 1, 0.82) : Theme.secondaryLabelColor
-                            font: Typography.callout
+
+                        Rectangle {
+                            visible: !modelData.separator
+                            anchors.fill: parent
+                            radius: 8 // SPEC §2.1: 8 pt selection highlight
+                            color: itemMouse.containsMouse && (modelData.enabled !== false) ? Theme.systemBlue : "transparent"
                         }
-                    }
+
+                        RowLayout {
+                            visible: !modelData.separator
+                            anchors.fill: parent
+                            anchors.leftMargin: 10
+                            anchors.rightMargin: 10
+                            Text {
+                                text: modelData.label || ""
+                                color: itemMouse.containsMouse && (modelData.enabled !== false)
+                                    ? "#FFFFFF"
+                                    : (modelData.enabled === false ? Theme.tertiaryLabelColor : Theme.labelColor)
+                                font: Typography.body
+                                elide: Text.ElideRight
+                                Layout.fillWidth: true
+                                Layout.minimumWidth: 0
+                            }
+                            Text {
+                                visible: !!(modelData.shortcut && modelData.shortcut !== "")
+                                Layout.maximumWidth: 72
+                                text: modelData.shortcut || ""
+                                color: itemMouse.containsMouse ? Qt.rgba(1, 1, 1, 0.82) : Theme.secondaryLabelColor
+                                font: Typography.callout
+                                elide: Text.ElideRight
+                            }
+                        }
 
                     MouseArea {
                         id: itemMouse
@@ -383,5 +412,6 @@ Item {
                 }
             }
         }
+    }
     }
 }

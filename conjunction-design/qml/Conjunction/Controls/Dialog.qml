@@ -19,6 +19,7 @@ T.Dialog {
     modal: true
     focus: true
     anchors.centerIn: parent
+    margins: 12
     closePolicy: T.Popup.CloseOnEscape
 
     background: Rectangle {
@@ -45,10 +46,12 @@ T.Dialog {
     }
 
     contentItem: Surface {
+        readonly property real maxWinW: control.T.Overlay.overlay ? Math.max(260, control.T.Overlay.overlay.width - 32) : 420
+        readonly property real maxWinH: control.T.Overlay.overlay ? Math.max(180, control.T.Overlay.overlay.height - 32) : 600
         elevation: "dialog"
         radius: Geometry.radiusSheet // 16 pt
-        implicitWidth: 380
-        implicitHeight: dialogLayout.implicitHeight + Spacing.lg + Spacing.md
+        implicitWidth: Math.min(380, maxWinW)
+        implicitHeight: Math.min(dialogLayout.implicitHeight + Spacing.lg + Spacing.md, maxWinH)
 
         ColumnLayout {
             id: dialogLayout
@@ -63,15 +66,30 @@ T.Dialog {
                 text: control.titleText
                 font: Typography.title2Bold
                 color: Theme.textPrimary
+                wrapMode: Text.Wrap
+                maximumLineCount: 2
+                elide: Text.ElideRight
                 Layout.fillWidth: true
             }
 
-            Text {
-                text: control.messageText
-                font: Typography.body
-                color: Theme.textSecondary
-                wrapMode: Text.WordWrap
+            Flickable {
                 Layout.fillWidth: true
+                Layout.fillHeight: true
+                Layout.preferredHeight: msgText.implicitHeight
+                Layout.maximumHeight: Math.max(48, (control.T.Overlay.overlay ? control.T.Overlay.overlay.height : 600) - 200)
+                contentWidth: width
+                contentHeight: msgText.implicitHeight
+                clip: true
+                T.ScrollBar.vertical: ScrollBar {}
+
+                Text {
+                    id: msgText
+                    width: parent.width
+                    text: control.messageText
+                    font: Typography.body
+                    color: Theme.textSecondary
+                    wrapMode: Text.Wrap
+                }
             }
 
             Rectangle {

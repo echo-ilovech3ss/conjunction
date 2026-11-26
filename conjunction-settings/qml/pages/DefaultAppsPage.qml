@@ -10,24 +10,28 @@ ScrollView {
     contentWidth: availableWidth
 
     ColumnLayout {
-        width: Math.min(root.width - 48, 640)
+        width: Math.min(root.availableWidth - 36, 480)
         anchors.horizontalCenter: parent.horizontalCenter
         spacing: 20
 
         Item { height: 12 }
 
         Text {
+            Layout.fillWidth: true
             text: "Default Applications"
             font: Typography.title
             color: Theme.textPrimary
             Layout.leftMargin: 4
+            elide: Text.ElideRight
         }
 
         Text {
+            Layout.fillWidth: true
             text: "Choose the default applications for web browsing, terminal, files, and media."
             font: Typography.body
             color: Theme.textSecondary
             Layout.leftMargin: 4
+            wrapMode: Text.Wrap
         }
 
         // Card containing categories
@@ -70,16 +74,24 @@ ScrollView {
                                 }
 
                                 ColumnLayout {
+                                    Layout.fillWidth: true
+                                    Layout.minimumWidth: 0
                                     spacing: 2
                                     Text {
+                                        Layout.fillWidth: true
+                                        Layout.minimumWidth: 0
                                         text: modelData.title
                                         font: Typography.headline
                                         color: Theme.textPrimary
+                                        elide: Text.ElideRight
                                     }
                                     Text {
+                                        Layout.fillWidth: true
+                                        Layout.minimumWidth: 0
                                         text: modelData.mime
                                         font: Typography.caption
                                         color: Theme.textSecondary
+                                        elide: Text.ElideRight
                                     }
                                 }
                             }
@@ -87,8 +99,8 @@ ScrollView {
                             // Current Selection Button / Menu
                             Rectangle {
                                 id: selectorButton
-                                Layout.preferredWidth: 180
-                                Layout.preferredHeight: 32
+                                Layout.preferredWidth: Math.min(180, Math.round(categoriesColumn.width * 0.40))
+                                Layout.preferredHeight: Math.max(32, selectorRow.implicitHeight + 10)
                                 radius: 6
                                 color: selectHover.hovered ? (Theme.isDark ? "#2AFFFFFF" : "#1A000000") : (Theme.isDark ? "#1AFFFFFF" : "#10000000")
                                 border.color: Theme.separator
@@ -97,6 +109,7 @@ ScrollView {
                                 HoverHandler { id: selectHover }
 
                                 RowLayout {
+                                    id: selectorRow
                                     anchors.fill: parent
                                     anchors.leftMargin: 8
                                     anchors.rightMargin: 8

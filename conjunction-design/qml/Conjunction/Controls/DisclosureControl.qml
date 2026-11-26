@@ -11,7 +11,7 @@ Rectangle {
     signal toggled(bool isExpanded)
 
     implicitWidth: parent ? parent.width : 200
-    implicitHeight: Geometry.controlHeightMedium
+    implicitHeight: Math.max(Geometry.controlHeightMedium, discText.implicitHeight + 6)
     radius: Geometry.radiusSmall
     color: hoverHandler.hovered ? Theme.surfaceSecondary : "transparent"
 
@@ -48,11 +48,20 @@ Rectangle {
         }
 
         Text {
+            id: discText
             Layout.fillWidth: true
+            Layout.minimumWidth: 0
             text: root.title
             font: Typography.controlLabel
             color: Theme.textPrimary
+            elide: Text.ElideRight
         }
+    }
+
+    ToolTip {
+        visible: hoverHandler.hovered && discText.truncated && root.title !== ""
+        text: root.title
+        delay: 400
     }
 
     FocusRing {

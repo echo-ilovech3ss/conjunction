@@ -75,12 +75,16 @@ T.ToolButton {
         RowLayout {
             id: contentLayout
             spacing: Spacing.xs
-            anchors.centerIn: parent
+            x: Math.max(0, Math.round((parent.width - width) * 0.5))
+            width: Math.min(implicitWidth, Math.max(0, parent.width))
+            height: parent.height
 
             Icon {
                 visible: control.iconName !== "" || (control.icon && control.icon.name !== "")
                 name: control.iconName !== "" ? control.iconName : (control.icon ? control.icon.name : "")
                 size: (control.sizeClass === "small" || control.sizeClass === "compact") ? 15 : 17
+                Layout.preferredWidth: size
+                Layout.preferredHeight: size
                 opsz: 24
                 fill: control.checked ? 1 : 0
                 color: {
@@ -91,7 +95,10 @@ T.ToolButton {
             }
 
             Text {
+                id: toolBtnText
                 visible: control.text !== ""
+                Layout.fillWidth: true
+                Layout.minimumWidth: 0
                 text: control.text
                 font: Typography.body
                 color: {
@@ -107,8 +114,8 @@ T.ToolButton {
     }
 
     ToolTip {
-        visible: control.hovered && (control.tooltipText !== "" || (control.text === "" && control.iconName !== ""))
-        text: control.tooltipText !== "" ? control.tooltipText : control.iconName
+        visible: control.hovered && (toolBtnText.truncated || control.tooltipText !== "" || (control.text === "" && control.iconName !== ""))
+        text: toolBtnText.truncated ? control.text : (control.tooltipText !== "" ? control.tooltipText : control.iconName)
         delay: 500
     }
 }

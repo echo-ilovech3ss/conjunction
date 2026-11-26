@@ -2,31 +2,16 @@
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-CHROOT="/root/conjunction-build/arch-chroot/root.x86_64/work/archiso-work/x86_64/airootfs"
+BUILD_DIR="${BUILD_DIR:-/tmp/build-files}"
+PREFIX="${PREFIX:-/usr}"
 
-echo "[INFO] Copying conjunction-files sources into Arch chroot..."
-mkdir -p "${CHROOT}/var/tmp"
-rm -rf "${CHROOT}/var/tmp/conjunction-files-src"
-cp -r "${REPO_ROOT}/conjunction-files" "${CHROOT}/var/tmp/conjunction-files-src"
+cmake -S "${REPO_ROOT}/conjunction-files" -B "${BUILD_DIR}" -DCMAKE_INSTALL_PREFIX="${PREFIX}"
+cmake --build "${BUILD_DIR}" -j"$(nproc)"
+cmake --install "${BUILD_DIR}" ${DESTDIR:+--prefix "${DESTDIR}/${PREFIX#/}"}
 
-echo "[INFO] Compiling conjunction-files inside Arch chroot..."
-arch-chroot "$CHROOT" bash -c '
-set -e
-cd /var/tmp/conjunction-files-src
-rm -rf build
-cmake -B build -S . -G Ninja
-cmake --build build
-cp build/conjunction-files /usr/bin/conjunction-files
-chmod 755 /usr/bin/conjunction-files
-'
+mkdir -p "${PREFIX}/share/applications"
+cp "${REPO_ROOT}/data/conjunction-files.desktop" "${PREFIX}/share/applications/conjunction-files.desktop"
+mkdir -p "${PREFIX}/share/xdg"
+cp "${REPO_ROOT}/data/mimeapps.list" "${PREFIX}/share/xdg/mimeapps.list"
 
-echo "[INFO] Copying QML files to /usr/share/conjunction/files/ in chroot..."
-mkdir -p "${CHROOT}/usr/share/conjunction/files"
-cp -r "${REPO_ROOT}/conjunction-files/qml/"* "${CHROOT}/usr/share/conjunction/files/"
-mkdir -p "${CHROOT}/usr/share/applications"
-cp "${REPO_ROOT}/data/conjunction-files.desktop" "${CHROOT}/usr/share/applications/conjunction-files.desktop"
-
-mkdir -p /tmp/wsl-target/release
-cp "${CHROOT}/usr/bin/conjunction-files" /tmp/wsl-target/release/conjunction-files
-
-echo "[SUCCESS] Conjunction Files successfully built and installed to chroot /usr/bin/conjunction-files!"
+echo "[SUCCESS] conjunction-files built and installed to ${PREFIX}"

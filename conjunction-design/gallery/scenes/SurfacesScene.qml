@@ -7,96 +7,126 @@ Surface {
     Layout.fillWidth: true
     Layout.fillHeight: true
 
-    ColumnLayout {
+    Flickable {
         anchors.fill: parent
         anchors.margins: Geometry.contentPadding
-        spacing: Spacing.md
+        clip: true
+        contentWidth: width
+        contentHeight: surfCol.implicitHeight
 
-        Text {
-            text: "Surfaces, Continuous Squircles & Concentric Nesting"
-            font: Typography.windowTitle
-            color: Theme.textPrimary
-        }
-
-        Rectangle {
-            Layout.fillWidth: true
-            height: Geometry.separatorThickness
-            color: Theme.separator
-        }
-
-        RowLayout {
+        ColumnLayout {
+            id: surfCol
+            width: parent.width
             spacing: Spacing.md
-            Layout.fillWidth: true
 
-            Surface {
-                elevation: "base"
+            Text {
                 Layout.fillWidth: true
-                height: 100
+                Layout.minimumWidth: 0
+                text: "Surfaces, Continuous Squircles & Concentric Nesting"
+                font: Typography.windowTitle
+                color: Theme.textPrimary
+                elide: Text.ElideRight
+            }
 
-                ColumnLayout {
-                    anchors.centerIn: parent
-                    Text { text: "Base Surface"; font: Typography.controlLabel; color: Theme.textPrimary; Layout.alignment: Qt.AlignCenter }
-                    Text { text: "radius 12pt"; font: Typography.caption; color: Theme.textSecondary; Layout.alignment: Qt.AlignCenter }
+            Rectangle {
+                Layout.fillWidth: true
+                height: Geometry.separatorThickness
+                color: Theme.separator
+            }
+
+            RowLayout {
+                spacing: Spacing.md
+                Layout.fillWidth: true
+
+                Surface {
+                    elevation: "base"
+                    Layout.fillWidth: true
+                    Layout.minimumWidth: 0
+                    height: 100
+
+                    ColumnLayout {
+                        anchors.fill: parent
+                        anchors.margins: 8
+                        Item { Layout.fillHeight: true }
+                        Text { Layout.fillWidth: true; Layout.minimumWidth: 0; horizontalAlignment: Text.AlignHCenter; elide: Text.ElideRight; text: "Base Surface"; font: Typography.controlLabel; color: Theme.textPrimary }
+                        Text { Layout.fillWidth: true; Layout.minimumWidth: 0; horizontalAlignment: Text.AlignHCenter; elide: Text.ElideRight; text: "radius 12pt"; font: Typography.caption; color: Theme.textSecondary }
+                        Item { Layout.fillHeight: true }
+                    }
+                }
+
+                Surface {
+                    elevation: "popover"
+                    Layout.fillWidth: true
+                    Layout.minimumWidth: 0
+                    height: 100
+
+                    ColumnLayout {
+                        anchors.fill: parent
+                        anchors.margins: 8
+                        Item { Layout.fillHeight: true }
+                        Text { Layout.fillWidth: true; Layout.minimumWidth: 0; horizontalAlignment: Text.AlignHCenter; elide: Text.ElideRight; text: "Popover Surface"; font: Typography.controlLabel; color: Theme.textPrimary }
+                        Text { Layout.fillWidth: true; Layout.minimumWidth: 0; horizontalAlignment: Text.AlignHCenter; elide: Text.ElideRight; text: "cr = 14pt, shadow 24%"; font: Typography.caption; color: Theme.textSecondary }
+                        Item { Layout.fillHeight: true }
+                    }
+                }
+
+                Surface {
+                    elevation: "dialog"
+                    Layout.fillWidth: true
+                    Layout.minimumWidth: 0
+                    height: 100
+
+                    ColumnLayout {
+                        anchors.fill: parent
+                        anchors.margins: 8
+                        Item { Layout.fillHeight: true }
+                        Text { Layout.fillWidth: true; Layout.minimumWidth: 0; horizontalAlignment: Text.AlignHCenter; elide: Text.ElideRight; text: "Dialog / Window"; font: Typography.controlLabel; color: Theme.textPrimary }
+                        Text { Layout.fillWidth: true; Layout.minimumWidth: 0; horizontalAlignment: Text.AlignHCenter; elide: Text.ElideRight; text: "cr = 16pt (24.5pt tangent)"; font: Typography.caption; color: Theme.textSecondary }
+                        Item { Layout.fillHeight: true }
+                    }
                 }
             }
 
-            Surface {
-                elevation: "popover"
+            Text {
                 Layout.fillWidth: true
-                height: 100
-
-                ColumnLayout {
-                    anchors.centerIn: parent
-                    Text { text: "Popover Surface"; font: Typography.controlLabel; color: Theme.textPrimary; Layout.alignment: Qt.AlignCenter }
-                    Text { text: "cr = 14pt, shadow 24%"; font: Typography.caption; color: Theme.textSecondary; Layout.alignment: Qt.AlignCenter }
-                }
+                Layout.minimumWidth: 0
+                text: "Concentric Nesting Formula: R_inner = max(4, R_outer - padding)"
+                font: Typography.sectionHeading
+                color: Theme.textPrimary
+                wrapMode: Text.WordWrap
             }
 
-            Surface {
-                elevation: "dialog"
-                Layout.fillWidth: true
-                height: 100
-
-                ColumnLayout {
-                    anchors.centerIn: parent
-                    Text { text: "Dialog / Window"; font: Typography.controlLabel; color: Theme.textPrimary; Layout.alignment: Qt.AlignCenter }
-                    Text { text: "cr = 16pt (24.5pt tangent)"; font: Typography.caption; color: Theme.textSecondary; Layout.alignment: Qt.AlignCenter }
-                }
-            }
-        }
-
-        Text {
-            text: "Concentric Nesting Formula: R_inner = max(4, R_outer - padding)"
-            font: Typography.sectionHeading
-            color: Theme.textPrimary
-        }
-
-        // Outer 16pt squircle with 8pt pad -> Inner 8pt squircle
-        SquircleRect {
-            Layout.preferredWidth: 340
-            Layout.preferredHeight: 84
-            radius: Geometry.radiusWindow // 16 pt
-            color: Theme.controlFill
-            borderColor: Theme.separator
-            borderWidth: 1
-
+            // Outer 16pt squircle with 8pt pad -> Inner 8pt squircle
             SquircleRect {
-                anchors.fill: parent
-                anchors.margins: 8
-                radius: Geometry.concentricRadius(Geometry.radiusWindow, 8) // 8 pt
-                color: Theme.surface
+                Layout.fillWidth: true
+                Layout.maximumWidth: 340
+                Layout.preferredHeight: 84
+                radius: Geometry.radiusWindow // 16 pt
+                color: Theme.controlFill
                 borderColor: Theme.separator
                 borderWidth: 1
 
-                Text {
-                    anchors.centerIn: parent
-                    text: "Outer 16pt - Pad 8pt = Inner 8pt Continuous Squircle"
-                    font: Typography.subheadline
-                    color: Theme.textPrimary
+                SquircleRect {
+                    anchors.fill: parent
+                    anchors.margins: 8
+                    radius: Geometry.concentricRadius(Geometry.radiusWindow, 8) // 8 pt
+                    color: Theme.surface
+                    borderColor: Theme.separator
+                    borderWidth: 1
+
+                    Text {
+                        anchors.fill: parent
+                        anchors.margins: 8
+                        text: "Outer 16pt - Pad 8pt = Inner 8pt Continuous Squircle"
+                        font: Typography.subheadline
+                        color: Theme.textPrimary
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
+                        wrapMode: Text.WordWrap
+                        elide: Text.ElideRight
+                    }
                 }
             }
         }
-
-        Item { Layout.fillHeight: true }
     }
 }

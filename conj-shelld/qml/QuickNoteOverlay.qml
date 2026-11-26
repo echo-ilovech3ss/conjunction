@@ -8,8 +8,8 @@ Item {
     id: root
     property Item backdropItem: null
 
-    width: 340
-    height: 240
+    width: Math.min(340, parent ? parent.width - 32 : 340)
+    height: Math.min(240, parent ? parent.height - 140 : 240)
 
     GlassSurface {
         anchors.fill: parent
@@ -32,9 +32,11 @@ Item {
                 }
                 Text {
                     Layout.fillWidth: true
+                    Layout.minimumWidth: 0
                     text: "Quick Note"
                     color: Theme.labelColor
                     font: Typography.headline
+                    elide: Text.ElideRight
                     horizontalAlignment: Text.AlignHCenter
                 }
                 Icon { name: "note"; size: 16; color: Theme.systemOrange }

@@ -10,24 +10,28 @@ ScrollView {
     contentWidth: availableWidth
 
     ColumnLayout {
-        width: Math.min(root.width - 48, 640)
+        width: Math.min(root.availableWidth - 36, 480)
         anchors.horizontalCenter: parent.horizontalCenter
         spacing: 20
 
         Item { height: 12 }
 
         Text {
+            Layout.fillWidth: true
             text: "Keyboard Shortcuts"
             font: Typography.title
             color: Theme.textPrimary
             Layout.leftMargin: 4
+            elide: Text.ElideRight
         }
 
         Text {
+            Layout.fillWidth: true
             text: "View and customize system shortcuts and window management hotkeys."
             font: Typography.body
             color: Theme.textSecondary
             Layout.leftMargin: 4
+            wrapMode: Text.Wrap
         }
 
         // Shortcuts List Card
@@ -58,25 +62,32 @@ ScrollView {
 
                             ColumnLayout {
                                 Layout.fillWidth: true
+                                Layout.minimumWidth: 0
                                 spacing: 2
 
                                 Text {
+                                    Layout.fillWidth: true
+                                    Layout.minimumWidth: 0
                                     text: modelData.title
                                     font: Typography.headline
                                     color: Theme.textPrimary
+                                    elide: Text.ElideRight
                                 }
 
                                 Text {
+                                    Layout.fillWidth: true
+                                    Layout.minimumWidth: 0
                                     text: modelData.category
                                     font: Typography.caption
                                     color: Theme.textSecondary
+                                    elide: Text.ElideRight
                                 }
                             }
 
                             // Shortcut Badge / Pill
                             Rectangle {
-                                Layout.preferredHeight: 28
-                                Layout.preferredWidth: Math.max(80, shortcutText.implicitWidth + 20)
+                                Layout.preferredHeight: Math.max(28, shortcutText.implicitHeight + 8)
+                                Layout.preferredWidth: Math.min(160, Math.max(80, shortcutText.implicitWidth + 20))
                                 radius: 6
                                 color: Theme.isDark ? "#2AFFFFFF" : "#1A000000"
                                 border.color: Theme.separator
@@ -85,9 +96,12 @@ ScrollView {
                                 Text {
                                     id: shortcutText
                                     anchors.centerIn: parent
+                                    width: Math.min(implicitWidth, parent.width - 12)
                                     text: modelData.shortcut
                                     font: Typography.caption
                                     color: Theme.accent
+                                    elide: Text.ElideRight
+                                    horizontalAlignment: Text.AlignHCenter
                                 }
                             }
                         }
