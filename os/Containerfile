@@ -233,9 +233,11 @@ RUN set -euo pipefail; \
       gstreamer1-plugins-bad-freeworld; \
     ARCH="$(uname -m)"; \
     if [ "${ARCH}" = "x86_64" ]; then \
-      dnf5 copr enable -y bazzite-org/bazzite; \
+      # Fedora's own repos (the bazzite copr has no fedora-45 chroot).
       dnf5 --setopt=fastestmirror=True --setopt=max_parallel_downloads=10 install -y \
-        wine wine-dxvk dxvk-native winetricks umu-launcher; \
+        wine winetricks; \
+      dnf5 --setopt=fastestmirror=True --setopt=max_parallel_downloads=10 install -y --skip-unavailable \
+        wine-dxvk dxvk-native umu-launcher; \
     elif [ "${ARCH}" = "aarch64" ]; then \
       # FEX-Emu (2604 in Fedora 45 main repo) + x86_64 Fedora RootFS + binfmt_misc + thunks + Box64
       # Exclude box64-binfmts weak dep so FEX exclusively owns x86/x86_64 binfmt_misc handlers.
@@ -319,7 +321,10 @@ RUN set -euo pipefail; \
     done; \
     # Rebuild initramfs so updated /usr/lib/os-release and Plymouth watermark are embedded
     KVER="$(ls -1 /usr/lib/modules | head -n 1)"; \
+    # /root -> /var/roothome is dangling at build time and dracut-install fails on it.
+    ROOTHOME="$(readlink -f /root)"; mkdir -p "${ROOTHOME}"; \
     dracut --no-hostonly --kver "${KVER}" --force "/usr/lib/modules/${KVER}/initramfs.img"; \
+    rmdir "${ROOTHOME}" 2>/dev/null || true; \
     # Clean caches/logs/tmp before bootc lint
     rm -rf /var/cache/libdnf5 /var/cache/dnf /var/log/* /tmp/* /var/tmp/*; \
     bootc container lint --fatal-warnings
