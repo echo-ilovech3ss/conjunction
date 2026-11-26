@@ -1,0 +1,10 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Conjunction Bundle Launcher
+Comment=Open Conjunction .app bundles
+Exec=conj-open %f
+Icon=application-x-executable
+MimeType=application/x-conjunction-app;
+NoDisplay=true
+Terminal=false

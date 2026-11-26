@@ -1,0 +1,10 @@
+// Optional polkit rule allowing local desktop wheel users to loop-mount
+// read-only .cdmg disk images via udisks2 without an admin prompt.
+polkit.addRule(function(action, subject) {
+    if ((action.id === "org.freedesktop.udisks2.loop-setup" ||
+         action.id === "org.freedesktop.udisks2.filesystem-mount" ||
+         action.id === "org.freedesktop.udisks2.filesystem-unmount-others") &&
+        subject.local && subject.active && subject.isInGroup("wheel")) {
+        return polkit.Result.YES;
+    }
+});

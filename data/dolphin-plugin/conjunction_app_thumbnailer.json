@@ -1,0 +1,10 @@
+{
+    "KPlugin": {
+        "MimeTypes": [
+            "inode/directory",
+            "application/x-conjunction-app"
+        ],
+        "Name": "Conjunction App Bundle Thumbnailer"
+    },
+    "CacheThumbnail": true
+}

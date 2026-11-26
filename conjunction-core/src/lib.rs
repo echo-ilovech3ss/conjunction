@@ -1,5 +1,30 @@
 pub mod bundle;
-pub use bundle::{Bundle, BundleError, Manifest, CURRENT_BUNDLE_FORMAT, SUPPORTED_ARCHITECTURES};
+pub use bundle::{
+    host_arch, AppImageSpec, Bundle, BundleError, DocumentType, FlatpakSpec, Manifest,
+    RuntimeKind, WineSpec, BUNDLE_FORMAT_V1, BUNDLE_FORMAT_V2, CURRENT_BUNDLE_FORMAT,
+    DEFAULT_RUNTIME, SUPPORTED_ARCHITECTURES, SUPPORTED_BUNDLE_FORMATS, SUPPORTED_RUNTIMES,
+};
+
+pub mod cdmg;
+pub use cdmg::{
+    detect_cdmg_filesystem, eject_cdmg, list_mounted_cdmgs, mount_cdmg, pack_cdmg, CdmgError,
+    CdmgFilesystem, MountBackend, MountRecord, PackOptions, VolumeMeta, CDMG_EXTENSION,
+    CDMG_FORMAT_VERSION, CDMG_MIME_TYPE,
+};
+
+pub mod launcher;
+pub use launcher::{
+    build_bundle_launch_plan, execute_plan_captured, spawn_plan_detached, LaunchError, LaunchPlan,
+};
+
+pub mod security;
+pub use security::{
+    check_bundle_symlinks_contained, clear_quarantine, get_quarantine, seal_bundle_manifest,
+    set_quarantine, sha256_bytes, sha256_file, sign_bundle_manifest, verify_bundle_manifest,
+    verify_bundle_signature, QuarantineInfo, SecurityError,
+};
+
+pub mod watcher;
 
 pub mod desktop_entry;
 pub use desktop_entry::{DesktopEntry, DesktopEntryError};
@@ -12,9 +37,9 @@ pub use flatpak::FlatpakAppInfo;
 
 pub mod registry;
 pub use registry::{
-    AppBackend, AppConflict, AppRegistry, AppScope, InstalledApp, LaunchResult, RegistryError,
-    RegistryItem, is_reserved_id, system_applications_dir, user_applications_dir,
-    user_config_dir, user_desktop_dir, user_state_dir,
+    generated_xdg_dir, is_reserved_id, system_applications_dir, user_applications_dir,
+    user_config_dir, user_desktop_dir, user_state_dir, AppBackend, AppConflict, AppRegistry,
+    AppScope, InstalledApp, LaunchResult, RegistryError, RegistryItem,
 };
 
 pub mod ipc;
@@ -38,8 +63,10 @@ pub use search::{
 
 pub mod files;
 pub use files::{
-    detect_mime_type, empty_trash, format_file_size, format_timestamp, get_app_data_paths,
-    get_trash_dir, move_to_trash, remove_app_data, FileItemInfo, QuickLookPreview, QuickLookType,
+    collect_leftover_candidates, detect_mime_type, empty_trash, format_file_size,
+    format_timestamp, get_app_data_paths, get_trash_dir, list_leftovers, move_to_trash,
+    purge_leftovers, record_leftovers, remove_app_data, FileItemInfo, LeftoverPath,
+    LeftoverRecord, QuickLookPreview, QuickLookType,
 };
 
 pub mod settings;
@@ -351,170 +378,100 @@ fn walk_dir_for_stem(dir: &Path, target_stem: &str) -> Option<PathBuf> {
 }
 
 pub fn create_app_bundle(name: &str, pkg_type: &str, package_id: &str) -> Result<(), Box<dyn std::error::Error>> {
-    let app_path = format!("/Applications/{}.app", name);
-    let macos_dir = format!("{}/Contents/MacOS", app_path);
-    let resources_dir = format!("{}/Contents/Resources", app_path);
-    
+    let apps_root = if is_root() {
+        system_applications_dir()
+    } else {
+        user_applications_dir()
+    };
+    let app_path = apps_root.join(format!("{}.app", name));
+    let macos_dir = app_path.join("Contents/MacOS");
+    let resources_dir = app_path.join("Contents/Resources");
+
     std::fs::create_dir_all(&macos_dir)?;
     std::fs::create_dir_all(&resources_dir)?;
-    
+
     let exec_cmd = if pkg_type == "flatpak" {
-        format!("exec flatpak run {}", package_id)
+        format!("exec flatpak run {} \"$@\"", package_id)
     } else {
         let bin_name = find_binary_for_package(package_id);
-        format!("exec {}", bin_name)
+        format!("exec {} \"$@\"", bin_name)
     };
-    
-    let launcher_path = format!("{}/{}", macos_dir, name);
-    let launcher_content = format!("#!/bin/bash\n{} \"$@\"\n", exec_cmd);
+
+    let launcher_path = macos_dir.join(name);
+    let launcher_content = format!("#!/bin/sh\n{}\n", exec_cmd);
     std::fs::write(&launcher_path, launcher_content)?;
-    
+
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
         std::fs::set_permissions(&launcher_path, std::fs::Permissions::from_mode(0o755))?;
     }
-    
-    let plist_path = format!("{}/Contents/Info.plist", app_path);
-    let bundle_id = if pkg_type == "flatpak" {
+
+    let mut icon_rel = None;
+    if let Some(icon_src) = find_package_icon(package_id, pkg_type) {
+        let ext = icon_src
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("png")
+            .to_string();
+        let dest_icon = resources_dir.join(format!("icon.{}", ext));
+        if std::fs::copy(&icon_src, &dest_icon).is_ok() {
+            icon_rel = Some(format!("Contents/Resources/icon.{}", ext));
+        }
+    }
+
+    let bundle_id = if pkg_type == "flatpak" && Bundle::validate_id(package_id).is_ok() {
         package_id.to_string()
     } else {
-        format!("org.conjunction.{}", name)
+        let clean: String = name
+            .chars()
+            .map(|c| if c.is_ascii_alphanumeric() || c == '-' || c == '_' { c } else { '-' })
+            .collect();
+        let trimmed = clean.trim_matches(|c| c == '-' || c == '_');
+        let seg = if trimmed.is_empty() { "app" } else { trimmed };
+        format!("app.conjunction.{}", seg)
     };
-    
-    let plist_content = format!(r#"<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>CFBundleName</key>
-    <string>{}</string>
-    <key>CFBundleExecutable</key>
-    <string>{}</string>
-    <key>CFBundleIdentifier</key>
-    <string>{}</string>
-</dict>
-</plist>
-"#, name, name, bundle_id);
-    std::fs::write(&plist_path, plist_content)?;
-    
-    let dest_icon_path = format!("{}/icon.png", resources_dir);
-    if let Some(icon_path) = find_package_icon(package_id, pkg_type) {
-        let _ = std::fs::copy(icon_path, &dest_icon_path);
-    }
-    
-    let user_home = get_user_home();
-    let meta_dir = user_home.join(".conjunction").join("apps");
-    let meta_path = meta_dir.join(format!("{}.json", name));
-    
-    let meta_data = serde_json::json!({
-        "name": name,
-        "type": pkg_type,
-        "package_id": package_id,
-        "app_path": app_path
-    });
-    
-    write_file_user(&meta_path, &serde_json::to_string_pretty(&meta_data)?, None)?;
-    
-    let desktop_dir = user_home.join(".local").join("share").join("applications");
-    let desktop_path = desktop_dir.join(format!("conjunction-{}.desktop", name));
-    
-    let icon_val = if Path::new(&dest_icon_path).exists() {
-        dest_icon_path.clone()
+
+    let runtime_block = if pkg_type == "flatpak" {
+        format!(
+            "runtime = \"flatpak\"\n\n[flatpak]\nid = \"{}\"\nscope = \"user\"\n",
+            package_id
+        )
     } else {
-        "system-run".to_string()
+        "runtime = \"conjunction-1\"\n".to_string()
     };
-    
-    let desktop_content = format!(r#"[Desktop Entry]
-Version=1.0
-Type=Application
-Name={}
-Exec={}
-Icon={}
-Terminal=false
-Categories=Utility;
-"#, name, launcher_path, icon_val);
-    
-    write_file_user(&desktop_path, &desktop_content, None)?;
-    
-    let app_desktop_path = format!("/Applications/{}.desktop", name);
-    let app_icon_val = if Path::new(&dest_icon_path).exists() {
-        dest_icon_path
-    } else {
-        "system-run".to_string()
-    };
-    
-    let app_desktop_content = format!(r#"[Desktop Entry]
-Version=1.0
-Type=Application
-Name={}
-Exec=/Applications/{}.app/Contents/MacOS/{}
-Icon={}
-Terminal=false
-Categories=Utility;
-"#, name, name, name, app_icon_val);
-    
-    std::fs::write(&app_desktop_path, app_desktop_content)?;
-    
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(&app_desktop_path, std::fs::Permissions::from_mode(0o755))?;
-    }
-    
+
+    let icon_line = icon_rel
+        .as_ref()
+        .map(|i| format!("icon = \"{}\"\n", i))
+        .unwrap_or_default();
+
+    let info_toml = format!(
+        "bundle_format = \"{}\"\nid = \"{}\"\nname = \"{}\"\nversion = \"1.0.0\"\nexecutable = \"Contents/MacOS/{}\"\narchitectures = [\"x86_64\", \"aarch64\"]\n{}{}",
+        BUNDLE_FORMAT_V2, bundle_id, name, name, icon_line, runtime_block
+    );
+    std::fs::write(app_path.join("Contents/Info.toml"), info_toml)?;
+
+    let mut reg = AppRegistry::default_for_user();
+    let _ = reg.reconcile();
     Ok(())
 }
 
 pub fn remove_app_bundle(name: &str) -> Result<(), Box<dyn std::error::Error>> {
-    let user_home = get_user_home();
-    let apps_dir = user_home.join(".conjunction").join("apps");
-    let mut app_name = name.to_string();
-    
-    if apps_dir.exists() {
-        if let Ok(entries) = std::fs::read_dir(&apps_dir) {
-            for entry in entries.flatten() {
-                let path = entry.path();
-                if path.is_file() && path.extension().is_some_and(|ext| ext == "json") {
-                    if let Ok(content) = std::fs::read_to_string(&path) {
-                        if let Ok(meta) = serde_json::from_str::<serde_json::Value>(&content) {
-                            let meta_name = meta.get("name").and_then(|v| v.as_str()).unwrap_or("");
-                            let meta_pkg_id = meta.get("package_id").and_then(|v| v.as_str()).unwrap_or("");
-                            if (meta_name.to_lowercase() == name.to_lowercase() || meta_pkg_id.to_lowercase() == name.to_lowercase())
-                                && !meta_name.is_empty() {
-                                    app_name = meta_name.to_string();
-                                    break;
-                                }
-                        }
-                    }
-                }
-            }
+    let candidates = [
+        user_applications_dir().join(format!("{}.app", name)),
+        system_applications_dir().join(format!("{}.app", name)),
+    ];
+    for p in &candidates {
+        if p.exists() {
+            println!("Removing application bundle {}...", p.display());
+            std::fs::remove_dir_all(p)?;
+            println!("✓ Removed {}", p.display());
         }
     }
-    
-    let app_path = format!("/Applications/{}.app", app_name);
-    let app_path_p = Path::new(&app_path);
-    if app_path_p.exists() {
-        println!("Removing application bundle {}...", app_path);
-        let _ = std::fs::remove_dir_all(app_path_p);
-        println!("✓ Removed {}", app_path);
-    }
-    
-    let companion_desktop_path = format!("/Applications/{}.desktop", app_name);
-    let companion_desktop_p = Path::new(&companion_desktop_path);
-    if companion_desktop_p.exists() {
-        let _ = std::fs::remove_file(companion_desktop_p);
-        println!("✓ Removed companion desktop file {}", companion_desktop_path);
-    }
-    
-    let desktop_path = user_home.join(".local").join("share").join("applications").join(format!("conjunction-{}.desktop", app_name));
-    if desktop_path.exists() {
-        let _ = std::fs::remove_file(desktop_path);
-    }
-    
-    let json_path = apps_dir.join(format!("{}.json", app_name));
-    if json_path.exists() {
-        let _ = std::fs::remove_file(json_path);
-    }
-    
+
+    let mut reg = AppRegistry::default_for_user();
+    let _ = reg.reconcile();
     Ok(())
 }
 

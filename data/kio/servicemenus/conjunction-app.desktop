@@ -1,0 +1,25 @@
+[Desktop Entry]
+Type=Service
+MimeType=application/x-conjunction-app;application/x-conjunction-disk-image;
+Actions=OpenConjunctionApp;ShowPackageContents;MountCdmg;EjectCdmg;
+X-KDE-Priority=TopLevel
+
+[Desktop Action OpenConjunctionApp]
+Name=Open Application
+Icon=system-run
+Exec=conj-open %f
+
+[Desktop Action ShowPackageContents]
+Name=Show Package Contents
+Icon=folder-open
+Exec=dolphin %f/Contents
+
+[Desktop Action MountCdmg]
+Name=Mount Disk Image
+Icon=media-optical
+Exec=conj-open %f
+
+[Desktop Action EjectCdmg]
+Name=Eject Disk Image
+Icon=media-eject
+Exec=conj-open --eject %f

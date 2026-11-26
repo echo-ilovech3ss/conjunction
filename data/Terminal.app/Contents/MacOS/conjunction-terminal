@@ -1,0 +1,10 @@
+#!/bin/sh
+set -eu
+SELF_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+if [ -x "$SELF_DIR/conjunction-terminal-bin" ]; then
+    exec "$SELF_DIR/conjunction-terminal-bin" "$@"
+fi
+if [ -x "/usr/bin/conjunction-terminal" ]; then
+    exec /usr/bin/conjunction-terminal "$@"
+fi
+exec konsole "$@"

@@ -128,6 +128,28 @@ EXPORTS_DIR = BASE_DIR / "exports"
 CONFIG_DIR = BASE_DIR / "config"
 DESKTOP_DIR = get_user_home() / ".local" / "share" / "applications"
 
+
+def user_applications_dir() -> Path:
+    """Resolve ~/Applications (respecting CONJUNCTION_USER_APPS_DIR)."""
+    override = os.environ.get("CONJUNCTION_USER_APPS_DIR")
+    if override:
+        return Path(override)
+    return get_user_home() / "Applications"
+
+
+def system_applications_dir() -> Path:
+    """Resolve /Applications (or /var/Applications on atomic images)."""
+    override = os.environ.get("CONJUNCTION_SYSTEM_APPS_DIR")
+    if override:
+        return Path(override)
+    primary = Path("/Applications")
+    if primary.exists():
+        return primary
+    atomic_var = Path("/var/Applications")
+    if atomic_var.exists():
+        return atomic_var
+    return primary
+
 # Visual C++ Redistributable URLs (2015-2022 combined)
 VC_REDIST_URLS: Dict[str, str] = {
     "x64": "https://aka.ms/vs/17/release/vc_redist.x64.exe",
@@ -1655,6 +1677,206 @@ class ConjunctionAPI:
 
         log.info("Application '%s' removed successfully", app_name)
 
+    def install_bundle(
+        self,
+        exe_path: str,
+        app_name: Optional[str] = None,
+        *,
+        apps_dir: Optional[Path] = None,
+        system: bool = False,
+        inject_runtime: bool = False,
+        force: bool = False,
+    ) -> Dict[str, Any]:
+        """Install a Windows .exe/.msi as a self-contained .app bundle.
+
+        All Wine state (Contents/WinePrefix/) and the .exe reside inside the
+        bundle itself, so deleting Name.app deletes the entire Windows install.
+        """
+        exe = Path(exe_path).resolve()
+        if not exe.exists():
+            raise FileNotFoundError(f"Installer or executable not found: {exe}")
+
+        raw_name = app_name or exe.stem
+        sanitized = re.sub(r"[^a-zA-Z0-9._-]", "_", raw_name).strip("._-") or "WindowsApp"
+
+        target_root = apps_dir or (system_applications_dir() if system else user_applications_dir())
+        target_root.mkdir(parents=True, exist_ok=True)
+        final_bundle = target_root / f"{sanitized}.app"
+
+        if final_bundle.exists() and not force:
+            raise PrefixError(f"Bundle already exists at {final_bundle} (pass force=True to replace)")
+
+        staging_bundle = target_root / f".{sanitized}.app.staging.{os.getpid()}.{int(time.time() * 1000)}"
+        contents_dir = staging_bundle / "Contents"
+        macos_dir = contents_dir / "MacOS"
+        resources_dir = contents_dir / "Resources"
+        prefix_path = contents_dir / "WinePrefix"
+
+        try:
+            macos_dir.mkdir(parents=True, exist_ok=True)
+            resources_dir.mkdir(parents=True, exist_ok=True)
+            prefix_path.mkdir(parents=True, exist_ok=True)
+
+            init_env = {
+                "WINEARCH": "win64",
+                "WINEPREFIX": str(prefix_path),
+                "DISPLAY": "",
+                "WINEDLLOVERRIDES": "winemenubuilder.exe=d",
+            }
+            _run_cmd(["wineboot", "--init"], env=init_env, timeout=300)
+
+            if inject_runtime:
+                self._inject_runtime(prefix_path)
+
+            is_msi = exe.suffix.lower() == ".msi"
+            is_portable_candidate = not is_msi and "setup" not in exe.stem.lower() and "install" not in exe.stem.lower()
+
+            if is_msi:
+                _run_cmd(["msiexec", "/i", str(exe)], env=init_env, check=False, timeout=3600)
+            elif not is_portable_candidate:
+                _run_cmd(["wine", str(exe)], env=init_env, check=False, timeout=3600)
+
+            primary_exe = self._discover_primary_exe(prefix_path)
+            if primary_exe is None:
+                # Portable .exe or self-contained binary: copy directly inside WinePrefix
+                prog_dir = prefix_path / "drive_c" / "Program Files" / sanitized
+                prog_dir.mkdir(parents=True, exist_ok=True)
+                copied_exe = prog_dir / exe.name
+                shutil.copy2(exe, copied_exe)
+                primary_exe = copied_exe
+
+            rel_exe = primary_exe.relative_to(staging_bundle).as_posix()
+
+            # Optional icon conversion from .ico found inside prefix
+            icon_rel: Optional[str] = None
+            ico_files = list(prefix_path.rglob("*.ico"))
+            if ico_files:
+                png_path = resources_dir / "icon.png"
+                if _convert_ico_to_png(ico_files[0], png_path):
+                    icon_rel = "Contents/Resources/icon.png"
+
+            launcher_path = macos_dir / sanitized
+            launcher_script = (
+                "#!/bin/sh\n"
+                "set -eu\n"
+                "SELF_DIR=$(CDPATH= cd -- \"$(dirname -- \"$0\")\" && pwd)\n"
+                "CONTENTS_DIR=$(CDPATH= cd -- \"$SELF_DIR/..\" && pwd)\n"
+                "export WINEPREFIX=\"${WINEPREFIX:-$CONTENTS_DIR/WinePrefix}\"\n"
+                "export WINEARCH=\"${WINEARCH:-win64}\"\n"
+                "export WINEDLLOVERRIDES=\"${WINEDLLOVERRIDES:-winemenubuilder.exe=d}\"\n"
+                "export WINEDEBUG=\"${WINEDEBUG:--all}\"\n"
+                f"exec wine \"$CONTENTS_DIR/../{rel_exe}\" \"$@\"\n"
+            )
+            launcher_path.write_text(launcher_script, encoding="utf-8")
+            launcher_path.chmod(0o755)
+
+            id_seg = re.sub(r"[^a-zA-Z0-9_-]", "", sanitized).strip("-_") or "app"
+            bundle_id = f"win.conjunction.{id_seg}"
+            icon_line = f'icon = "{icon_rel}"\n' if icon_rel else ""
+
+            info_toml = (
+                'bundle_format = "conjunction.app/2"\n'
+                f'id = "{bundle_id}"\n'
+                f'name = "{sanitized}"\n'
+                'version = "1.0.0"\n'
+                f'executable = "Contents/MacOS/{sanitized}"\n'
+                'architectures = ["x86_64", "aarch64"]\n'
+                'runtime = "wine"\n'
+                f'{icon_line}\n'
+                '[wine]\n'
+                'prefix = "Contents/WinePrefix"\n'
+                f'target_exe = "{rel_exe}"\n'
+                'arch = "win64"\n'
+                'esync = true\n'
+                'fsync = true\n'
+                'wine_debug = "-all"\n'
+            )
+            (contents_dir / "Info.toml").write_text(info_toml, encoding="utf-8")
+
+            if final_bundle.exists() and force:
+                shutil.rmtree(final_bundle)
+            os.replace(staging_bundle, final_bundle)
+        except Exception:
+            shutil.rmtree(staging_bundle, ignore_errors=True)
+            raise
+
+        # Best-effort trigger conj-appctl reconcile if daemon is running
+        appctl = _which("conj-appctl")
+        if appctl:
+            try:
+                _run_cmd([appctl, "reconcile"], check=False, timeout=5)
+            except Exception:
+                pass
+
+        return {
+            "id": bundle_id,
+            "name": sanitized,
+            "bundle_path": str(final_bundle),
+            "prefix_path": str(final_bundle / "Contents" / "WinePrefix"),
+            "primary_exe": str(final_bundle / rel_exe),
+        }
+
+    def run_bundle(
+        self,
+        bundle_path: Path,
+        args: Sequence[str] = (),
+        *,
+        no_gpu: bool = False,
+        debug: bool = False,
+    ) -> int:
+        """Run a Wine .app bundle directly from its self-contained Contents/WinePrefix."""
+        bundle_root = Path(bundle_path).resolve()
+        info_path = bundle_root / "Contents" / "Info.toml"
+        if not info_path.is_file():
+            raise AppNotFoundError(f"Missing Info.toml in bundle: {bundle_root}")
+
+        manifest = _load_toml_file(info_path)
+        wine_cfg = manifest.get("wine", {})
+        rel_prefix = wine_cfg.get("prefix", "Contents/WinePrefix")
+        rel_exe = wine_cfg.get("target_exe", "")
+        if not rel_exe:
+            raise ConjunctionError(f"Bundle '{bundle_root}' is missing [wine].target_exe")
+
+        for label, rel in (("wine.prefix", rel_prefix), ("wine.target_exe", rel_exe)):
+            p = Path(rel)
+            if p.is_absolute() or ".." in p.parts:
+                raise ConjunctionError(f"Unsafe {label} path in bundle: {rel}")
+
+        prefix_path = (bundle_root / rel_prefix).resolve()
+        target_exe = (bundle_root / rel_exe).resolve()
+        if not str(prefix_path).startswith(str(bundle_root)) or not str(target_exe).startswith(str(bundle_root)):
+            raise ConjunctionError("Wine bundle path escapes bundle boundary")
+        if not target_exe.is_file():
+            raise AppNotFoundError(f"Bundle executable missing: {target_exe}")
+
+        self._validate_prefix_state(prefix_path)
+        env = self._configure_environment(prefix_path, no_gpu=no_gpu, debug=debug)
+
+        if self.proton_path:
+            cmd = [self.proton_path, "run", str(target_exe), *args]
+        elif self.wine_path:
+            cmd = [self.wine_path, str(target_exe), *args]
+        else:
+            raise WineNotFoundError("Neither Proton nor Wine found on the system.")
+
+        proc = subprocess.Popen(cmd, env=env, cwd=str(target_exe.parent), text=True)
+        return proc.wait(timeout=7200)
+
+    def remove_bundle(self, app_name_or_path: str) -> Path:
+        """Delete a .app bundle (including its self-contained Wine prefix)."""
+        candidate = Path(app_name_or_path)
+        if not (candidate.is_dir() and candidate.suffix == ".app"):
+            stem = app_name_or_path[:-4] if app_name_or_path.endswith(".app") else app_name_or_path
+            for root in (user_applications_dir(), system_applications_dir()):
+                p = root / f"{stem}.app"
+                if p.is_dir():
+                    candidate = p
+                    break
+        if not candidate.is_dir():
+            raise AppNotFoundError(f"Application bundle not found: {app_name_or_path}")
+        shutil.rmtree(candidate)
+        return candidate
+
     def configure(
         self,
         app_name: str,
@@ -2661,6 +2883,34 @@ class ConjunctionAPI:
                     log_cb(f"Warning: Failed to create desktop entry: {exc}")
 
         return True
+
+
+def _load_toml_file(path: Path) -> Dict[str, Any]:
+    """Load a TOML file using stdlib tomllib (Python 3.11+) with minimal fallback."""
+    try:
+        import tomllib
+        with open(path, "rb") as fh:
+            return tomllib.load(fh)
+    except ImportError:
+        data: Dict[str, Any] = {}
+        section: Optional[str] = None
+        for raw_line in path.read_text(encoding="utf-8").splitlines():
+            line = raw_line.strip()
+            if not line or line.startswith("#"):
+                continue
+            if line.startswith("[") and line.endswith("]"):
+                section = line[1:-1].strip()
+                data.setdefault(section, {})
+                continue
+            if "=" in line:
+                k, v = line.split("=", 1)
+                k = k.strip()
+                v = v.strip().strip('"').strip("'")
+                if section:
+                    data[section][k] = v
+                else:
+                    data[k] = v
+        return data
 
 
 class ConjunctionRunner(ConjunctionAPI):

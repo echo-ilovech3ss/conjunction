@@ -1,5 +1,5 @@
 use std::path::Path;
-use conjunction_core::bundle::CURRENT_BUNDLE_FORMAT;
+use conjunction_core::bundle::{Bundle, CURRENT_BUNDLE_FORMAT};
 use conjunction_core::desktop_entry::DesktopEntry;
 
 #[test]
@@ -20,10 +20,14 @@ fn test_terminal_bundle_spec_valid() {
     assert_eq!(val.get("id").and_then(|v| v.as_str()), Some("org.conjunction.terminal"));
     assert_eq!(val.get("name").and_then(|v| v.as_str()), Some("Terminal"));
     assert_eq!(val.get("version").and_then(|v| v.as_str()), Some("1.0.0"));
-    assert_eq!(val.get("executable").and_then(|v| v.as_str()), Some("Contents/Executable/conjunction-terminal"));
+    assert_eq!(val.get("executable").and_then(|v| v.as_str()), Some("Contents/MacOS/conjunction-terminal"));
 
     let archs = val.get("architectures").and_then(|v| v.as_array()).expect("architectures must be array");
     assert!(archs.iter().any(|a| a.as_str() == Some("x86_64")));
+    assert!(archs.iter().any(|a| a.as_str() == Some("aarch64")));
+
+    let bundle = Bundle::open(bundle_path).expect("Terminal.app should open");
+    bundle.validate().expect("Terminal.app should validate");
 }
 
 #[test]

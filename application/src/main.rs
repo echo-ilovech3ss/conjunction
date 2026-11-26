@@ -1191,9 +1191,10 @@ fn main() {
     let has_pacman = which_binary("pacman").is_some();
     let has_flatpak = which_binary("flatpak").is_some();
     let has_yay = which_binary("yay").is_some();
+    let has_dnf = which_binary("dnf").is_some() || which_binary("rpm-ostree").is_some();
     
-    if !has_pacman && !has_flatpak {
-        eprintln!("{}", colored("✗ Neither pacman nor flatpak is available on this system.", RED));
+    if !has_pacman && !has_flatpak && !has_dnf {
+        eprintln!("{}", colored("✗ Neither flatpak, dnf/rpm-ostree, nor pacman is available on this system.", RED));
         std::process::exit(1);
     }
     

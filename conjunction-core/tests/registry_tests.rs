@@ -63,7 +63,7 @@ id = "{}"
 name = "{}"
 version = "1.0.0"
 executable = "Contents/Executable/{}"
-architectures = ["x86_64"]
+architectures = ["x86_64", "aarch64"]
 mime_types = ["application/x-hello"]
 "#,
             CURRENT_BUNDLE_FORMAT, id, name, exec_name
@@ -286,4 +286,190 @@ architectures = ["x86_64"]
     // Verify no leftover staging directories in user_apps
     let entries: Vec<_> = fs::read_dir(&env.user_apps).unwrap().collect();
     assert_eq!(entries.len(), 0, "no staging directories left behind");
+}
+
+#[test]
+fn test_reconcile_rebuilds_from_disk_purges_orphans_and_tracks_leftovers() {
+    let env = TestEnv::new("reconcile_leftovers");
+    let xdg_root = env.root.join("xdg");
+    let desktop_dir = xdg_root.join("applications");
+    let icons_dir = xdg_root.join("icons/hicolor/scalable/apps");
+    let mime_pkg_dir = xdg_root.join("mime/packages");
+    fs::create_dir_all(&desktop_dir).unwrap();
+    fs::create_dir_all(&icons_dir).unwrap();
+    fs::create_dir_all(&mime_pkg_dir).unwrap();
+
+    // Plant stale orphaned artifacts before creating registry (simulates crash or offline deletion)
+    let stale_dt = desktop_dir.join("conj-org.example.stale.desktop");
+    let stale_icon = icons_dir.join("conj-org.example.stale.svg");
+    let stale_xml = mime_pkg_dir.join("conj-org.example.stale.xml");
+    fs::write(&stale_dt, "[Desktop Entry]\nName=Stale\n").unwrap();
+    fs::write(&stale_icon, "<svg/>").unwrap();
+    fs::write(&stale_xml, "<mime-info/>").unwrap();
+    fs::write(
+        env.config_dir.join("mimeapps.list"),
+        "[Added Associations]\ntext/plain=conj-org.example.stale.desktop;\n",
+    )
+    .unwrap();
+
+    // Create a rich v2 bundle in user_apps with icon, url_schemes, document_types
+    let bundle_dir = env.user_apps.join("Notes.app");
+    fs::create_dir_all(bundle_dir.join("Contents/MacOS")).unwrap();
+    fs::create_dir_all(bundle_dir.join("Contents/Resources")).unwrap();
+    let notes_manifest = format!(
+        r#"bundle_format = "{}"
+id = "org.example.notes"
+name = "Notes"
+version = "1.0.0"
+executable = "Contents/MacOS/notes"
+architectures = ["x86_64", "aarch64"]
+icon = "Contents/Resources/icon.svg"
+url_schemes = ["notes"]
+
+[[document_types]]
+name = "Conjunction Note"
+mime_types = ["application/x-conj-note"]
+extensions = ["cnote"]
+"#,
+        conjunction_core::BUNDLE_FORMAT_V2
+    );
+    fs::write(bundle_dir.join("Contents/Info.toml"), notes_manifest).unwrap();
+    fs::write(bundle_dir.join("Contents/Resources/icon.svg"), "<svg xmlns=\"http://www.w3.org/2000/svg\"/>").unwrap();
+    let exec_p = bundle_dir.join("Contents/MacOS/notes");
+    fs::write(&exec_p, "#!/bin/sh\necho notes\n").unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(&exec_p, fs::Permissions::from_mode(0o755)).unwrap();
+    }
+
+    let mut reg = AppRegistry::new(
+        vec![
+            (env.user_apps.clone(), AppScope::User),
+            (env.system_apps.clone(), AppScope::System),
+        ],
+        env.state_dir.clone(),
+        desktop_dir.clone(),
+        env.config_dir.clone(),
+    );
+    reg.reconcile().unwrap();
+
+    // 1. Stale files were purged cleanly on rebuild-from-disk
+    assert!(!stale_dt.exists(), "stale desktop file must be purged");
+    assert!(!stale_icon.exists(), "stale icon must be purged");
+    assert!(!stale_xml.exists(), "stale mime xml must be purged");
+    let cfg_mime = fs::read_to_string(env.config_dir.join("mimeapps.list")).unwrap();
+    assert!(!cfg_mime.contains("conj-org.example.stale.desktop"));
+
+    // 2. Active bundle generated .desktop, icon, XML, and URL handler registration
+    let notes_dt = desktop_dir.join("conj-org.example.notes.desktop");
+    assert!(notes_dt.is_file());
+    let dt_str = fs::read_to_string(&notes_dt).unwrap();
+    assert!(dt_str.contains("x-scheme-handler/notes"));
+    assert!(dt_str.contains("application/x-conj-note"));
+    assert!(icons_dir.join("conj-org.example.notes.svg").is_file());
+    assert!(mime_pkg_dir.join("conj-org.example.notes.xml").is_file());
+
+    // 3. Simulate app creating cache/config in user home, plus user Documents file
+    let home = conjunction_core::get_user_home();
+    let unique_id = format!("org.example.leftover_{}", std::process::id());
+    let lo_bundle = env.user_apps.join("Leftover.app");
+    fs::create_dir_all(lo_bundle.join("Contents/MacOS")).unwrap();
+    let lo_manifest = format!(
+        r#"bundle_format = "{}"
+id = "{}"
+name = "Leftover App"
+version = "1.0.0"
+executable = "Contents/MacOS/lo"
+architectures = ["x86_64", "aarch64"]
+"#,
+        conjunction_core::BUNDLE_FORMAT_V2,
+        unique_id
+    );
+    fs::write(lo_bundle.join("Contents/Info.toml"), lo_manifest).unwrap();
+    let lo_exec = lo_bundle.join("Contents/MacOS/lo");
+    fs::write(&lo_exec, "#!/bin/sh\necho lo\n").unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(&lo_exec, fs::Permissions::from_mode(0o755)).unwrap();
+    }
+
+    let cache_dir = home.join(".cache").join(&unique_id);
+    fs::create_dir_all(&cache_dir).unwrap();
+    fs::write(cache_dir.join("cache.dat"), "12345").unwrap();
+
+    reg.reconcile().unwrap();
+
+    // Now delete Leftover.app externally (like dragging to Trash / rm -rf)
+    fs::remove_dir_all(&lo_bundle).unwrap();
+    reg.reconcile().unwrap();
+
+    assert!(!desktop_dir.join(format!("conj-{}.desktop", unique_id)).exists());
+    let leftovers = reg.list_leftovers();
+    let rec = leftovers
+        .iter()
+        .find(|r| r.bundle_id == unique_id)
+        .expect("leftover record should be created on bundle deletion");
+    assert!(rec.total_bytes >= 5);
+
+    // Purge leftovers cleanly removes cache_dir and clears the record
+    let removed = reg.purge_leftovers(&unique_id).unwrap();
+    assert!(removed >= 1);
+    assert!(!cache_dir.exists());
+    assert!(reg.list_leftovers().iter().all(|r| r.bundle_id != unique_id));
+}
+
+#[test]
+fn test_running_app_survives_bundle_deletion() {
+    let env = TestEnv::new("running_survives");
+    let bundle_dir = env.user_apps.join("Sleeper.app");
+    fs::create_dir_all(bundle_dir.join("Contents/MacOS")).unwrap();
+    let manifest = format!(
+        r#"bundle_format = "{}"
+id = "org.example.sleeper"
+name = "Sleeper"
+version = "1.0.0"
+executable = "Contents/MacOS/sleeper"
+architectures = ["x86_64", "aarch64"]
+"#,
+        conjunction_core::BUNDLE_FORMAT_V2
+    );
+    fs::write(bundle_dir.join("Contents/Info.toml"), manifest).unwrap();
+    let ready_marker = env.root.join("sleeper.ready");
+    let exec_p = bundle_dir.join("Contents/MacOS/sleeper");
+    let script = format!(
+        "#!/bin/sh\ntouch '{}'\nexec sleep 0.4\n",
+        ready_marker.display()
+    );
+    fs::write(&exec_p, script).unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(&exec_p, fs::Permissions::from_mode(0o755)).unwrap();
+    }
+
+    let bundle = conjunction_core::Bundle::open(&bundle_dir).unwrap();
+    let plan = conjunction_core::build_bundle_launch_plan(&bundle, &[], true).unwrap();
+    let mut cmd = std::process::Command::new(&plan.program);
+    cmd.args(&plan.args);
+    for (k, v) in &plan.env {
+        cmd.env(k, v);
+    }
+    let mut child = cmd.spawn().expect("spawn sleeper app");
+
+    // Wait until /bin/sh has opened the script and started executing before deleting the bundle
+    let start = std::time::Instant::now();
+    while !ready_marker.exists() && start.elapsed() < std::time::Duration::from_secs(2) {
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    assert!(ready_marker.exists(), "sleeper script did not start");
+
+    // Delete the entire .app bundle while running
+    fs::remove_dir_all(&bundle_dir).unwrap();
+    assert!(!bundle_dir.exists());
+
+    // Process keeps running and exits cleanly with 0
+    let status = child.wait().expect("wait for running app");
+    assert!(status.success());
 }

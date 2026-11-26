@@ -95,23 +95,7 @@ impl FileItemInfo {
                     if let Ok(exec_path) = bundle.executable_path() {
                         bundle_executable = Some(exec_path);
                     }
-                    // Check for bundle icon in Contents/Resources
-                    let res_dir = path.join("Contents").join("Resources");
-                    if let Some(icon_name) = &m.icon {
-                        let candidate = res_dir.join(icon_name);
-                        if candidate.exists() {
-                            bundle_icon = Some(candidate);
-                        }
-                    }
-                    if bundle_icon.is_none() {
-                        for candidate_name in &["icon.png", "icon.svg", "AppIcon.png", "AppIcon.svg"] {
-                            let candidate = res_dir.join(candidate_name);
-                            if candidate.exists() {
-                                bundle_icon = Some(candidate);
-                                break;
-                            }
-                        }
-                    }
+                    bundle_icon = bundle.resolve_icon_file();
                 }
             }
         }
@@ -419,6 +403,258 @@ pub fn get_app_data_paths(
     }
 
     paths
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LeftoverPath {
+    pub kind: String,
+    pub path: PathBuf,
+    pub size_bytes: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LeftoverRecord {
+    pub bundle_id: String,
+    pub app_name: String,
+    pub removed_at: String,
+    pub paths: Vec<LeftoverPath>,
+    pub total_bytes: u64,
+}
+
+pub fn leftovers_dir_for_state(state_dir: &Path) -> PathBuf {
+    state_dir.join("leftovers")
+}
+
+pub fn collect_leftover_candidates(
+    bundle_id: &str,
+    data_map: Option<&HashMap<String, String>>,
+    is_flatpak: bool,
+    flatpak_id: Option<&str>,
+) -> Vec<(String, PathBuf)> {
+    if !is_safe_app_id(bundle_id) {
+        return Vec::new();
+    }
+    let home = get_user_home();
+    let config_root = crate::registry::user_config_dir();
+    let xdg_data_root = std::env::var("XDG_DATA_HOME")
+        .ok()
+        .filter(|s| !s.is_empty())
+        .map(PathBuf::from)
+        .unwrap_or_else(|| home.join(".local").join("share"));
+    let xdg_cache_root = std::env::var("XDG_CACHE_HOME")
+        .ok()
+        .filter(|s| !s.is_empty())
+        .map(PathBuf::from)
+        .unwrap_or_else(|| home.join(".cache"));
+    let xdg_state_root = std::env::var("XDG_STATE_HOME")
+        .ok()
+        .filter(|s| !s.is_empty())
+        .map(PathBuf::from)
+        .unwrap_or_else(|| home.join(".local").join("state"));
+
+    let ns_for = |key: &str| -> String {
+        if let Some(map) = data_map {
+            if let Some(v) = map.get(key) {
+                let trimmed = v.trim();
+                if !trimmed.is_empty()
+                    && !trimmed.contains('/')
+                    && !trimmed.contains('\\')
+                    && !trimmed.contains("..")
+                {
+                    return trimmed.to_string();
+                }
+            }
+        }
+        bundle_id.to_string()
+    };
+
+    let mut out = vec![
+        ("config".to_string(), config_root.join(ns_for("config"))),
+        ("data".to_string(), xdg_data_root.join(ns_for("data"))),
+        ("cache".to_string(), xdg_cache_root.join(ns_for("cache"))),
+        ("state".to_string(), xdg_state_root.join(ns_for("state"))),
+    ];
+
+    if is_flatpak {
+        let f_id = flatpak_id.unwrap_or(bundle_id);
+        if is_safe_app_id(f_id) {
+            out.push(("flatpak-data".to_string(), home.join(".var").join("app").join(f_id)));
+        }
+    }
+
+    // Never allow any path outside $HOME or pointing to user document folders
+    let protected = [
+        home.clone(),
+        home.join("Documents"),
+        home.join("Desktop"),
+        home.join("Downloads"),
+        home.join("Pictures"),
+        home.join("Music"),
+        home.join("Videos"),
+    ];
+
+    let mut deduped = Vec::new();
+    for (kind, p) in out {
+        if !p.starts_with(&home) || protected.iter().any(|pr| pr == &p) {
+            continue;
+        }
+        if !deduped.iter().any(|(_, existing): &(String, PathBuf)| existing == &p) {
+            deduped.push((kind, p));
+        }
+    }
+    deduped
+}
+
+fn measure_path_bytes_no_follow(path: &Path) -> u64 {
+    let Ok(meta) = fs::symlink_metadata(path) else {
+        return 0;
+    };
+    if meta.file_type().is_symlink() {
+        return 0;
+    }
+    if meta.is_file() {
+        return meta.len();
+    }
+    if meta.is_dir() {
+        let mut total = 0u64;
+        if let Ok(entries) = fs::read_dir(path) {
+            for entry in entries.flatten() {
+                total = total.saturating_add(measure_path_bytes_no_follow(&entry.path()));
+            }
+        }
+        return total;
+    }
+    0
+}
+
+pub fn record_leftovers(
+    state_dir: &Path,
+    bundle_id: &str,
+    app_name: &str,
+    data_map: Option<&HashMap<String, String>>,
+    is_flatpak: bool,
+    flatpak_id: Option<&str>,
+) -> std::io::Result<Option<LeftoverRecord>> {
+    if !is_safe_app_id(bundle_id) {
+        return Ok(None);
+    }
+    let candidates = collect_leftover_candidates(bundle_id, data_map, is_flatpak, flatpak_id);
+    let mut existing = Vec::new();
+    let mut total_bytes = 0u64;
+
+    for (kind, path) in candidates {
+        if fs::symlink_metadata(&path).is_ok() {
+            let size_bytes = measure_path_bytes_no_follow(&path);
+            total_bytes = total_bytes.saturating_add(size_bytes);
+            existing.push(LeftoverPath {
+                kind,
+                path,
+                size_bytes,
+            });
+        }
+    }
+
+    let ldir = leftovers_dir_for_state(state_dir);
+    let rec_path = ldir.join(format!("{}.json", bundle_id));
+    if existing.is_empty() {
+        let _ = fs::remove_file(&rec_path);
+        return Ok(None);
+    }
+
+    fs::create_dir_all(&ldir)?;
+    let ts = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    let record = LeftoverRecord {
+        bundle_id: bundle_id.to_string(),
+        app_name: app_name.to_string(),
+        removed_at: format_timestamp(ts),
+        paths: existing,
+        total_bytes,
+    };
+    let json = serde_json::to_string_pretty(&record)
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
+    fs::write(&rec_path, json)?;
+    Ok(Some(record))
+}
+
+pub fn list_leftovers(state_dir: &Path) -> Vec<LeftoverRecord> {
+    let ldir = leftovers_dir_for_state(state_dir);
+    let mut records = Vec::new();
+    if let Ok(entries) = fs::read_dir(&ldir) {
+        for entry in entries.flatten() {
+            let p = entry.path();
+            if p.extension().is_some_and(|e| e == "json") {
+                if let Ok(content) = fs::read_to_string(&p) {
+                    if let Ok(mut rec) = serde_json::from_str::<LeftoverRecord>(&content) {
+                        rec.paths.retain(|lp| fs::symlink_metadata(&lp.path).is_ok());
+                        if !rec.paths.is_empty() {
+                            records.push(rec);
+                        } else {
+                            let _ = fs::remove_file(&p);
+                        }
+                    }
+                }
+            }
+        }
+    }
+    records.sort_by(|a, b| a.bundle_id.cmp(&b.bundle_id));
+    records
+}
+
+pub fn clear_leftover_record(state_dir: &Path, bundle_id: &str) {
+    if is_safe_app_id(bundle_id) {
+        let _ = fs::remove_file(leftovers_dir_for_state(state_dir).join(format!("{}.json", bundle_id)));
+    }
+}
+
+pub fn purge_leftovers(state_dir: &Path, bundle_id: &str) -> std::io::Result<usize> {
+    if !is_safe_app_id(bundle_id) {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            format!("Invalid application ID: {}", bundle_id),
+        ));
+    }
+    let home = get_user_home();
+    let protected = [
+        home.clone(),
+        home.join("Documents"),
+        home.join("Desktop"),
+        home.join("Downloads"),
+        home.join("Pictures"),
+        home.join("Music"),
+        home.join("Videos"),
+    ];
+
+    let rec_path = leftovers_dir_for_state(state_dir).join(format!("{}.json", bundle_id));
+    let mut removed = 0usize;
+
+    if rec_path.is_file() {
+        let content = fs::read_to_string(&rec_path)?;
+        let rec: LeftoverRecord = serde_json::from_str(&content)
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e.to_string()))?;
+
+        for lp in rec.paths {
+            if !lp.path.starts_with(&home) || protected.iter().any(|pr| pr == &lp.path) {
+                continue;
+            }
+            if let Ok(meta) = fs::symlink_metadata(&lp.path) {
+                let ft = meta.file_type();
+                if ft.is_symlink() || ft.is_file() {
+                    fs::remove_file(&lp.path)?;
+                    removed += 1;
+                } else if ft.is_dir() {
+                    fs::remove_dir_all(&lp.path)?;
+                    removed += 1;
+                }
+            }
+        }
+        let _ = fs::remove_file(&rec_path);
+    }
+
+    removed += remove_app_data(bundle_id, false, None).unwrap_or(0);
+    Ok(removed)
 }
 
 /// Remove application data directories if they exist, returning count of removed locations.

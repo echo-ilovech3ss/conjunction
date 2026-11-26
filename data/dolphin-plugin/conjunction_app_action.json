@@ -1,0 +1,10 @@
+{
+    "KPlugin": {
+        "MimeTypes": [
+            "inode/directory",
+            "application/x-conjunction-app",
+            "application/x-conjunction-disk-image"
+        ],
+        "Name": "Conjunction App Bundle Actions"
+    }
+}

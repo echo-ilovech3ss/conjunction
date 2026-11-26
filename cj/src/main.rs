@@ -387,7 +387,7 @@ fn cmd_update(runner: &Runner) -> i32 {
     0
 }
 
-fn cmd_install(runner: &Runner, app_name_or_path: &str, force: bool, sandbox: bool) -> i32 {
+fn cmd_install(runner: &Runner, app_name_or_path: &str, force: bool, _sandbox: bool) -> i32 {
     runner.info("═══════════════════════════════════════");
     runner.info(&format!(" Conjunction OS — Installing: {}", app_name_or_path));
     runner.info("═══════════════════════════════════════");
@@ -426,40 +426,50 @@ fn cmd_install(runner: &Runner, app_name_or_path: &str, force: bool, sandbox: bo
             return 0;
         }
 
-        // Install Windows App
-        let app_dir = Path::new("/Applications").join(format!("{}.app", sanitized_name));
-        let prefix_path = app_dir.join("Contents").join("Resources").join("prefix");
-
-        if prefix_path.exists() && !force {
-            runner.warning(&format!("Wine prefix already exists for '{}' at {:?}. Use --force to reinstall.", sanitized_name, prefix_path));
+        // Install Windows App as a self-contained .app bundle (Contents/WinePrefix)
+        let apps_dir = if conjunction_core::is_root() {
+            conjunction_core::system_applications_dir()
         } else {
-            runner.info("Creating pristine Wine prefix...");
-            let _ = fs::create_dir_all(&prefix_path);
-            let envs = [
-                ("WINEPREFIX", prefix_path.to_str().unwrap()),
-                ("WINEARCH", "win64"),
-                ("DISPLAY", ""),
-                ("WINEDLLOVERRIDES", "winemenubuilder.exe=d"),
-            ];
-            runner.info("Initializing Wine prefix...");
-            match runner.run_stream(&["wineboot", "--init"], &envs, false) {
-                Ok(0) => runner.success("Wine prefix initialized."),
-                _ => {
-                    runner.error("Failed to initialize Wine prefix.");
-                    return 1;
-                }
-            }
+            conjunction_core::user_applications_dir()
+        };
+        let _ = fs::create_dir_all(&apps_dir);
+        let app_dir = apps_dir.join(format!("{}.app", sanitized_name));
+        let staging_dir = apps_dir.join(format!(".{}.app.staging", sanitized_name));
+        let _ = fs::remove_dir_all(&staging_dir);
+        let prefix_path = staging_dir.join("Contents").join("WinePrefix");
+        let macos_dir = staging_dir.join("Contents").join("MacOS");
+        let resources_dir = staging_dir.join("Contents").join("Resources");
 
-            // Inject runtimes via winetricks if available
-            let winetricks_path = which_binary("winetricks");
-            if let Some(wt) = winetricks_path {
-                runner.info("Installing Wine components via winetricks...");
-                let wt_str = wt.to_string_lossy().to_string();
-                let _ = runner.run_stream(&[&wt_str, "-q", "corefonts", "vcrun2015", "msxml6", "d3dcompiler_47"], &[("WINEPREFIX", prefix_path.to_str().unwrap())], false);
+        let _ = fs::create_dir_all(&prefix_path);
+        let _ = fs::create_dir_all(&macos_dir);
+        let _ = fs::create_dir_all(&resources_dir);
+
+        runner.info("Creating self-contained Wine prefix inside bundle...");
+        let envs = [
+            ("WINEPREFIX", prefix_path.to_str().unwrap()),
+            ("WINEARCH", "win64"),
+            ("DISPLAY", ""),
+            ("WINEDLLOVERRIDES", "winemenubuilder.exe=d"),
+        ];
+        match runner.run_stream(&["wineboot", "--init"], &envs, false) {
+            Ok(0) => runner.success("Wine prefix initialized."),
+            _ => {
+                let _ = fs::remove_dir_all(&staging_dir);
+                runner.error("Failed to initialize Wine prefix.");
+                return 1;
             }
         }
 
-        // Run installer
+        if let Some(wt) = which_binary("winetricks") {
+            runner.info("Installing Wine components via winetricks...");
+            let wt_str = wt.to_string_lossy().to_string();
+            let _ = runner.run_stream(
+                &[&wt_str, "-q", "corefonts", "vcrun2015", "msxml6", "d3dcompiler_47"],
+                &[("WINEPREFIX", prefix_path.to_str().unwrap())],
+                false,
+            );
+        }
+
         runner.info("Running installer...");
         let envs = [
             ("WINEPREFIX", prefix_path.to_str().unwrap()),
@@ -473,15 +483,12 @@ fn cmd_install(runner: &Runner, app_name_or_path: &str, force: bool, sandbox: bo
             vec!["wine", &installer_str]
         };
 
-        match runner.run_stream(&installer_args, &envs, false) {
-            Ok(_) => runner.success("Installer finished execution."),
-            Err(e) => {
-                runner.error(&format!("Failed to execute installer: {}", e));
-                return 1;
-            }
+        if let Err(e) = runner.run_stream(&installer_args, &envs, false) {
+            let _ = fs::remove_dir_all(&staging_dir);
+            runner.error(&format!("Failed to execute installer: {}", e));
+            return 1;
         }
 
-        // Discover primary executable
         runner.info("Discovering primary executable...");
         let search_dirs = [
             prefix_path.join("drive_c").join("Program Files"),
@@ -490,24 +497,25 @@ fn cmd_install(runner: &Runner, app_name_or_path: &str, force: bool, sandbox: bo
         let mut candidates = Vec::new();
         for dir in &search_dirs {
             if dir.is_dir() {
-                // Simple recursive walk
                 let mut stack = vec![dir.clone()];
-                    while let Some(current_dir) = stack.pop() {
-                        if let Ok(sub_entries) = fs::read_dir(current_dir) {
-                            for sub_entry in sub_entries.flatten() {
-                                let path = sub_entry.path();
-                                if path.is_dir() {
-                                    stack.push(path);
-                                } else if path.is_file() {
-                                    if let Some(ext) = path.extension().and_then(|s| s.to_str()) {
-                                        if ext.to_lowercase() == "exe" {
-                                            if let Some(name) = path.file_name().and_then(|s| s.to_str()) {
-                                                let lower_name = name.to_lowercase();
-                                                if lower_name != "uninstall.exe" && lower_name != "unins000.exe" && lower_name != "setup.exe" {
-                                                    if let Ok(metadata) = path.metadata() {
-                                                        if let Ok(modified) = metadata.modified() {
-                                                            candidates.push((modified, path));
-                                                        }
+                while let Some(current_dir) = stack.pop() {
+                    if let Ok(sub_entries) = fs::read_dir(current_dir) {
+                        for sub_entry in sub_entries.flatten() {
+                            let path = sub_entry.path();
+                            if path.is_dir() {
+                                stack.push(path);
+                            } else if path.is_file() {
+                                if let Some(ext) = path.extension().and_then(|s| s.to_str()) {
+                                    if ext.eq_ignore_ascii_case("exe") {
+                                        if let Some(name) = path.file_name().and_then(|s| s.to_str()) {
+                                            let lower_name = name.to_lowercase();
+                                            if lower_name != "uninstall.exe"
+                                                && lower_name != "unins000.exe"
+                                                && lower_name != "setup.exe"
+                                            {
+                                                if let Ok(metadata) = path.metadata() {
+                                                    if let Ok(modified) = metadata.modified() {
+                                                        candidates.push((modified, path));
                                                     }
                                                 }
                                             }
@@ -515,6 +523,7 @@ fn cmd_install(runner: &Runner, app_name_or_path: &str, force: bool, sandbox: bo
                                     }
                                 }
                             }
+                        }
                     }
                 }
             }
@@ -522,46 +531,30 @@ fn cmd_install(runner: &Runner, app_name_or_path: &str, force: bool, sandbox: bo
 
         let primary_exe = if !candidates.is_empty() {
             candidates.sort_by_key(|b| std::cmp::Reverse(b.0));
-            Some(candidates[0].1.clone())
+            candidates[0].1.clone()
         } else {
-            None
+            // Portable .exe fallback: copy directly into drive_c/Program Files/<app>/
+            let portable_dir = prefix_path.join("drive_c/Program Files").join(&sanitized_name);
+            let _ = fs::create_dir_all(&portable_dir);
+            let exe_fname = abs_path
+                .file_name()
+                .and_then(|s| s.to_str())
+                .unwrap_or("app.exe");
+            let copied = portable_dir.join(exe_fname);
+            let _ = fs::copy(&abs_path, &copied);
+            copied
         };
 
-        if let Some(ref pe) = primary_exe {
-            runner.success(&format!("Discovered primary executable: {:?}", pe));
-        } else {
-            runner.warning("Could not automatically discover primary executable.");
-        }
+        let rel_exe = primary_exe
+            .strip_prefix(&staging_dir)
+            .map(|p| p.to_string_lossy().replace('\\', "/"))
+            .unwrap_or_else(|_| format!("Contents/WinePrefix/drive_c/Program Files/{}/app.exe", sanitized_name));
 
-        // Create macOS bundle structures
-        let app_name_str = sanitized_name.clone();
-        let app_path_str = app_dir.to_string_lossy().to_string();
-        let macos_dir = app_dir.join("Contents").join("MacOS");
-        let resources_dir = app_dir.join("Contents").join("Resources");
-
-        let _ = fs::create_dir_all(&macos_dir);
-        let _ = fs::create_dir_all(&resources_dir);
-
-        let plist_path = app_dir.join("Contents").join("Info.plist");
-        let plist_content = format!(r#"<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>CFBundleName</key>
-    <string>{}</string>
-    <key>CFBundleExecutable</key>
-    <string>{}</string>
-    <key>CFBundleIdentifier</key>
-    <string>org.conjunction.{}</string>
-    <key>CFBundlePackageType</key>
-    <string>APPL</string>
-</dict>
-</plist>
-"#, app_name_str, app_name_str, app_name_str);
-        let _ = fs::write(&plist_path, plist_content);
-
-        let launcher_path = macos_dir.join(&app_name_str);
-        let launcher_content = format!("#!/usr/bin/env bash\nexec cj run {}\n", app_name_str);
+        let launcher_path = macos_dir.join(&sanitized_name);
+        let launcher_content = format!(
+            "#!/bin/sh\nset -eu\nSELF_DIR=$(CDPATH= cd -- \"$(dirname -- \"$0\")\" && pwd)\nCONTENTS_DIR=$(CDPATH= cd -- \"$SELF_DIR/..\" && pwd)\nexport WINEPREFIX=\"${{WINEPREFIX:-$CONTENTS_DIR/WinePrefix}}\"\nexport WINEARCH=\"${{WINEARCH:-win64}}\"\nexport WINEDLLOVERRIDES=\"${{WINEDLLOVERRIDES:-winemenubuilder.exe=d}}\"\nexport WINEDEBUG=\"${{WINEDEBUG:--all}}\"\nexec wine \"$CONTENTS_DIR/../{}\" \"$@\"\n",
+            rel_exe
+        );
         let _ = fs::write(&launcher_path, launcher_content);
         #[cfg(unix)]
         {
@@ -569,67 +562,36 @@ fn cmd_install(runner: &Runner, app_name_or_path: &str, force: bool, sandbox: bo
             let _ = fs::set_permissions(&launcher_path, fs::Permissions::from_mode(0o755));
         }
 
-        // Write desktop entry inside Applications
-        let app_desktop_path = Path::new("/Applications").join(format!("{}.desktop", app_name_str));
-        let app_desktop_content = format!(r#"[Desktop Entry]
-Version=1.0
-Type=Application
-Name={}
-Exec=/Applications/{}.app/Contents/MacOS/{}
-Icon=system-run
-Terminal=false
-Categories=Utility;
-"#, app_name_str, app_name_str, app_name_str);
-        let _ = fs::write(&app_desktop_path, app_desktop_content);
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            let _ = fs::set_permissions(&app_desktop_path, fs::Permissions::from_mode(0o755));
+        let bundle_id_seg: String = sanitized_name
+            .chars()
+            .filter(|c| c.is_ascii_alphanumeric() || *c == '-' || *c == '_')
+            .collect();
+        let bundle_id = format!(
+            "win.conjunction.{}",
+            if bundle_id_seg.is_empty() { "app" } else { bundle_id_seg.trim_matches(|c| c == '-' || c == '_') }
+        );
+        let info_toml = format!(
+            "bundle_format = \"{}\"\nid = \"{}\"\nname = \"{}\"\nversion = \"1.0.0\"\nexecutable = \"Contents/MacOS/{}\"\narchitectures = [\"x86_64\", \"aarch64\"]\nruntime = \"wine\"\n\n[wine]\nprefix = \"Contents/WinePrefix\"\ntarget_exe = \"{}\"\narch = \"win64\"\nesync = true\nfsync = true\nwine_debug = \"-all\"\n",
+            conjunction_core::BUNDLE_FORMAT_V2,
+            bundle_id,
+            sanitized_name,
+            sanitized_name,
+            rel_exe
+        );
+        let _ = fs::write(staging_dir.join("Contents/Info.toml"), info_toml);
+
+        if app_dir.exists() && force {
+            let _ = fs::remove_dir_all(&app_dir);
+        }
+        if let Err(e) = fs::rename(&staging_dir, &app_dir) {
+            let _ = fs::remove_dir_all(&staging_dir);
+            runner.error(&format!("Failed to finalize bundle at {}: {}", app_dir.display(), e));
+            return 1;
         }
 
-        // Save metadata
-        let user_home = conjunction_core::get_user_home();
-        let meta_dir = user_home.join(".conjunction").join("apps");
-        let _ = fs::create_dir_all(&meta_dir);
-        let meta_path = meta_dir.join(format!("{}.json", app_name_str));
-
-        let install_time = SystemTime::now()
-            .duration_since(SystemTime::UNIX_EPOCH)
-            .map(|d| d.as_secs().to_string())
-            .unwrap_or_default();
-
-        let metadata = serde_json::json!({
-            "name": app_name_str,
-            "type": "wine",
-            "source_exe": abs_path.to_string_lossy().to_string(),
-            "prefix_path": prefix_path.to_string_lossy().to_string(),
-            "primary_exe": primary_exe.as_ref().map(|p| p.to_string_lossy().to_string()),
-            "desktop_entry": format!("{}/.local/share/applications/conjunction-{}.desktop", user_home.to_string_lossy(), app_name_str),
-            "app_bundle_path": app_path_str,
-            "installed_at": install_time,
-            "gpu_vendor": runner.detect_gpu_vendor(),
-            "sandboxed": sandbox,
-            "proton": false
-        });
-
-        let _ = conjunction_core::write_file_user(&meta_path, &serde_json::to_string_pretty(&metadata).unwrap(), None);
-
-        // Write local share desktop file
-        let desktop_dir = user_home.join(".local").join("share").join("applications");
-        let _ = fs::create_dir_all(&desktop_dir);
-        let desktop_path = desktop_dir.join(format!("conjunction-{}.desktop", app_name_str));
-        let desktop_content = format!(r#"[Desktop Entry]
-Version=1.0
-Type=Application
-Name={}
-Exec=/Applications/{}.app/Contents/MacOS/{}
-Icon=system-run
-Terminal=false
-Categories=Utility;
-"#, app_name_str, app_name_str, app_name_str);
-        let _ = conjunction_core::write_file_user(&desktop_path, &desktop_content, None);
-
-        runner.success(&format!("Successfully installed '{}'", app_name_str));
+        let mut reg = conjunction_core::AppRegistry::default_for_user();
+        let _ = reg.reconcile();
+        runner.success(&format!("Successfully installed '{}'", app_dir.display()));
         0
     } else {
         // Delegate package installation to the application Rust binary
@@ -906,14 +868,23 @@ fn cmd_apps(runner: &Runner, remove_name: Option<String>) -> i32 {
             return 0;
         }
 
+        let mut reg = conjunction_core::AppRegistry::default_for_user();
+        let _ = reg.scan_readonly();
+        if reg.inspect(&name).is_ok() {
+            match reg.uninstall(&name) {
+                Ok(()) => {
+                    runner.success(&format!("Removed '{}' successfully", name));
+                    return 0;
+                }
+                Err(e) => {
+                    runner.error(&format!("Failed to remove application: {}", e));
+                    return 1;
+                }
+            }
+        }
+
         match conjunction_core::remove_app_bundle(&name) {
             Ok(_) => {
-                // Delete prefix under /Applications
-                let app_dir = format!("/Applications/{}.app", name);
-                let _ = Command::new("rm").args(["-rf", &app_dir]).status();
-                let app_desktop = format!("/Applications/{}.desktop", name);
-                let _ = Command::new("rm").args(["-f", &app_desktop]).status();
-                
                 runner.success(&format!("Removed '{}' successfully", name));
                 0
             }
@@ -928,41 +899,27 @@ fn cmd_apps(runner: &Runner, remove_name: Option<String>) -> i32 {
         runner.info("═══════════════════════════════════════");
         println!();
 
-        let user_home = conjunction_core::get_user_home();
-        let apps_dir = user_home.join(".conjunction").join("apps");
-        if !apps_dir.exists() {
-            runner.warning("No applications installed yet");
-            runner.info("Install apps with: cj install <name_or_path>");
-            return 0;
-        }
-
+        let mut reg = conjunction_core::AppRegistry::default_for_user();
+        let _ = reg.scan_readonly();
+        let items = reg.list();
         let mut app_count = 0;
-        if let Ok(entries) = fs::read_dir(&apps_dir) {
-            for entry in entries.flatten() {
-                let path = entry.path();
-                if path.is_file() && path.extension().is_some_and(|ext| ext == "json") {
-                    if let Ok(content) = fs::read_to_string(&path) {
-                        if let Ok(val) = serde_json::from_str::<Value>(&content) {
-                            let name = val.get("name").and_then(|v| v.as_str()).unwrap_or("unknown");
-                            let gpu = val.get("gpu_vendor").and_then(|v| v.as_str()).unwrap_or("unknown");
-                            let installed_at = val.get("installed_at").and_then(|v| v.as_str()).unwrap_or("unknown");
-                            let desktop = val.get("desktop_entry").and_then(|v| v.as_str()).unwrap_or("none");
-                            
-                            runner.info(&format!("  {}", colored(name, BOLD)));
-                            runner.info(&format!("    GPU Passthrough: {}", gpu));
-                            runner.info(&format!("    Installed:       {}", installed_at));
-                            runner.info(&format!("    Desktop Entry:   {}", desktop));
-                            println!();
-                            app_count += 1;
-                        }
-                    }
+
+        for item in items {
+            if let conjunction_core::RegistryItem::Active(app) = item {
+                if app.bundle_path.extension().is_some_and(|e| e == "app") {
+                    runner.info(&format!("  {}", colored(&app.name, BOLD)));
+                    runner.info(&format!("    ID:      {}", app.id));
+                    runner.info(&format!("    Backend: {}", app.backend));
+                    runner.info(&format!("    Bundle:  {}", app.bundle_path.display()));
+                    println!();
+                    app_count += 1;
                 }
             }
         }
 
         if app_count == 0 {
-            runner.warning("No applications installed yet");
-            runner.info("Install apps with: cj install <name_or_path>");
+            runner.warning("No .app bundles installed yet");
+            runner.info("Drag .app bundles into ~/Applications or run: cj install <app.exe>");
         }
         0
     }
@@ -981,13 +938,8 @@ fn cmd_setup_wrappers(runner: &Runner) -> i32 {
 
     let wrappers = [
         ("open", r#"#!/usr/bin/env bash
-if [[ "$1" == *.app ]]; then
-    app_name=$(basename "$1" .app)
-    if [[ -x "$1/Contents/MacOS/$app_name" ]]; then
-        exec "$1/Contents/MacOS/$app_name" "${@:2}"
-    elif [[ -x "$1/AppRun" ]]; then
-        exec "$1/AppRun" "${@:2}"
-    fi
+if command -v conj-open >/dev/null 2>&1; then
+    exec conj-open "$@"
 fi
 exec xdg-open "$@"
 "#),
@@ -1041,6 +993,35 @@ exec cj update "$@"
 }
 
 fn cmd_run(runner: &Runner, app_name: &str) -> i32 {
+    let candidate_bundles = [
+        conjunction_core::user_applications_dir().join(format!("{}.app", app_name)),
+        conjunction_core::system_applications_dir().join(format!("{}.app", app_name)),
+        PathBuf::from(app_name),
+    ];
+    for bp in &candidate_bundles {
+        if bp.is_dir() && bp.join("Contents/Info.toml").is_file() {
+            if let Ok(bundle) = conjunction_core::Bundle::open(bp) {
+                match conjunction_core::build_bundle_launch_plan(&bundle, &[], false) {
+                    Ok(plan) => match conjunction_core::execute_plan_captured(&plan) {
+                        Ok(res) => {
+                            print!("{}", res.stdout);
+                            eprint!("{}", res.stderr);
+                            return res.exit_code;
+                        }
+                        Err(e) => {
+                            runner.error(&format!("Launch failed: {}", e));
+                            return 1;
+                        }
+                    },
+                    Err(e) => {
+                        runner.error(&format!("Failed to prepare launch: {}", e));
+                        return 1;
+                    }
+                }
+            }
+        }
+    }
+
     let user_home = conjunction_core::get_user_home();
     let meta_path = user_home.join(".conjunction").join("apps").join(format!("{}.json", app_name));
     
@@ -1247,8 +1228,15 @@ fn cmd_repair(runner: &Runner, app_name: &str) -> i32 {
     runner.info("═══════════════════════════════════════");
     println!();
 
-    let app_dir = format!("/Applications/{}.app", app_name);
-    let prefix_path = Path::new(&app_dir).join("Contents").join("Resources").join("prefix");
+    let candidate_dirs = [
+        conjunction_core::user_applications_dir().join(format!("{}.app", app_name)),
+        conjunction_core::system_applications_dir().join(format!("{}.app", app_name)),
+    ];
+    let prefix_path = candidate_dirs
+        .iter()
+        .map(|d| d.join("Contents/WinePrefix"))
+        .find(|p| p.exists())
+        .unwrap_or_else(|| Path::new("/Applications").join(format!("{}.app/Contents/WinePrefix", app_name)));
     if !prefix_path.exists() {
         runner.error(&format!("Wine prefix for application '{}' does not exist.", app_name));
         return 1;

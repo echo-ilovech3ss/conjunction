@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mime-info xmlns="http://www.freedesktop.org/standards/shared-mime-info">
+  <mime-type type="application/x-conjunction-app">
+    <comment>Conjunction Application Bundle</comment>
+    <sub-class-of type="inode/directory"/>
+    <icon name="application-x-executable"/>
+    <glob pattern="*.app"/>
+  </mime-type>
+  <mime-type type="application/x-conjunction-disk-image">
+    <comment>Conjunction Disk Image</comment>
+    <icon name="media-optical"/>
+    <magic priority="60">
+      <match type="string" value="hsqs" offset="0"/>
+      <match type="little32" value="0xe0f5e1e2" offset="1024"/>
+    </magic>
+    <glob pattern="*.cdmg" weight="80"/>
+  </mime-type>
+</mime-info>

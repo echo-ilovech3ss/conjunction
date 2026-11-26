@@ -1,7 +1,7 @@
 use clap::{Parser, Subcommand};
 use conjunction_core::{
     appd_socket_path, ipc::send_appd_request_to_path, AppRegistry, AppdRequest, InstalledApp,
-    RegistryItem,
+    LeftoverRecord, RegistryItem,
 };
 use std::path::PathBuf;
 use std::process::ExitCode;
@@ -9,7 +9,7 @@ use std::process::ExitCode;
 #[derive(Parser, Debug)]
 #[command(
     name = "conj-appctl",
-    version = "0.1.0",
+    version = "0.2.0",
     about = "Conjunction Application Services control interface"
 )]
 struct Cli {
@@ -68,11 +68,28 @@ enum Commands {
         args: Vec<String>,
     },
 
+    #[command(about = "List or purge leftover cache/config directories of removed bundles")]
+    Leftovers {
+        #[command(subcommand)]
+        action: LeftoversAction,
+    },
+
     #[command(about = "Reconcile application registry from filesystem state")]
     Reconcile,
 
     #[command(about = "Ping the conj-appd daemon")]
     Ping,
+}
+
+#[derive(Subcommand, Debug)]
+enum LeftoversAction {
+    #[command(about = "List recorded leftover application data")]
+    List,
+    #[command(about = "Remove recorded leftover data for an uninstalled bundle ID")]
+    Purge {
+        #[arg(help = "Bundle ID")]
+        id: String,
+    },
 }
 
 fn main() -> ExitCode {
@@ -83,7 +100,6 @@ fn main() -> ExitCode {
         return run_standalone(cli.command);
     }
 
-    // Default: Dispatch through authoritative conj-appd daemon via session IPC
     let req = match &cli.command {
         Commands::List => AppdRequest::List,
         Commands::Inspect { id } => AppdRequest::Inspect { id: id.clone() },
@@ -96,6 +112,10 @@ fn main() -> ExitCode {
         Commands::Launch { target, args } => AppdRequest::Launch {
             target: target.clone(),
             args: args.clone(),
+        },
+        Commands::Leftovers { action } => match action {
+            LeftoversAction::List => AppdRequest::ListLeftovers,
+            LeftoversAction::Purge { id } => AppdRequest::PurgeLeftovers { id: id.clone() },
         },
         Commands::Reconcile => AppdRequest::Reconcile,
         Commands::Ping => AppdRequest::Ping,
@@ -122,31 +142,7 @@ fn main() -> ExitCode {
         Commands::List => {
             if let Some(data) = resp.data {
                 let items: Vec<RegistryItem> = serde_json::from_value(data).unwrap_or_default();
-                if items.is_empty() {
-                    println!("No applications installed.");
-                    return ExitCode::SUCCESS;
-                }
-                for item in items {
-                    match item {
-                        RegistryItem::Active(app) => {
-                            println!(
-                                "{:<32} {:<20} {:<10} [{}] [{}] {}",
-                                app.id,
-                                app.name,
-                                app.version,
-                                app.scope,
-                                app.backend,
-                                app.bundle_path.display()
-                            );
-                        }
-                        RegistryItem::Conflict(conflict) => {
-                            println!("{:<32} [CONFLICT DETECTED]", conflict.id);
-                            for candidate in conflict.candidate_paths {
-                                println!("    -> candidate: {}", candidate.display());
-                            }
-                        }
-                    }
-                }
+                print_registry_items(&items);
             }
             ExitCode::SUCCESS
         }
@@ -154,42 +150,7 @@ fn main() -> ExitCode {
         Commands::Inspect { .. } => {
             if let Some(data) = resp.data {
                 match serde_json::from_value::<RegistryItem>(data) {
-                    Ok(RegistryItem::Active(app)) => {
-                        println!("Application ID:   {}", app.id);
-                        println!("Name:             {}", app.name);
-                        println!("Version:          {}", app.version);
-                        println!("Scope:            {}", app.scope);
-                        println!("Backend:          {}", app.backend);
-                        println!("Bundle Path:      {}", app.bundle_path.display());
-                        println!("Executable Path:  {}", app.executable_path.display());
-                        if let Some(pkg) = &app.package_name {
-                            let ver_str = app.package_version.as_deref().map(|v| format!(" {}", v)).unwrap_or_default();
-                            println!("Package:          {}{}", pkg, ver_str);
-                        }
-                        if !app.sibling_apps.is_empty() {
-                            println!("Sibling Apps:     {}", app.sibling_apps.join(", "));
-                        }
-                        if let Some(fp_id) = &app.flatpak_id {
-                            println!("Flatpak ID:       {}", fp_id);
-                        }
-                        if let Some(icon) = app.icon {
-                            println!("Icon:             {}", icon);
-                        }
-                        if !app.mime_types.is_empty() {
-                            println!("MIME Types:       {}", app.mime_types.join(", "));
-                        }
-                        ExitCode::SUCCESS
-                    }
-                    Ok(RegistryItem::Conflict(conflict)) => {
-                        eprintln!(
-                            "Conflict: application ID '{}' has multiple candidate bundles:",
-                            conflict.id
-                        );
-                        for candidate in conflict.candidate_paths {
-                            eprintln!("  - {}", candidate.display());
-                        }
-                        ExitCode::FAILURE
-                    }
+                    Ok(item) => print_inspected_item(&item),
                     Err(e) => {
                         eprintln!("error: failed to parse response: {}", e);
                         ExitCode::FAILURE
@@ -234,6 +195,24 @@ fn main() -> ExitCode {
             }
         }
 
+        Commands::Leftovers { action } => match action {
+            LeftoversAction::List => {
+                if let Some(data) = resp.data {
+                    let records: Vec<LeftoverRecord> = serde_json::from_value(data).unwrap_or_default();
+                    print_leftovers(&records);
+                }
+                ExitCode::SUCCESS
+            }
+            LeftoversAction::Purge { id } => {
+                let count = resp
+                    .data
+                    .and_then(|d| d.get("removed").and_then(|c| c.as_u64()))
+                    .unwrap_or(0);
+                println!("Purged {} leftover path(s) for '{}'", count, id);
+                ExitCode::SUCCESS
+            }
+        },
+
         Commands::Reconcile => {
             println!("Reconciliation complete.");
             ExitCode::SUCCESS
@@ -246,6 +225,94 @@ fn main() -> ExitCode {
     }
 }
 
+fn print_registry_items(items: &[RegistryItem]) {
+    if items.is_empty() {
+        println!("No applications installed.");
+        return;
+    }
+    for item in items {
+        match item {
+            RegistryItem::Active(app) => {
+                println!(
+                    "{:<32} {:<20} {:<10} [{}] [{}] {}",
+                    app.id,
+                    app.name,
+                    app.version,
+                    app.scope,
+                    app.backend,
+                    app.bundle_path.display()
+                );
+            }
+            RegistryItem::Conflict(conflict) => {
+                println!("{:<32} [CONFLICT DETECTED]", conflict.id);
+                for candidate in &conflict.candidate_paths {
+                    println!("    -> candidate: {}", candidate.display());
+                }
+            }
+        }
+    }
+}
+
+fn print_inspected_item(item: &RegistryItem) -> ExitCode {
+    match item {
+        RegistryItem::Active(app) => {
+            println!("Application ID:   {}", app.id);
+            println!("Name:             {}", app.name);
+            println!("Version:          {}", app.version);
+            println!("Scope:            {}", app.scope);
+            println!("Backend:          {}", app.backend);
+            println!("Bundle Path:      {}", app.bundle_path.display());
+            println!("Executable Path:  {}", app.executable_path.display());
+            if let Some(pkg) = &app.package_name {
+                let ver_str = app.package_version.as_deref().map(|v| format!(" {}", v)).unwrap_or_default();
+                println!("Package:          {}{}", pkg, ver_str);
+            }
+            if !app.sibling_apps.is_empty() {
+                println!("Sibling Apps:     {}", app.sibling_apps.join(", "));
+            }
+            if let Some(fp_id) = &app.flatpak_id {
+                println!("Flatpak ID:       {}", fp_id);
+            }
+            if let Some(icon) = &app.icon {
+                println!("Icon:             {}", icon);
+            }
+            if !app.mime_types.is_empty() {
+                println!("MIME Types:       {}", app.mime_types.join(", "));
+            }
+            if !app.url_schemes.is_empty() {
+                println!("URL Schemes:      {}", app.url_schemes.join(", "));
+            }
+            ExitCode::SUCCESS
+        }
+        RegistryItem::Conflict(conflict) => {
+            eprintln!(
+                "Conflict: application ID '{}' has multiple candidate bundles:",
+                conflict.id
+            );
+            for candidate in &conflict.candidate_paths {
+                eprintln!("  - {}", candidate.display());
+            }
+            ExitCode::FAILURE
+        }
+    }
+}
+
+fn print_leftovers(records: &[LeftoverRecord]) {
+    if records.is_empty() {
+        println!("No leftover application data recorded.");
+        return;
+    }
+    for rec in records {
+        println!(
+            "{:<32} {:<20} {} bytes (removed {})",
+            rec.bundle_id, rec.app_name, rec.total_bytes, rec.removed_at
+        );
+        for p in &rec.paths {
+            println!("    [{}] {} ({} B)", p.kind, p.path.display(), p.size_bytes);
+        }
+    }
+}
+
 fn run_standalone(cmd: Commands) -> ExitCode {
     let mut registry = AppRegistry::default_for_user();
     match cmd {
@@ -254,67 +321,13 @@ fn run_standalone(cmd: Commands) -> ExitCode {
                 eprintln!("error: {}", e);
                 return ExitCode::FAILURE;
             }
-            let items = registry.list();
-            if items.is_empty() {
-                println!("No applications installed.");
-                return ExitCode::SUCCESS;
-            }
-            for item in items {
-                match item {
-                    RegistryItem::Active(app) => {
-                        println!(
-                            "{:<32} {:<20} {:<10} [{}] [{}] {}",
-                            app.id,
-                            app.name,
-                            app.version,
-                            app.scope,
-                            app.backend,
-                            app.bundle_path.display()
-                        );
-                    }
-                    RegistryItem::Conflict(conflict) => {
-                        println!("{:<32} [CONFLICT DETECTED]", conflict.id);
-                        for candidate in conflict.candidate_paths {
-                            println!("    -> candidate: {}", candidate.display());
-                        }
-                    }
-                }
-            }
+            print_registry_items(&registry.list());
             ExitCode::SUCCESS
         }
         Commands::Inspect { id } => {
             let _ = registry.scan_readonly();
             match registry.inspect(&id) {
-                Ok(RegistryItem::Active(app)) => {
-                    println!("Application ID:   {}", app.id);
-                    println!("Name:             {}", app.name);
-                    println!("Version:          {}", app.version);
-                    println!("Scope:            {}", app.scope);
-                    println!("Backend:          {}", app.backend);
-                    println!("Bundle Path:      {}", app.bundle_path.display());
-                    println!("Executable Path:  {}", app.executable_path.display());
-                    if let Some(pkg) = &app.package_name {
-                        let ver_str = app.package_version.as_deref().map(|v| format!(" {}", v)).unwrap_or_default();
-                        println!("Package:          {}{}", pkg, ver_str);
-                    }
-                    if !app.sibling_apps.is_empty() {
-                        println!("Sibling Apps:     {}", app.sibling_apps.join(", "));
-                    }
-                    if let Some(fp_id) = &app.flatpak_id {
-                        println!("Flatpak ID:       {}", fp_id);
-                    }
-                    if let Some(icon) = app.icon {
-                        println!("Icon:             {}", icon);
-                    }
-                    if !app.mime_types.is_empty() {
-                        println!("MIME Types:       {}", app.mime_types.join(", "));
-                    }
-                    ExitCode::SUCCESS
-                }
-                Ok(RegistryItem::Conflict(conflict)) => {
-                    eprintln!("Conflict: {}", conflict.id);
-                    ExitCode::FAILURE
-                }
+                Ok(item) => print_inspected_item(&item),
                 Err(e) => {
                     eprintln!("error: {}", e);
                     ExitCode::FAILURE
@@ -339,6 +352,18 @@ fn run_standalone(cmd: Commands) -> ExitCode {
             );
             ExitCode::FAILURE
         }
+        Commands::Leftovers { action } => match action {
+            LeftoversAction::List => {
+                print_leftovers(&registry.list_leftovers());
+                ExitCode::SUCCESS
+            }
+            LeftoversAction::Purge { .. } => {
+                eprintln!(
+                    "error: mutating operation 'leftovers purge' cannot be performed in standalone mode; start conj-appd"
+                );
+                ExitCode::FAILURE
+            }
+        },
         Commands::Launch { target, args } => {
             let _ = registry.scan_readonly();
             match registry.launch_captured(&target, &args) {

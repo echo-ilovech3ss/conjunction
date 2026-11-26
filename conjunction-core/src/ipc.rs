@@ -16,6 +16,8 @@ pub enum AppdRequest {
     },
     Launch { target: String, args: Vec<String> },
     Reconcile,
+    ListLeftovers,
+    PurgeLeftovers { id: String },
     Ping,
 }
 

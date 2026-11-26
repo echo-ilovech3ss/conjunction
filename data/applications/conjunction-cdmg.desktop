@@ -1,0 +1,10 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Conjunction Disk Image Mounter
+Comment=Mount and open .cdmg disk images
+Exec=conj-open %f
+Icon=media-optical
+MimeType=application/x-conjunction-disk-image;
+NoDisplay=true
+Terminal=false

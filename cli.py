@@ -441,11 +441,9 @@ class ConjunctionCLI:
                 self._info(f"[dry-run] Would install Windows app from {installer_path}")
                 return 0
             try:
-                with Spinner(f"Installing {Path(installer_path).name} via ConjunctionRunner..."):
-                    metadata = self.api.install(installer_path)
-                self._success(f"Successfully installed '{metadata['name']}'")
-                if metadata.get("desktop_entry"):
-                    self._info(f"Created desktop entry: {metadata['desktop_entry']}")
+                with Spinner(f"Installing {Path(installer_path).name} as .app bundle..."):
+                    metadata = self.api.install_bundle(installer_path, force=force)
+                self._success(f"Successfully installed '{metadata['name']}' at {metadata['bundle_path']}")
                 return 0
             except Exception as exc:
                 self._error(f"Installation failed: {exc}")
@@ -576,24 +574,35 @@ class ConjunctionCLI:
         return 0
 
     def cmd_apps(self) -> int:
-        """List installed sandboxed applications with details."""
+        """List installed .app bundles and legacy sandboxed applications."""
         remove_app = getattr(self.args, "remove", None)
-        
+
         if remove_app:
             return self._remove_app(remove_app)
-        
+
         self._info("═══════════════════════════════════════")
         self._info(" Conjunction OS — Installed Apps")
         self._info("═══════════════════════════════════════")
         print()
-        
+
         try:
+            from engine import user_applications_dir, system_applications_dir
+            found_bundles = []
+            for root in (user_applications_dir(), system_applications_dir()):
+                if root.is_dir():
+                    for p in sorted(root.glob("*.app")):
+                        if (p / "Contents" / "Info.toml").is_file():
+                            found_bundles.append(p)
+
             apps = self.api.list_apps()
-            if not apps:
+            if not found_bundles and not apps:
                 self._warning("No applications installed yet")
-                self._info("Install apps with: cj install <name_or_path>")
+                self._info("Drag .app bundles into ~/Applications or run: cj install <app.exe>")
                 return 0
-                
+
+            for bp in found_bundles:
+                self._info(f"  {_colored(bp.stem, Colors.BOLD)} ({bp})")
+
             for app in apps:
                 self._info(f"  {_colored(app['name'], Colors.BOLD)}")
                 self._info(f"    GPU Passthrough: {app.get('gpu_vendor', 'unknown')}")
@@ -604,34 +613,30 @@ class ConjunctionCLI:
         except Exception as exc:
             self._error(f"Failed to list applications: {exc}")
             return 1
-        
+
         return 0
 
     def _remove_app(self, app_name: str) -> int:
-        """Remove a sandboxed application.
-        
-        Args:
-            app_name: Name of the application to remove.
-        
-        Returns:
-            0 on success, 1 on failure.
-        """
-        # Confirm removal
+        """Remove a sandboxed application (.app bundle or legacy prefix)."""
         if not self.dry_run:
             if not _confirm(f"Remove '{app_name}' and all its data?"):
                 self._info("Aborted.")
                 return 0
-        
+
         self._info(f"Removing {app_name}...")
-        
+
         try:
-            runner = ConjunctionRunner()
             if self.dry_run:
-                self._info(f"[dry-run] ConjunctionRunner().remove('{app_name}')")
+                self._info(f"[dry-run] Would remove '{app_name}'")
                 return 0
-            runner.remove(app_name)
-            self._success(f"Removed '{app_name}' successfully")
-            return 0
+            try:
+                removed = self.api.remove_bundle(app_name)
+                self._success(f"Removed bundle '{removed}' successfully")
+                return 0
+            except Exception:
+                self.api.remove(app_name)
+                self._success(f"Removed '{app_name}' successfully")
+                return 0
         except Exception as exc:
             self._error(f"Failed to remove application: {exc}")
             return 1

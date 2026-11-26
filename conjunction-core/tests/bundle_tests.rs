@@ -1,4 +1,6 @@
-use conjunction_core::bundle::{Bundle, BundleError, CURRENT_BUNDLE_FORMAT};
+use conjunction_core::bundle::{host_arch, Bundle, BundleError, RuntimeKind, BUNDLE_FORMAT_V1, CURRENT_BUNDLE_FORMAT};
+use conjunction_core::launcher::build_bundle_launch_plan;
+use conjunction_core::security::seal_bundle_manifest;
 use std::fs::{self, File};
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -491,4 +493,224 @@ architectures = ["mips64"]
         Err(BundleError::UnsupportedArchitecture(a)) => assert_eq!(a, "mips64"),
         other => panic!("Expected UnsupportedArchitecture, got {:?}", other),
     }
+}
+
+#[test]
+fn test_v1_backwards_compatibility() {
+    let t = TestDir::new("v1_compat");
+    let bundle_dir = t.path.join("LegacyV1.app");
+    let manifest_content = format!(
+        r#"bundle_format = "{}"
+id = "org.example.v1app"
+name = "Legacy V1"
+version = "1.0.0"
+executable = "Contents/Executable/v1app"
+architectures = ["x86_64", "aarch64"]
+"#,
+        BUNDLE_FORMAT_V1
+    );
+    create_file(bundle_dir.join("Contents/Info.toml"), &manifest_content, false);
+    create_file(bundle_dir.join("Contents/Executable/v1app"), "#!/bin/sh\necho v1\n", true);
+
+    let bundle = Bundle::open(&bundle_dir).unwrap();
+    bundle.validate().expect("v1 bundle must validate cleanly");
+}
+
+#[test]
+fn test_universal_bundle_arch_selection_and_missing_host_arch() {
+    let t = TestDir::new("universal_arch");
+    let bundle_dir = t.path.join("Universal.app");
+    let manifest_content = format!(
+        r#"bundle_format = "{}"
+id = "org.example.universal"
+name = "Universal App"
+version = "2.0.0"
+executable = "Contents/MacOS/uapp"
+architectures = ["x86_64", "aarch64"]
+runtime = "conjunction-1"
+"#,
+        CURRENT_BUNDLE_FORMAT
+    );
+    create_file(bundle_dir.join("Contents/Info.toml"), &manifest_content, false);
+    create_file(bundle_dir.join("Contents/MacOS/x86_64/uapp"), "#!/bin/sh\necho x86_64\n", true);
+    create_file(bundle_dir.join("Contents/MacOS/aarch64/uapp"), "#!/bin/sh\necho aarch64\n", true);
+
+    let bundle = Bundle::open(&bundle_dir).unwrap();
+    bundle.validate().unwrap();
+
+    let x86 = bundle.resolve_executable_for_arch("x86_64").unwrap();
+    let arm = bundle.resolve_executable_for_arch("aarch64").unwrap();
+    assert!(x86.to_string_lossy().contains("x86_64"));
+    assert!(arm.to_string_lossy().contains("aarch64"));
+
+    let host_resolved = bundle.resolve_executable_for_host().unwrap();
+    assert!(host_resolved.to_string_lossy().contains(host_arch()));
+
+    // Missing host arch bundle must fail with clear error on launch resolution
+    let other_arch = if host_arch() == "aarch64" { "x86_64" } else { "aarch64" };
+    let single_dir = t.path.join("SingleArch.app");
+    let single_manifest = format!(
+        r#"bundle_format = "{}"
+id = "org.example.singlearch"
+name = "Single Arch"
+version = "1.0.0"
+executable = "Contents/MacOS/sapp"
+architectures = ["{}"]
+"#,
+        CURRENT_BUNDLE_FORMAT, other_arch
+    );
+    create_file(single_dir.join("Contents/Info.toml"), &single_manifest, false);
+    create_file(
+        single_dir.join(format!("Contents/MacOS/{}/sapp", other_arch)),
+        "#!/bin/sh\necho other\n",
+        true,
+    );
+
+    let single_bundle = Bundle::open(&single_dir).unwrap();
+    single_bundle.validate().expect("static validation succeeds for valid single-arch bundle");
+    let err = single_bundle.resolve_executable_for_host().unwrap_err();
+    match err {
+        BundleError::UnsupportedHostArchitecture { host_arch: h, .. } => {
+            assert_eq!(h, host_arch());
+        }
+        other => panic!("Expected UnsupportedHostArchitecture, got {:?}", other),
+    }
+}
+
+#[test]
+fn test_frameworks_ld_library_path_and_escape_rejection() {
+    let t = TestDir::new("frameworks");
+    let bundle_dir = t.path.join("FrameworksApp.app");
+    let manifest_content = format!(
+        r#"bundle_format = "{}"
+id = "org.example.fw"
+name = "FW App"
+version = "1.0.0"
+executable = "Contents/MacOS/fwapp"
+architectures = ["x86_64", "aarch64"]
+runtime = "conjunction-1"
+"#,
+        CURRENT_BUNDLE_FORMAT
+    );
+    create_file(bundle_dir.join("Contents/Info.toml"), &manifest_content, false);
+    create_file(bundle_dir.join("Contents/MacOS/fwapp"), "#!/bin/sh\necho ok\n", true);
+    create_file(bundle_dir.join("Contents/Frameworks/libcustom.so"), "fake so", false);
+
+    let bundle = Bundle::open(&bundle_dir).unwrap();
+    bundle.validate().unwrap();
+    let plan = build_bundle_launch_plan(&bundle, &[], true).unwrap();
+    let ld_path = plan.env.get("LD_LIBRARY_PATH").expect("LD_LIBRARY_PATH should be set");
+    assert!(ld_path.contains("Contents/Frameworks"));
+
+    // Symlink escape via Contents/Frameworks must be rejected
+    #[cfg(unix)]
+    {
+        let evil_dir = t.path.join("evil_libs");
+        fs::create_dir_all(&evil_dir).unwrap();
+        let bad_app = t.path.join("BadFw.app");
+        create_file(bad_app.join("Contents/Info.toml"), &manifest_content, false);
+        create_file(bad_app.join("Contents/MacOS/fwapp"), "#!/bin/sh\necho ok\n", true);
+        std::os::unix::fs::symlink(&evil_dir, bad_app.join("Contents/Frameworks")).unwrap();
+
+        let bad_bundle = Bundle::open(&bad_app).unwrap();
+        assert!(matches!(
+            bad_bundle.validate(),
+            Err(BundleError::PathEscapesBundle { .. })
+        ));
+    }
+}
+
+#[test]
+fn test_runtime_specs_and_minimum_os_check() {
+    let t = TestDir::new("runtime_minos");
+    let app_dir = t.path.join("MinOs.app");
+    let manifest_content = format!(
+        r#"bundle_format = "{}"
+id = "org.example.minos"
+name = "MinOS App"
+version = "1.0.0"
+executable = "Contents/MacOS/minos"
+architectures = ["x86_64", "aarch64"]
+runtime = "conjunction-1"
+minimum_os = "42"
+"#,
+        CURRENT_BUNDLE_FORMAT
+    );
+    create_file(app_dir.join("Contents/Info.toml"), &manifest_content, false);
+    create_file(app_dir.join("Contents/MacOS/minos"), "#!/bin/sh\necho ok\n", true);
+
+    let bundle = Bundle::open(&app_dir).unwrap();
+    assert_eq!(bundle.runtime_kind().unwrap(), RuntimeKind::Conjunction1);
+
+    std::env::set_var("CONJUNCTION_OS_VERSION", "40");
+    let res = bundle.resolve_executable_for_host();
+    std::env::remove_var("CONJUNCTION_OS_VERSION");
+    assert!(matches!(res, Err(BundleError::MinimumOsNotMet { .. })));
+
+    std::env::set_var("CONJUNCTION_OS_VERSION", "42");
+    let res_ok = bundle.resolve_executable_for_host();
+    std::env::remove_var("CONJUNCTION_OS_VERSION");
+    assert!(res_ok.is_ok());
+
+    // Unsupported runtime
+    let bad_rt = t.path.join("BadRt.app");
+    let bad_manifest = manifest_content.replace("conjunction-1", "unknown-rt");
+    create_file(bad_rt.join("Contents/Info.toml"), &bad_manifest, false);
+    create_file(bad_rt.join("Contents/MacOS/minos"), "#!/bin/sh\necho ok\n", true);
+    let bad_bundle = Bundle::open(&bad_rt).unwrap();
+    assert!(matches!(
+        bad_bundle.validate(),
+        Err(BundleError::UnsupportedRuntime(_))
+    ));
+}
+
+#[test]
+fn test_wine_path_traversal_rejected_and_manifest_tamper_rejected() {
+    let t = TestDir::new("wine_sec");
+    let bad_wine = t.path.join("EvilWine.app");
+    let bad_manifest = format!(
+        r#"bundle_format = "{}"
+id = "org.example.evilwine"
+name = "Evil Wine"
+version = "1.0.0"
+executable = "Contents/MacOS/run"
+architectures = ["x86_64", "aarch64"]
+runtime = "wine"
+
+[wine]
+prefix = "../../outside_prefix"
+target_exe = "Contents/WinePrefix/drive_c/app.exe"
+"#,
+        CURRENT_BUNDLE_FORMAT
+    );
+    create_file(bad_wine.join("Contents/Info.toml"), &bad_manifest, false);
+    create_file(bad_wine.join("Contents/MacOS/run"), "#!/bin/sh\necho hi\n", true);
+    let b = Bundle::open(&bad_wine).unwrap();
+    assert!(matches!(
+        b.validate(),
+        Err(BundleError::InvalidRelativePath { .. })
+    ));
+
+    // Sealed bundle tamper detection inside Bundle::validate()
+    let sealed_app = t.path.join("Sealed.app");
+    let sealed_manifest = format!(
+        r#"bundle_format = "{}"
+id = "org.example.sealed"
+name = "Sealed App"
+version = "1.0.0"
+executable = "Contents/MacOS/sealed"
+architectures = ["x86_64", "aarch64"]
+"#,
+        CURRENT_BUNDLE_FORMAT
+    );
+    create_file(sealed_app.join("Contents/Info.toml"), &sealed_manifest, false);
+    create_file(sealed_app.join("Contents/MacOS/sealed"), "#!/bin/sh\necho ok\n", true);
+    seal_bundle_manifest(&sealed_app).unwrap();
+
+    let sb = Bundle::open(&sealed_app).unwrap();
+    sb.validate().expect("sealed bundle should validate");
+
+    // Tamper payload
+    create_file(sealed_app.join("Contents/MacOS/sealed"), "#!/bin/sh\necho pwned\n", true);
+    assert!(matches!(sb.validate(), Err(BundleError::IntegrityError(_))));
 }
