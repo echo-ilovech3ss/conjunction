@@ -1,0 +1,57 @@
+name: Hardware report
+description: Tell us how Conjunction runs on your machine, working or not.
+title: "[hardware] <vendor> <model>"
+labels: ["hardware"]
+body:
+  - type: input
+    id: model
+    attributes:
+      label: Machine
+      placeholder: Lenovo ThinkPad T14 Gen 5 (AMD) / Snapdragon X Elite laptop / custom desktop
+    validations:
+      required: true
+  - type: dropdown
+    id: arch
+    attributes:
+      label: Architecture
+      options:
+        - x86_64 (Intel / AMD)
+        - aarch64 (ARM)
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Conjunction version
+      description: ISO file name or `bootc status --booted`.
+    validations:
+      required: true
+  - type: checkboxes
+    id: works
+    attributes:
+      label: What works?
+      description: Tick what you tested and saw working. Leave the rest unticked and describe below.
+      options:
+        - label: ISO boots
+        - label: Install completes
+        - label: Boots after install
+        - label: Display at native resolution / refresh rate
+        - label: GPU acceleration (glass effects smooth)
+        - label: Wi-Fi
+        - label: Bluetooth
+        - label: Audio out / mic
+        - label: Webcam
+        - label: Touchpad gestures
+        - label: Suspend / resume
+        - label: External monitors
+        - label: Battery reporting
+  - type: textarea
+    id: notes
+    attributes:
+      label: Problems and notes
+  - type: textarea
+    id: inxi
+    attributes:
+      label: System info
+      description: Paste `inxi -Fxz` (or `lspci -nnk` and `lsusb`).
+      render: text

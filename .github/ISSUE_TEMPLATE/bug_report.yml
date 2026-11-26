@@ -1,0 +1,101 @@
+name: Bug report
+description: Something is broken in Conjunction (install, boot, desktop, apps).
+labels: ["bug", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for testing. One problem per issue, please. Search existing issues first.
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Installer / ISO
+        - Boot / login
+        - Desktop shell (menu bar, Dock, Control Center, search)
+        - Window animations / glass effects
+        - .app bundles / .cdmg disk images
+        - Files app
+        - Settings app
+        - Windows apps (Wine / Proton / FEX)
+        - Updates (bootc)
+        - Hardware (GPU, Wi-Fi, audio, sleep, etc.)
+        - Other
+    validations:
+      required: true
+  - type: dropdown
+    id: arch
+    attributes:
+      label: Architecture
+      options:
+        - x86_64 (Intel / AMD)
+        - aarch64 (ARM)
+    validations:
+      required: true
+  - type: dropdown
+    id: machine
+    attributes:
+      label: Where are you running it?
+      options:
+        - Real hardware
+        - VM (QEMU / virt-manager)
+        - VM (VirtualBox)
+        - VM (VMware)
+        - VM (Hyper-V)
+        - VM (UTM / Parallels on Mac)
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Conjunction version
+      description: ISO file name, or the output of `bootc status --booted` (image and digest) if installed.
+      placeholder: conjunction-45-amd64.iso / ghcr.io/.../conjunction@sha256:...
+    validations:
+      required: true
+  - type: textarea
+    id: hardware
+    attributes:
+      label: Hardware
+      description: CPU, GPU, RAM, disk. If installed, paste `inxi -Fxz` or `lspci -nnk` and `lsusb`.
+      render: text
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Boot the ISO
+        2. Click ...
+        3. ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected vs what happened
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: |
+        Installed or live system: `journalctl -b -p warning --no-pager | tail -300`.
+        Installer failures: `/tmp/anaconda.log` and `/tmp/program.log` from the live session.
+        App problems: `journalctl --user -u conj-appd -b --no-pager`.
+      render: text
+  - type: textarea
+    id: media
+    attributes:
+      label: Screenshots or video
+      description: Drag files here. Video helps a lot for animation and glass bugs.
+  - type: dropdown
+    id: frequency
+    attributes:
+      label: How often?
+      options:
+        - Every time
+        - Sometimes
+        - Happened once
