@@ -140,9 +140,6 @@ jobs:
 
       - name: Build NVIDIA image on x86_64
         if: matrix.arch == 'amd64'
-        # Experimental: akmod-nvidia can't build kmods as root inside the image yet.
-        # Don't let it block the main ISO.
-        continue-on-error: true
         run: |
           sudo podman build \
             --platform linux/amd64 \
