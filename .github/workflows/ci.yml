@@ -140,6 +140,9 @@ jobs:
 
       - name: Build NVIDIA image on x86_64
         if: matrix.arch == 'amd64'
+        # Experimental: akmod-nvidia can't build kmods as root inside the image yet.
+        # Don't let it block the main ISO.
+        continue-on-error: true
         run: |
           sudo podman build \
             --platform linux/amd64 \
@@ -185,7 +188,9 @@ jobs:
             --rootfs btrfs \
             --force-repo "${FEDORA_REPO}" \
             "${{ steps.meta.outputs.image }}:45-${{ matrix.arch }}"
-          mv "out/iso-${{ matrix.arch }}/bootiso/install.iso" "out/iso-${{ matrix.arch }}/conjunction-45-${{ matrix.arch }}.iso"
+          # bootc-image-builder runs as root, so its output is root-owned.
+          sudo mv "out/iso-${{ matrix.arch }}/bootiso/install.iso" "out/iso-${{ matrix.arch }}/conjunction-45-${{ matrix.arch }}.iso"
+          sudo chown -R "$(id -u):$(id -g)" "out/iso-${{ matrix.arch }}"
           ls -lh "out/iso-${{ matrix.arch }}/conjunction-45-${{ matrix.arch }}.iso"
 
       - name: Upload installer ISO artifact (workflow_dispatch)
