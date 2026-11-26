@@ -17,6 +17,7 @@ RUN if [ "$(uname -m)" != "x86_64" ]; then \
 COPY os/nvidia/usr/lib/bootc/kargs.d/05-nvidia.toml /usr/lib/bootc/kargs.d/05-nvidia.toml
 
 RUN set -euo pipefail; \
+    export HOME=/tmp; \
     KVER="$(ls -1 /usr/lib/modules | head -n 1)"; \
     KDEV_VER="$(rpm -q --qf '%{VERSION}-%{RELEASE}.%{ARCH}' kernel-core)"; \
     dnf5 install -y \

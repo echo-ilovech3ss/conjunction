@@ -10,11 +10,11 @@ Conjunction is a desktop operating system built as a multi-arch (`x86_64` / `aar
 | NVIDIA Variant | `x86_64` RPM Fusion NVIDIA driver + `nouveau` blacklist kargs | [`os/Containerfile.nvidia`](os/Containerfile.nvidia) |
 | Installer Media | Anaconda (`anaconda-iso`) generated via `bootc-image-builder` | [`os/iso-config.toml`](os/iso-config.toml) |
 | Rust Daemons & CLI | `conj-appd`, `conj-open`, `conj-bundle`, `conj-appctl`, `conj-sysd`, `cj`, `application`, `app_sync` | Workspace crates |
-| Desktop UI (C++/Qt6/KF6) | `conj-shelld`, `conj-notificationd`, `conjunction-files`, `conjunction-settings`, `conjunction-terminal`, `conjunction-design`, Dolphin KF6 plugin | C++/QML directories & `data/dolphin-plugin/` |
-| Typography & Themes | `Inter` + `Inter Display` (`OFL-1.1`), `JetBrains Mono` (`OFL-1.1`), `Material Symbols Rounded` (`Apache-2.0`), `MacTahoe` icon (`GPL-3.0`) & GTK (`MIT`) themes | [`os/ASSETS-LICENSES.md`](os/ASSETS-LICENSES.md) |
-| Software Ecosystem | Flathub, Distrobox, RPM Fusion codecs, Wine/DXVK/winetricks/`umu-launcher` (`x86_64`), FEX-Emu/Box64/winetricks (`aarch64`) | [`os/Containerfile`](os/Containerfile) |
+| Desktop UI (C++/Qt6/KF6) | `conj-shelld`, `conj-notificationd`, `conjunction-files`, `conjunction-settings`, `conjunction-terminal`, `conjunction-design`, KWin glass/motion (`kwin/`), Plasma look-and-feel (`plasma/`), Dolphin KF6 plugin | C++/QML directories & `data/dolphin-plugin/` |
+| Typography & Themes | `Inter` + `Inter Display` (`OFL-1.1`), `JetBrains Mono` (`OFL-1.1`), `Material Symbols Rounded` (`Apache-2.0`), `MacTahoe` icon (`GPL-3.0`) & GTK (`MIT`) themes, Phosphor icons (`MIT`) | [`os/ASSETS-LICENSES.md`](os/ASSETS-LICENSES.md) |
+| Software Ecosystem | Flathub, Distrobox, RPM Fusion codecs, Wine/DXVK/`umu-launcher` (`x86_64`), FEX-Emu + `fex-emu-rootfs-fedora` + Box64 + x86_64 Wine-Proton WoW64 (`aarch64`) | [`os/Containerfile`](os/Containerfile) |
 
-> **Architecture Note (`aarch64`)**: Native `wine` and `umu-launcher` are not packaged in Fedora 45 / `bazzite-org/bazzite` for `aarch64`. On `aarch64`, Conjunction ships `fex-emu`, `fex-emu-rootfs-fedora`, `fex-emu-thunks`, `box64`, and `winetricks`.
+> **Architecture Note (`aarch64`)**: Native `wine` and `umu-launcher` are not packaged in Fedora 45 / `bazzite-org/bazzite` for `aarch64`. On `aarch64`, Conjunction ships Fedora's `fex-emu` (`2604`), `fex-emu-rootfs-fedora`, `fex-emu-thunks`, `box64`, `winetricks`, and a bundled `x86_64` Wine-Proton WoW64 runtime wrapped through `FEXInterpreter` with `binfmt_misc` active.
 
 ## Quickstart (Rootful Podman + `bootc-image-builder`)
 

@@ -12,5 +12,5 @@ __pycache__/
 *.raw
 *.ppm
 *.log
-docs/design/macos-reference/
+docs/
 tests/

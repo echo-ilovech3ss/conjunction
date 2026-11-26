@@ -1,32 +1,40 @@
 # syntax=docker/dockerfile:1
 # Conjunction OS base image (Fedora 45 Kinoite bootc, multi-arch: linux/amd64 + linux/arm64)
+# Keep build-context small via `--ignorefile os/.containerignore`.
 
 ARG BASE_IMAGE=quay.io/fedora/fedora-kinoite:45
 
 # ==============================================================================
-# Stage 1: Build Rust workspace, C++/Qt6/KF6 components, fonts, and themes
+# Stage 1: Builder (toolchains, upstream assets, Rust workspace, Qt6/KF6/KWin C++)
+# Shell/Design/KWin additions in conjunction-design/, conj-shelld/,
+# conjunction-files/, conjunction-settings/, conjunction-terminal/, and kwin/
+# are built uniformly in the CMAKE_COMPONENTS loop below.
 # ==============================================================================
 FROM ${BASE_IMAGE} AS builder
 
 WORKDIR /src
 # On bootc bases /root is a symlink to /var/roothome, which doesn't exist at build
-# time, so cargo can't create ~/.cargo. Keep its cache inside the build stage.
-ENV CARGO_HOME=/tmp/cargo-home
+# time, so cargo/git/tools can't create ~/.cargo or ~/.cache. Keep them in /tmp.
+ENV CARGO_HOME=/tmp/cargo-home \
+    HOME=/tmp
 
-# Install toolchains, Qt6/KF6 development headers, and theme build helpers
+# 1. Install toolchains, Qt6/KF6/KWin development headers, and theme build helpers
 RUN set -euo pipefail; \
-    dnf5 install -y \
+    dnf5 --setopt=fastestmirror=True --setopt=max_parallel_downloads=10 install -y \
       cargo rust \
       cmake ninja-build gcc-c++ extra-cmake-modules \
-      qt6-qtbase-devel qt6-qtdeclarative-devel qt6-qtsvg-devel \
+      qt6-qtbase-devel qt6-qtdeclarative-devel qt6-qtsvg-devel qt6-qtshadertools-devel \
       kf6-kio-devel kf6-kconfig-devel kf6-solid-devel \
       kf6-networkmanager-qt-devel libkscreen-devel \
       kf6-kparts-devel kf6-kxmlgui-devel kf6-kcoreaddons-devel \
+      kf6-ki18n-devel kf6-kwindowsystem-devel \
+      kdecoration-devel kwin-devel libdrm-devel layer-shell-qt-devel libepoxy-devel \
       sassc glib2-devel gtk-murrine-engine \
-      git unzip curl binutils; \
+      git unzip curl binutils xz; \
     dnf5 clean all
 
-# Install pinned upstream fonts & MacTahoe themes into /out (with license files)
+# 2. Fetch upstream fonts, MacTahoe themes, and (on aarch64) Wine-Proton WoW64 into /out
+ARG PROTON_WINE_VERSION=proton-11.0-3
 RUN set -euo pipefail; \
     mkdir -p \
       /out/usr/share/fonts/inter \
@@ -65,77 +73,70 @@ RUN set -euo pipefail; \
       sed -i 's/setterm /true /g' libs/lib-core.sh && \
       USER=root TERM=xterm-256color bash ./install.sh -d /out/usr/share/themes -c light -c dark -o normal -t default </dev/null); \
     install -Dm644 /tmp/MacTahoe-gtk-theme/COPYING /out/usr/share/licenses/conjunction/MacTahoe-gtk-theme-MIT.txt; \
-    rm -rf /tmp/MacTahoe-gtk-theme
+    rm -rf /tmp/MacTahoe-gtk-theme; \
+    # Portable x86_64 Wine-Proton WoW64 for FEX-Emu on aarch64
+    if [ "$(uname -m)" = "aarch64" ]; then \
+      mkdir -p /out/usr/share/conjunction/wine-x86_64 /out/usr/bin; \
+      curl -fsSL -o /tmp/wine-proton.tar.xz \
+        "https://github.com/Kron4ek/Wine-Builds/releases/download/${PROTON_WINE_VERSION}/wine-${PROTON_WINE_VERSION}-amd64-wow64.tar.xz"; \
+      tar -xJf /tmp/wine-proton.tar.xz --strip-components=1 -C /out/usr/share/conjunction/wine-x86_64; \
+      rm -f /tmp/wine-proton.tar.xz; \
+      test -x /out/usr/share/conjunction/wine-x86_64/bin/wine; \
+    fi
 
-# Replace trademarked start-here / distributor-logo / safari / finder artwork in MacTahoe icons
-COPY assets /src/assets
+# 3. Copy repo in one layer, patch MacTahoe trademark icons, build Rust + C++/Qt6/KF6/KWin, and stage /out
+COPY . /src
+
+ARG CMAKE_COMPONENTS="conjunction-design conj-shelld conjunction-files conjunction-settings conjunction-terminal kwin data/dolphin-plugin"
+
 RUN set -euo pipefail; \
-    MARK="/src/assets/conjunction-mark.svg"; \
+    R="/src"; \
+    # Replace trademarked start-here / distributor-logo / safari / finder artwork in MacTahoe icons
+    MARK="${R}/assets/conjunction-mark.svg"; \
     for theme_dir in /out/usr/share/icons/MacTahoe*; do \
       [ -d "${theme_dir}" ] || continue; \
-      find "${theme_dir}" \( -type f -o -type l \) \( -name 'start-here*.svg' -o -name 'distributor-logo*.svg' \) | while read -r icon; do \
-        rm -f "${icon}"; \
-        cp "${MARK}" "${icon}"; \
+      GENERIC_NET="$(find "${theme_dir}" \( -path '*/apps/scalable/applications-internet.svg' -o -path '*/categories/scalable/applications-internet.svg' \) | head -n 1 || true)"; \
+      GENERIC_FOLDER="$(find "${theme_dir}" \( -path '*/places/scalable/folder-blue.svg' -o -path '*/places/scalable/folder.svg' \) | head -n 1 || true)"; \
+      find "${theme_dir}" \( -type f -o -type l \) \( -name 'start-here*.svg' -o -name 'distributor-logo*.svg' -o -name 'tapple.svg' -o -name 'safari*.svg' -o -name 'system-file-manager*.svg' \) | while IFS= read -r icon; do \
+        base="$(basename "${icon}")"; \
+        case "${base}" in \
+          start-here*.svg|distributor-logo*.svg|tapple.svg) \
+            rm -f "${icon}"; \
+            cp "${MARK}" "${icon}"; \
+            ;; \
+          safari*.svg) \
+            if [ -n "${GENERIC_NET}" ] && [ -e "${GENERIC_NET}" ]; then \
+              rm -f "${icon}"; \
+              cp -L "${GENERIC_NET}" "${icon}"; \
+            fi; \
+            ;; \
+          system-file-manager*.svg) \
+            if [ -n "${GENERIC_FOLDER}" ] && [ -e "${GENERIC_FOLDER}" ]; then \
+              rm -f "${icon}"; \
+              cp -L "${GENERIC_FOLDER}" "${icon}"; \
+            fi; \
+            ;; \
+        esac; \
       done; \
-      # Replace Safari and Apple-branded Finder/file-manager icons with non-trademark icons
-      GENERIC_NET="$(find "${theme_dir}" -path '*/apps/scalable/applications-internet.svg' -o -path '*/categories/scalable/applications-internet.svg' | head -n 1 || true)"; \
-      GENERIC_FOLDER="$(find "${theme_dir}" -path '*/places/scalable/folder-blue.svg' -o -path '*/places/scalable/folder.svg' | head -n 1 || true)"; \
-      find "${theme_dir}" \( -type f -o -type l \) -name 'safari*.svg' | while read -r sicon; do \
-        if [ -n "${GENERIC_NET}" ] && [ -e "${GENERIC_NET}" ]; then \
-          rm -f "${sicon}"; \
-          cp -L "${GENERIC_NET}" "${sicon}"; \
-        fi; \
-      done; \
-      find "${theme_dir}" \( -type f -o -type l \) \( -name 'system-file-manager*.svg' -o -name 'user-home*.svg' -o -name 'tapple.svg' \) | while read -r ficon; do \
-        if [ "$(basename "${ficon}")" = "tapple.svg" ]; then \
-          rm -f "${ficon}"; \
-          cp "${MARK}" "${ficon}"; \
-        elif [ "$(basename "${ficon}")" = "system-file-manager.svg" ] && [ -n "${GENERIC_FOLDER}" ] && [ -e "${GENERIC_FOLDER}" ]; then \
-          rm -f "${ficon}"; \
-          cp -L "${GENERIC_FOLDER}" "${ficon}"; \
-        fi; \
-      done; \
-    done
-
-# Build all Rust workspace binaries (including bundle daemon, CLI, opener, packer, and sysd)
-COPY Cargo.toml Cargo.lock ./
-COPY conjunction-core ./conjunction-core
-COPY application ./application
-COPY app_sync ./app_sync
-COPY cj ./cj
-COPY conj-bundle ./conj-bundle
-COPY conj-appd ./conj-appd
-COPY conj-appctl ./conj-appctl
-COPY conj-open ./conj-open
-COPY conj-sysd ./conj-sysd
-RUN set -euo pipefail; \
+    done; \
+    # Build all Rust workspace binaries
     cargo build --release --locked; \
     mkdir -p /out/usr/bin; \
     for bin in cj application app_sync conj-bundle conj-appd conj-appctl conj-open conj-sysd; do \
       install -Dm755 "target/release/${bin}" "/out/usr/bin/${bin}"; \
-      strip "/out/usr/bin/${bin}" || true; \
-    done
-
-# Build all C++/Qt6/KF6 components and Dolphin KF6 plugin
-COPY conjunction-design ./conjunction-design
-COPY conj-shelld ./conj-shelld
-COPY conj-notificationd ./conj-notificationd
-COPY conjunction-files ./conjunction-files
-COPY conjunction-settings ./conjunction-settings
-COPY conjunction-terminal ./conjunction-terminal
-COPY data/dolphin-plugin ./data/dolphin-plugin
-
-RUN set -euo pipefail; \
-    for proj in conjunction-design conj-shelld conjunction-files conjunction-settings conjunction-terminal data/dolphin-plugin; do \
-      cmake -S "/src/${proj}" -B "/tmp/build-${proj//\//-}" -G Ninja \
+    done; \
+    # Build all C++/Qt6/KF6/KWin components and Dolphin KF6 plugin
+    for proj in ${CMAKE_COMPONENTS}; do \
+      BDIR="/tmp/build-$(printf '%s' "${proj}" | tr '/' '-')"; \
+      cmake -S "${R}/${proj}" -B "${BDIR}" -G Ninja \
         -DCMAKE_BUILD_TYPE=Release \
         -DCMAKE_INSTALL_PREFIX=/usr; \
-      cmake --build "/tmp/build-${proj//\//-}"; \
-      DESTDIR=/out cmake --install "/tmp/build-${proj//\//-}"; \
-      rm -rf "/tmp/build-${proj//\//-}"; \
+      cmake --build "${BDIR}"; \
+      DESTDIR=/out cmake --install "${BDIR}"; \
+      rm -rf "${BDIR}"; \
     done; \
-    # conj-notificationd does not declare an install() rule in CMakeLists.txt
-    cmake -S /src/conj-notificationd -B /tmp/build-conj-notificationd -G Ninja \
+    # Ensure conj-notificationd binary is installed even if upstream CMakeLists.txt omits install()
+    cmake -S "${R}/conj-notificationd" -B /tmp/build-conj-notificationd -G Ninja \
       -DCMAKE_BUILD_TYPE=Release \
       -DCMAKE_INSTALL_PREFIX=/usr; \
     cmake --build /tmp/build-conj-notificationd; \
@@ -143,14 +144,50 @@ RUN set -euo pipefail; \
     rm -rf /tmp/build-conj-notificationd; \
     # Complete QML module layout & reference_app alias expected by C++ loaders
     mkdir -p /out/usr/share/conjunction/qml /out/usr/lib64/qt6/qml/QtQuick/Controls; \
-    cp -a /src/conjunction-design/qml/QtQuick /out/usr/share/conjunction/qml/; \
+    cp -a "${R}/conjunction-design/qml/QtQuick" /out/usr/share/conjunction/qml/; \
     ln -sfn reference_app /out/usr/share/conjunction/reference; \
     ln -sfn /usr/share/conjunction/qml/Conjunction /out/usr/lib64/qt6/qml/Conjunction; \
     ln -sfn /usr/share/conjunction/qml/QtQuick/Controls/Conjunction /out/usr/lib64/qt6/qml/QtQuick/Controls/Conjunction; \
-    find /out/usr/bin -maxdepth 1 -type f -exec strip {} + 2>/dev/null || true
+    # Verify compiled QSB shaders and KWin/Dolphin plugins
+    test -f /out/usr/share/conjunction/qml/Conjunction/Design/shaders/liquid_glass.frag.qsb; \
+    find /out -name '*.so' | tee /dev/stderr | grep -q 'conjunction'; \
+    find /out/usr/bin -maxdepth 1 -type f -exec strip {} + 2>/dev/null || true; \
+    # Stage Python Wine helpers, session, desktop/MIME/Polkit/DBus/KWin/Plasma/Terminal.app, and Fedora bootc overlays into /out
+    install -Dm644 -t /out/usr/lib/conjunction "${R}/engine.py" "${R}/cli.py"; \
+    install -Dm644 "${R}/data/conjunction.desktop" /out/usr/share/wayland-sessions/conjunction.desktop; \
+    install -Dm755 "${R}/data/conjunction-session" /out/usr/bin/conjunction-session; \
+    install -Dm755 "${R}/data/conjunction-session-init" /out/usr/bin/conjunction-session-init; \
+    install -Dm644 -t /out/usr/share/applications \
+      "${R}/data/conjunction-files.desktop" \
+      "${R}/data/conjunction-settings.desktop" \
+      "${R}/data/conjunction-terminal.desktop" \
+      "${R}/data/applications/conjunction-cdmg.desktop" \
+      "${R}/data/applications/conjunction-open.desktop"; \
+    install -Dm644 "${R}/data/mime/packages/conjunction-bundles.xml" /out/usr/share/mime/packages/conjunction-bundles.xml; \
+    install -Dm755 "${R}/data/kio/servicemenus/conjunction-app.desktop" /out/usr/share/kio/servicemenus/conjunction-app.desktop; \
+    install -Dm644 "${R}/data/polkit-1/rules.d/50-conjunction-cdmg.rules" /out/etc/polkit-1/rules.d/50-conjunction-cdmg.rules; \
+    install -Dm644 "${R}/data/org.conjunction.packages.policy" /out/usr/share/polkit-1/actions/org.conjunction.packages.policy; \
+    install -Dm644 "${R}/data/org.conjunction.Notifications.service" /out/usr/share/dbus-1/services/org.conjunction.Notifications.service; \
+    install -Dm644 "${R}/data/org.freedesktop.impl.portal.desktop.plasmanotify.service" /out/usr/share/dbus-1/services/org.freedesktop.impl.portal.desktop.plasmanotify.service; \
+    install -Dm644 "${R}/data/environment.d/60-conjunction-apps.conf" /out/usr/lib/environment.d/60-conjunction-apps.conf; \
+    install -Dm755 "${R}/data/plasma-env/conjunction-apps.sh" /out/etc/xdg/plasma-workspace/env/conjunction-apps.sh; \
+    install -Dm644 "${R}/data/tmpfiles.d/conjunction-apps.conf" /out/usr/lib/tmpfiles.d/conjunction-apps.conf; \
+    mkdir -p /out/usr/lib/systemd/user /out/usr/share/kwin/scripts/conjunction-kwin-bridge/contents/code /out/usr/share/kwin/effects/conjunction-overview /out/usr/share/conjunction/Applications/Terminal.app /out/usr/share/wallpapers/Conjunction /out/usr/share/plasma/look-and-feel /out/usr/share/conjunction/assets; \
+    cp -a "${R}/data/systemd/user/." /out/usr/lib/systemd/user/; \
+    install -Dm644 "${R}/data/conjunction-kwin-bridge.js" /out/usr/share/kwin/scripts/conjunction-kwin-bridge/contents/code/main.js; \
+    cp -a "${R}/data/conjunction-overview/." /out/usr/share/kwin/effects/conjunction-overview/; \
+    cp -a "${R}/data/Terminal.app/." /out/usr/share/conjunction/Applications/Terminal.app/; \
+    cp -a "${R}/data/wallpapers/." /out/usr/share/wallpapers/Conjunction/; \
+    cp -a "${R}/plasma/look-and-feel/." /out/usr/share/plasma/look-and-feel/; \
+    cp -a "${R}/assets/." /out/usr/share/conjunction/assets/; \
+    install -Dm644 "${R}/os/ASSETS-LICENSES.md" /out/usr/share/licenses/conjunction/ASSETS-LICENSES.md; \
+    # Fedora bootc overrides + authoritative Plasma globals (kdeglobals, kwinrc)
+    cp -a "${R}/os/files/." /out/; \
+    install -Dm644 "${R}/plasma/kdeglobals" /out/etc/xdg/kdeglobals; \
+    install -Dm644 "${R}/plasma/kwinrc" /out/etc/xdg/kwinrc
 
 # ==============================================================================
-# Stage 2: Final bootc OS image
+# Stage 2: Final bootc OS image (single COPY --from=builder avoids overlay bloat)
 # ==============================================================================
 FROM ${BASE_IMAGE}
 
@@ -161,49 +198,19 @@ LABEL org.opencontainers.image.title="Conjunction OS" \
       org.opencontainers.image.source="https://github.com/echo-ilovech3ss/conjunction" \
       containers.bootc="1"
 
-# Copy compiled Rust & C++/KF6 binaries, QML modules, plugins, fonts, themes, and licenses
+# Copy compiled Rust & C++/KF6/KWin binaries, QML modules, shaders, plugins, fonts, themes, licenses, and overlays
 COPY --from=builder /out/ /
 
-# Install Python Wine bundle runner helpers referenced in docs/APP_BUNDLES.md
-COPY engine.py cli.py /usr/lib/conjunction/
-
-# Install Conjunction session, desktop entries, MIME types, Polkit, D-Bus, KWin, and Terminal.app
-COPY data/conjunction.desktop /usr/share/wayland-sessions/conjunction.desktop
-COPY data/conjunction-session /usr/bin/conjunction-session
-COPY data/conjunction-session-init /usr/bin/conjunction-session-init
-COPY data/conjunction-files.desktop /usr/share/applications/conjunction-files.desktop
-COPY data/conjunction-settings.desktop /usr/share/applications/conjunction-settings.desktop
-COPY data/conjunction-terminal.desktop /usr/share/applications/conjunction-terminal.desktop
-COPY data/applications/conjunction-cdmg.desktop /usr/share/applications/conjunction-cdmg.desktop
-COPY data/applications/conjunction-open.desktop /usr/share/applications/conjunction-open.desktop
-COPY data/mime/packages/conjunction-bundles.xml /usr/share/mime/packages/conjunction-bundles.xml
-COPY data/kio/servicemenus/conjunction-app.desktop /usr/share/kio/servicemenus/conjunction-app.desktop
-COPY data/polkit-1/rules.d/50-conjunction-cdmg.rules /etc/polkit-1/rules.d/50-conjunction-cdmg.rules
-COPY data/org.conjunction.packages.policy /usr/share/polkit-1/actions/org.conjunction.packages.policy
-COPY data/org.conjunction.Notifications.service /usr/share/dbus-1/services/org.conjunction.Notifications.service
-COPY data/org.freedesktop.impl.portal.desktop.plasmanotify.service /usr/share/dbus-1/services/org.freedesktop.impl.portal.desktop.plasmanotify.service
-COPY data/environment.d/60-conjunction-apps.conf /usr/lib/environment.d/60-conjunction-apps.conf
-COPY data/plasma-env/conjunction-apps.sh /etc/xdg/plasma-workspace/env/conjunction-apps.sh
-COPY data/tmpfiles.d/conjunction-apps.conf /usr/lib/tmpfiles.d/conjunction-apps.conf
-COPY data/systemd/user/ /usr/lib/systemd/user/
-COPY data/conjunction-kwin-bridge.js /usr/share/kwin/scripts/conjunction-kwin-bridge/contents/code/main.js
-COPY data/conjunction-overview/ /usr/share/kwin/effects/conjunction-overview/
-COPY data/Terminal.app/ /usr/share/conjunction/Applications/Terminal.app/
-COPY assets/ /usr/share/conjunction/assets/
-COPY os/ASSETS-LICENSES.md /usr/share/licenses/conjunction/ASSETS-LICENSES.md
-
-# Overlay Fedora bootc overrides last (os-release, conj-sysd.service, tmpfiles, theming, fonts)
-COPY os/files/ /
-
-# Configure Flathub, RPM Fusion, codecs/firmware/bundle tools, and arch-specific Windows compat
+# Configure Flathub, RPM Fusion, codecs/firmware/bundle tools, and arch-specific Windows/x86 compat
 RUN set -euo pipefail; \
+    export HOME=/tmp; \
     mkdir -p /etc/flatpak/remotes.d; \
     curl -fsSL -o /etc/flatpak/remotes.d/flathub.flatpakrepo https://dl.flathub.org/repo/flathub.flatpakrepo; \
     FEDORA_VER="$(rpm -E %fedora)"; \
-    dnf5 install -y \
+    dnf5 --setopt=fastestmirror=True --setopt=max_parallel_downloads=10 install -y \
       "https://mirrors.rpmfusion.org/free/fedora/rpmfusion-free-release-${FEDORA_VER}.noarch.rpm" \
       "https://mirrors.rpmfusion.org/nonfree/fedora/rpmfusion-nonfree-release-${FEDORA_VER}.noarch.rpm"; \
-    dnf5 install -y --allowerasing \
+    dnf5 --setopt=fastestmirror=True --setopt=max_parallel_downloads=10 install -y --allowerasing \
       distrobox \
       btrfs-progs \
       squashfs-tools \
@@ -214,7 +221,6 @@ RUN set -euo pipefail; \
       desktop-file-utils \
       shared-mime-info \
       openssl \
-      winetricks \
       cabextract \
       alsa-firmware \
       alsa-sof-firmware \
@@ -228,10 +234,43 @@ RUN set -euo pipefail; \
     ARCH="$(uname -m)"; \
     if [ "${ARCH}" = "x86_64" ]; then \
       dnf5 copr enable -y bazzite-org/bazzite; \
-      dnf5 install -y wine wine-dxvk dxvk-native umu-launcher; \
+      dnf5 --setopt=fastestmirror=True --setopt=max_parallel_downloads=10 install -y \
+        wine wine-dxvk dxvk-native winetricks umu-launcher; \
     elif [ "${ARCH}" = "aarch64" ]; then \
-      # Wine and umu-launcher are not packaged for Fedora aarch64; ship FEX-Emu + Box64
-      dnf5 install -y fex-emu fex-emu-rootfs-fedora fex-emu-thunks box64; \
+      # FEX-Emu (2604 in Fedora 45 main repo) + x86_64 Fedora RootFS + binfmt_misc + thunks + Box64
+      # Exclude box64-binfmts weak dep so FEX exclusively owns x86/x86_64 binfmt_misc handlers.
+      dnf5 --setopt=fastestmirror=True --setopt=max_parallel_downloads=10 --setopt=install_weak_deps=False install -y \
+        fex-emu fex-emu-rootfs-fedora fex-emu-thunks fex-emu-utils box64; \
+      curl -fsSL -o /usr/bin/winetricks https://raw.githubusercontent.com/Winetricks/winetricks/master/src/winetricks; \
+      chmod 0755 /usr/bin/winetricks; \
+      # Global FEX configuration pointing to the Fedora x86_64 EROFS RootFS
+      mkdir -p /usr/share/fex-emu /etc/skel/.fex-emu /etc/profile.d; \
+      printf '{"Config":{"RootFS":"/usr/share/fex-emu/RootFS/default.erofs"}}\n' > /usr/share/fex-emu/Config.json; \
+      cp /usr/share/fex-emu/Config.json /etc/skel/.fex-emu/Config.json; \
+      printf 'FEX_ROOTFS=/usr/share/fex-emu/RootFS/default.erofs\n' > /usr/lib/environment.d/66-conjunction-fex.conf; \
+      printf 'export FEX_ROOTFS="${FEX_ROOTFS:-/usr/share/fex-emu/RootFS/default.erofs}"\n' > /etc/profile.d/conjunction-fex.sh; \
+      # Verify FEX binfmt_misc configs exist for systemd-binfmt on boot
+      test -f /usr/lib/binfmt.d/FEX-x86.conf; \
+      test -f /usr/lib/binfmt.d/FEX-x86_64.conf; \
+      # Expose bundled x86_64 Wine-Proton WoW64 through FEXInterpreter so Windows .app bundles and winetricks work transparently
+      for tool in wine wine64 wineboot winecfg wineserver msiexec regedit; do \
+        printf '%s\n' \
+          '#!/bin/sh' \
+          'export FEX_ROOTFS="${FEX_ROOTFS:-/usr/share/fex-emu/RootFS/default.erofs}"' \
+          "if [ -x \"/usr/share/conjunction/wine-x86_64/bin/${tool}\" ]; then" \
+          "  exec /usr/bin/FEXInterpreter \"/usr/share/conjunction/wine-x86_64/bin/${tool}\" \"\$@\"" \
+          'fi' \
+          'exec /usr/bin/FEXInterpreter /usr/share/conjunction/wine-x86_64/bin/wine "$@"' \
+          > "/usr/bin/${tool}"; \
+        chmod 0755 "/usr/bin/${tool}"; \
+      done; \
+      printf '%s\n' \
+        '#!/bin/sh' \
+        'export FEX_ROOTFS="${FEX_ROOTFS:-/usr/share/fex-emu/RootFS/default.erofs}"' \
+        'if [ "${1:-}" = "run" ]; then shift; fi' \
+        'exec /usr/bin/FEXInterpreter /usr/share/conjunction/wine-x86_64/bin/wine "$@"' \
+        > /usr/bin/proton; \
+      chmod 0755 /usr/bin/proton; \
     else \
       echo "Unsupported architecture: ${ARCH}" >&2; \
       exit 1; \
@@ -240,6 +279,7 @@ RUN set -euo pipefail; \
 
 # Finalize rootfs symlinks, units, branding (icons/Plymouth/Anaconda), caches, initramfs, and bootc lint
 RUN set -euo pipefail; \
+    export HOME=/tmp; \
     # Atomic writable /Applications backing directory
     ln -sfn var/Applications /Applications; \
     # Strip CRLF if present and fix permissions
