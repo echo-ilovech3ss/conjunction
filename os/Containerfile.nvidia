@@ -1,9 +1,59 @@
 # syntax=docker/dockerfile:1
 # Conjunction OS NVIDIA variant (x86_64 only)
 # Builds on top of the base Conjunction Fedora 45 Kinoite bootc image to add
-# proprietary NVIDIA drivers via RPM Fusion and required bootc kernel args.
+# RPM Fusion NVIDIA open kernel modules (Turing+) built sign-free at image
+# build time, proprietary userspace drivers, and required bootc kernel args.
 
 ARG BASE_IMAGE=ghcr.io/echo-ilovech3ss/conjunction:45-amd64
+
+# ==============================================================================
+# Stage 1: Kernel module builder (akmods compiles sign-free nvidia-open kmod)
+# ==============================================================================
+FROM ${BASE_IMAGE} AS kmod-builder
+
+ARG TARGETARCH
+
+# Fail fast if invoked for non-x86_64 architectures.
+RUN if [ "$(uname -m)" != "x86_64" ]; then \
+      echo "ERROR: Containerfile.nvidia only supports x86_64 (got $(uname -m), TARGETARCH=${TARGETARCH:-unset})." >&2; \
+      exit 1; \
+    fi
+
+RUN set -euo pipefail; \
+    export HOME=/tmp; \
+    KVER="$(ls -1 /usr/lib/modules | head -n 1)"; \
+    KDEV_VER="$(rpm -q --qf '%{VERSION}-%{RELEASE}.%{ARCH}' kernel-core)"; \
+    dnf5 --setopt=fastestmirror=True --setopt=max_parallel_downloads=10 install -y \
+      "kernel-devel-${KDEV_VER}" \
+    || { \
+      dnf5 --setopt=fastestmirror=True --setopt=max_parallel_downloads=10 install -y fedora-repos-archive; \
+      dnf5 --setopt=fastestmirror=True --setopt=max_parallel_downloads=10 --enablerepo=updates-archive install -y \
+        "kernel-devel-${KDEV_VER}"; \
+    }; \
+    dnf5 --setopt=fastestmirror=True --setopt=max_parallel_downloads=10 install -y akmods; \
+    # fedora-kinoite:45 sets OSTREE_VERSION= in /etc/os-release while /var is writable
+    # during container builds, so akmod-nvidia %post -> akmods-ostree-post fails as root.
+    # Stub it in this builder stage, then compile cleanly via akmods' akmods user.
+    printf '#!/bin/sh\nexit 0\n' > /usr/sbin/akmods-ostree-post; \
+    chmod 0755 /usr/sbin/akmods-ostree-post; \
+    # Build open kernel modules (Turing+ GPUs) deterministically without host lspci detection.
+    printf '%s\n' '%_with_kmod_nvidia_open 1' > /etc/rpm/macros.nvidia-kmod; \
+    chmod 0644 /etc/rpm/macros.nvidia-kmod; \
+    dnf5 --setopt=fastestmirror=True --setopt=max_parallel_downloads=10 install -y akmod-nvidia; \
+    mkdir -p /run/akmods /out/kmods; \
+    if ! akmods --force --kernels "${KVER}" --kmod nvidia; then \
+      find /var/cache/akmods/nvidia -maxdepth 1 -type f -name '*.log' -exec cat {} + >&2 || true; \
+      exit 1; \
+    fi; \
+    MODPATH="$(find "/usr/lib/modules/${KVER}/extra/nvidia" -maxdepth 1 -type f -name 'nvidia.ko*' | head -n 1)"; \
+    test -n "${MODPATH}"; \
+    modinfo -F license "${MODPATH}" | tee /dev/stderr | grep -qiE 'MIT|GPL'; \
+    find /var/cache/akmods/nvidia -maxdepth 1 -type f -name 'kmod-nvidia-*.rpm' ! -name '*-debuginfo-*' -exec cp -t /out/kmods {} +; \
+    test -n "$(ls -A /out/kmods)"
+
+# ==============================================================================
+# Stage 2: Final bootc NVIDIA image (prebuilt kmod + driver userspace only)
+# ==============================================================================
 FROM ${BASE_IMAGE}
 
 ARG TARGETARCH
@@ -15,29 +65,22 @@ RUN if [ "$(uname -m)" != "x86_64" ]; then \
     fi
 
 COPY os/nvidia/usr/lib/bootc/kargs.d/05-nvidia.toml /usr/lib/bootc/kargs.d/05-nvidia.toml
+COPY --from=kmod-builder /out/kmods /tmp/kmods
 
 RUN set -euo pipefail; \
     export HOME=/tmp; \
     KVER="$(ls -1 /usr/lib/modules | head -n 1)"; \
-    KDEV_VER="$(rpm -q --qf '%{VERSION}-%{RELEASE}.%{ARCH}' kernel-core)"; \
-    dnf5 install -y \
-      "kernel-devel-${KDEV_VER}" \
-      akmod-nvidia \
-      xorg-x11-drv-nvidia \
-      xorg-x11-drv-nvidia-cuda \
-    || dnf5 install -y \
-      kernel-devel-matched \
-      akmod-nvidia \
+    dnf5 --setopt=fastestmirror=True --setopt=max_parallel_downloads=10 install -y \
+      --exclude=akmod-nvidia \
+      /tmp/kmods/kmod-nvidia-*.rpm \
       xorg-x11-drv-nvidia \
       xorg-x11-drv-nvidia-cuda; \
-    akmods --force --kernels "${KVER}"; \
+    rm -rf /tmp/kmods; \
     depmod -a "${KVER}"; \
     ROOTHOME="$(readlink -f /root)"; mkdir -p "${ROOTHOME}"; \
     dracut --no-hostonly --kver "${KVER}" --force "/usr/lib/modules/${KVER}/initramfs.img"; \
     rmdir "${ROOTHOME}" 2>/dev/null || true; \
     dnf5 clean all; \
-    for d in /var/cache/akmods /tmp /var/tmp; do \
-      [ -d "$d" ] && find "$d" -mindepth 1 -delete || true; \
-    done; \
-    rm -rf /var/cache/libdnf5 /var/cache/dnf /var/cache/ldconfig /var/lib/dnf /var/log/* /run/dnf /run/akmods; \
+    find /tmp /var/tmp -mindepth 1 -delete; \
+    rm -rf /var/cache/akmods /var/cache/libdnf5 /var/cache/dnf /var/cache/ldconfig /var/lib/dnf /var/log/* /run/dnf /run/akmods; \
     bootc container lint --fatal-warnings
