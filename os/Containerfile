@@ -9,6 +9,9 @@ ARG BASE_IMAGE=quay.io/fedora/fedora-kinoite:45
 FROM ${BASE_IMAGE} AS builder
 
 WORKDIR /src
+# On bootc bases /root is a symlink to /var/roothome, which doesn't exist at build
+# time, so cargo can't create ~/.cargo. Keep its cache inside the build stage.
+ENV CARGO_HOME=/tmp/cargo-home
 
 # Install toolchains, Qt6/KF6 development headers, and theme build helpers
 RUN set -euo pipefail; \
