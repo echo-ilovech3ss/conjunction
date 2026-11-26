@@ -29,6 +29,7 @@ magiclampEnabled=false
 fadeEnabled=false
 conjunctionglassEnabled=true
 conjunctionmotionEnabled=true
+conjunction-kwin-bridgeEnabled=true
 
 [Windows]
 BorderlessMaximizedWindows=false

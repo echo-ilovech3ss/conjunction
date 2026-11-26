@@ -12,9 +12,9 @@ Conjunction is a desktop operating system built as a multi-arch (`x86_64` / `aar
 | Rust Daemons & CLI | `conj-appd`, `conj-open`, `conj-bundle`, `conj-appctl`, `conj-sysd`, `cj`, `application`, `app_sync` | Workspace crates |
 | Desktop UI (C++/Qt6/KF6) | `conj-shelld`, `conj-notificationd`, `conjunction-files`, `conjunction-settings`, `conjunction-terminal`, `conjunction-design`, KWin glass/motion (`kwin/`), Plasma look-and-feel (`plasma/`), Dolphin KF6 plugin | C++/QML directories & `data/dolphin-plugin/` |
 | Typography & Themes | `Inter` + `Inter Display` (`OFL-1.1`), `JetBrains Mono` (`OFL-1.1`), `Material Symbols Rounded` (`Apache-2.0`), `MacTahoe` icon (`GPL-3.0`) & GTK (`MIT`) themes, Phosphor icons (`MIT`) | [`os/ASSETS-LICENSES.md`](os/ASSETS-LICENSES.md) |
-| Software Ecosystem | Flathub, Distrobox, RPM Fusion codecs, Wine/DXVK/`umu-launcher` (`x86_64`), FEX-Emu + `fex-emu-rootfs-fedora` + Box64 + x86_64 Wine-Proton WoW64 (`aarch64`) | [`os/Containerfile`](os/Containerfile) |
+| Software Ecosystem | Flathub, Distrobox, RPM Fusion codecs, Wine/DXVK/`winetricks` (`x86_64`; `umu-launcher` skipped when absent in F45), FEX-Emu + `fex-emu-rootfs-fedora` + Box64 + x86_64 Wine-Proton WoW64 (`aarch64`) | [`os/Containerfile`](os/Containerfile) |
 
-> **Architecture Note (`aarch64`)**: Native `wine` and `umu-launcher` are not packaged in Fedora 45 / `bazzite-org/bazzite` for `aarch64`. On `aarch64`, Conjunction ships Fedora's `fex-emu` (`2604`), `fex-emu-rootfs-fedora`, `fex-emu-thunks`, `box64`, `winetricks`, and a bundled `x86_64` Wine-Proton WoW64 runtime wrapped through `FEXInterpreter` with `binfmt_misc` active.
+> **Architecture Note (`aarch64`)**: Native `wine` and `umu-launcher` are not packaged in Fedora 45 / `bazzite-org/bazzite` for `aarch64` (and `bazzite-org/bazzite` currently has no `fedora-45` chroot on `x86_64` either). On `aarch64`, Conjunction ships Fedora's `fex-emu` (`2604`), `fex-emu-rootfs-fedora`, `fex-emu-thunks`, `box64`, `winetricks`, and a bundled `x86_64` Wine-Proton WoW64 runtime wrapped through `FEXInterpreter` with `binfmt_misc` active.
 
 ## Quickstart (Rootful Podman + `bootc-image-builder`)
 
@@ -41,6 +41,8 @@ podman run --rm localhost/conjunction:45-arm64 bootc container lint --fatal-warn
 
 ```bash
 mkdir -p out/iso-arm64
+# bootc-image-builder's legacy anaconda-iso repo lookup keys on os-release ID=conjunction,
+# so pass --force-repo pointing to the matching Fedora 45 Everything tree.
 podman run --rm --privileged \
   -v "$(pwd)/os/iso-config.toml:/config.toml:ro" \
   -v "$(pwd)/out/iso-arm64:/output" \
@@ -49,6 +51,7 @@ podman run --rm --privileged \
   build \
   --type anaconda-iso \
   --rootfs btrfs \
+  --force-repo "https://dl.fedoraproject.org/pub/fedora/linux/releases/45/Everything/aarch64/os/" \
   localhost/conjunction:45-arm64
 ```
 

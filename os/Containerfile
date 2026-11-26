@@ -172,6 +172,8 @@ RUN set -euo pipefail; \
     install -Dm644 "${R}/data/environment.d/60-conjunction-apps.conf" /out/usr/lib/environment.d/60-conjunction-apps.conf; \
     install -Dm755 "${R}/data/plasma-env/conjunction-apps.sh" /out/etc/xdg/plasma-workspace/env/conjunction-apps.sh; \
     install -Dm644 "${R}/data/tmpfiles.d/conjunction-apps.conf" /out/usr/lib/tmpfiles.d/conjunction-apps.conf; \
+    install -Dm644 "${R}/data/fontconfig/99-conjunction-fonts.conf" /out/etc/fonts/conf.d/99-conjunction-fonts.conf; \
+    install -Dm644 "${R}/data/mimeapps.list" /out/etc/xdg/conjunction-mimeapps.list; \
     mkdir -p /out/usr/lib/systemd/user /out/usr/share/kwin/scripts/conjunction-kwin-bridge/contents/code /out/usr/share/kwin/effects/conjunction-overview /out/usr/share/conjunction/Applications/Terminal.app /out/usr/share/wallpapers/Conjunction /out/usr/share/plasma/look-and-feel /out/usr/share/conjunction/assets; \
     cp -a "${R}/data/systemd/user/." /out/usr/lib/systemd/user/; \
     install -Dm644 "${R}/data/conjunction-kwin-bridge.js" /out/usr/share/kwin/scripts/conjunction-kwin-bridge/contents/code/main.js; \
@@ -325,6 +327,11 @@ RUN set -euo pipefail; \
     ROOTHOME="$(readlink -f /root)"; mkdir -p "${ROOTHOME}"; \
     dracut --no-hostonly --kver "${KVER}" --force "/usr/lib/modules/${KVER}/initramfs.img"; \
     rmdir "${ROOTHOME}" 2>/dev/null || true; \
-    # Clean caches/logs/tmp before bootc lint
-    rm -rf /var/cache/libdnf5 /var/cache/dnf /var/cache/ldconfig /var/lib/dnf /var/log/* /tmp/* /var/tmp/* /run/dnf; \
+    # Register winbindd_privileged (pulled in by wine-core on x86_64) so bootc var-tmpfiles lint stays clean
+    if [ -d /var/lib/samba/winbindd_privileged ] && getent group wbpriv >/dev/null 2>&1; then \
+      printf 'd /var/lib/samba/winbindd_privileged 0750 root wbpriv -\n' > /usr/lib/tmpfiles.d/conjunction-wine-samba.conf; \
+    fi; \
+    # Clean caches/logs/tmp (including hidden dirs like /tmp/.cache/mesa_shader_cache) before bootc lint
+    find /tmp /var/tmp -mindepth 1 -delete; \
+    rm -rf /var/cache/libdnf5 /var/cache/dnf /var/cache/ldconfig /var/lib/dnf /var/log/* /run/dnf; \
     bootc container lint --fatal-warnings

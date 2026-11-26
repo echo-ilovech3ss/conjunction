@@ -36,5 +36,8 @@ RUN set -euo pipefail; \
     dracut --no-hostonly --kver "${KVER}" --force "/usr/lib/modules/${KVER}/initramfs.img"; \
     rmdir "${ROOTHOME}" 2>/dev/null || true; \
     dnf5 clean all; \
-    rm -rf /var/cache/libdnf5 /var/cache/dnf /var/cache/ldconfig /var/lib/dnf /var/log/* /tmp/* /var/tmp/* /run/dnf; \
+    for d in /var/cache/akmods /tmp /var/tmp; do \
+      [ -d "$d" ] && find "$d" -mindepth 1 -delete || true; \
+    done; \
+    rm -rf /var/cache/libdnf5 /var/cache/dnf /var/cache/ldconfig /var/lib/dnf /var/log/* /run/dnf /run/akmods; \
     bootc container lint --fatal-warnings

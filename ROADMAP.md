@@ -7,7 +7,7 @@
 - [x] Dedicated `x86_64` NVIDIA image variant (`os/Containerfile.nvidia`) with `akmod-nvidia` and kernel arguments (`os/nvidia/usr/lib/bootc/kargs.d/05-nvidia.toml`).
 - [x] Declarative installable media (`anaconda-iso` with Btrfs rootfs) via `bootc-image-builder` and `os/iso-config.toml`.
 - [x] Typography (`Inter`, `Inter Display`, `JetBrains Mono`, `Material Symbols Rounded`) and `MacTahoe` icon/GTK themes with documented licensing and non-trademark icon overrides (`os/ASSETS-LICENSES.md`).
-- [x] Out-of-the-box Flathub, Distrobox, RPM Fusion codecs, firmware, Wine/DXVK/`umu-launcher` (`x86_64`), and FEX-Emu (`fex-emu-rootfs-fedora`) + x86_64 Wine-Proton WoW64 + Box64 (`aarch64`).
+- [x] Out-of-the-box Flathub, Distrobox, RPM Fusion codecs, firmware, Wine/DXVK/`winetricks` (`x86_64`; `umu-launcher` installed when packaged in F45), and FEX-Emu (`fex-emu-rootfs-fedora`) + x86_64 Wine-Proton WoW64 + Box64 (`aarch64`).
 - [x] Multi-arch GitHub Actions CI/CD building `linux/amd64` + `linux/arm64` images, pushing GHCR multi-arch manifests on `main`, and producing `workflow_dispatch` installer ISOs.
 
 ## Phase 2: Application Bundles & Compatibility
