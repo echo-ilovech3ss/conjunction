@@ -326,5 +326,5 @@ RUN set -euo pipefail; \
     dracut --no-hostonly --kver "${KVER}" --force "/usr/lib/modules/${KVER}/initramfs.img"; \
     rmdir "${ROOTHOME}" 2>/dev/null || true; \
     # Clean caches/logs/tmp before bootc lint
-    rm -rf /var/cache/libdnf5 /var/cache/dnf /var/log/* /tmp/* /var/tmp/*; \
+    rm -rf /var/cache/libdnf5 /var/cache/dnf /var/cache/ldconfig /var/lib/dnf /var/log/* /tmp/* /var/tmp/* /run/dnf; \
     bootc container lint --fatal-warnings
